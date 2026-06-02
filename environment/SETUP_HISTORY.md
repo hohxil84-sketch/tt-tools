@@ -24,3 +24,6 @@
 - 首次引入模块：desktop/shared。
 - 8 个子模块创建完毕：Auth、CloudApi、LocalRuntime、FileSystem、JobSystem、Logging、Settings、UI。
 - 59 项单元测试全部通过，0 失败 0 警告。
+
+2026-06-03（contract-base-rules）：
+- 引入 Spectral 6.16.0（OpenAPI 校验工具），通过 npx 按需运行，npm 缓存指向 D:\localPath\caches\npm。

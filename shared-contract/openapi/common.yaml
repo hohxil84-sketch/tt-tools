@@ -1,66 +1,190 @@
 openapi: 3.1.0
 info:
   title: TT Tools Common Schemas
+  description: |
+    TT Tools 项目通用 OpenAPI 组件定义。
+    统一响应结构、错误结构、request_id、鉴权头、API 版本和通用规则。
+    所有业务 OpenAPI 文件（auth-device.yaml、ai-copy.yaml 等）应引用本文件的公共组件。
   version: 0.1.0
+  contact:
+    name: TT Tools Team
+
+# API 版本前缀：所有接口统一在 /api/v1 下
+servers:
+  - url: /api/v1
+    description: TT Tools API v1
+
 paths: {}
+
 components:
+
+  # ---- 鉴权规则 ----
+  # 所有需登录接口统一使用 Bearer Token 鉴权
+  # 请求头：Authorization: Bearer <access_token>
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        统一鉴权方式。
+        桌面端在请求头中携带 `Authorization: Bearer <access_token>`。
+        客户端不得自行决定鉴权结果。
+
+  # ---- 通用参数 ----
+  parameters:
+    # 请求追踪 ID 头，用于全链路追踪和问题排查
+    RequestIdHeader:
+      name: X-Request-ID
+      in: header
+      description: 请求追踪 ID，由客户端生成或云端回传，用于全链路追踪
+      schema:
+        type: string
+      required: false
+
+  # ---- 通用 Schema ----
+
   schemas:
+
+    # -- 错误结构 --
+    # 统一错误码结构，所有错误响应必须使用此结构
     ErrorDetail:
       type: object
+      description: 统一错误详情结构
       required: [code, message]
       properties:
         code:
           type: string
+          description: |
+            统一错误码。
+            通用：UNKNOWN_ERROR、VALIDATION_ERROR、REQUEST_TIMEOUT、NETWORK_ERROR
+            鉴权：AUTH_REQUIRED、AUTH_INVALID_CREDENTIALS、AUTH_TOKEN_EXPIRED、DEVICE_NOT_BOUND、PERMISSION_DENIED
+            额度：PLAN_REQUIRED、CREDITS_NOT_ENOUGH、BILLING_FAILED
+            Provider：PROVIDER_TIMEOUT、PROVIDER_RATE_LIMITED、PROVIDER_AUTH_FAILED、PROVIDER_QUOTA_EXCEEDED、PROVIDER_BAD_RESPONSE、PROVIDER_UNAVAILABLE
+            详见 shared-contract/error-codes.md
         message:
           type: string
+          description: 人类可读的错误描述（中文）
         details:
           type: object
           additionalProperties: true
+          description: 可选补充信息，如字段级校验错误明细
+
+    # -- 统一响应结构 --
+    # 所有 API 响应必须包含 success / data / error / request_id
     ApiResponse:
       type: object
+      description: |
+        统一 API 响应外层结构。
+        所有接口响应必须包含 success、data、error、request_id 四个字段。
+        成功时 error 为 null，失败时 data 为 null。
       required: [success, data, error, request_id]
       properties:
         success:
           type: boolean
-        data: {}
+          description: 请求是否成功
+        data:
+          description: 业务数据载荷，成功时返回具体数据，失败时为 null
         error:
           anyOf:
             - $ref: '#/components/schemas/ErrorDetail'
             - type: 'null'
+          description: 错误详情，成功时为 null
         request_id:
           type: string
+          description: 云端生成的请求追踪 ID，用于排查问题
+
+    # -- 分页结构 --
     Pagination:
       type: object
+      description: 分页信息，用于列表类接口响应
       required: [total, limit, offset]
       properties:
         total:
           type: integer
           minimum: 0
+          description: 总记录数
         limit:
           type: integer
           minimum: 1
+          description: 每页条数
         offset:
           type: integer
           minimum: 0
+          description: 当前偏移量
+
+    # -- 文件引用 --
     FileRef:
       type: object
+      description: 文件引用，用于接口中传递文件信息
       required: [file_id, mime_type]
       properties:
         file_id:
           type: string
           format: uuid
+          description: 文件 ID
         url:
           type: string
+          description: 文件访问 URL（临时签名链接）
         mime_type:
           type: string
+          description: 文件 MIME 类型
         width:
           type: integer
           nullable: true
+          description: 图片宽度（仅图片类型有值）
         height:
           type: integer
           nullable: true
+          description: 图片高度（仅图片类型有值）
+
+    # -- 通用错误响应 --
+    # 标准 4xx/5xx 错误时使用的统一响应体
+    ErrorResponse:
+      type: object
+      description: 标准错误响应体
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: 始终为 false
+        data:
+          type: 'null'
+          description: 错误时始终为 null
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        request_id:
+          type: string
+          description: 请求追踪 ID
+
+    # -- 健康检查响应 --
+    HealthResponse:
+      type: object
+      description: 健康检查响应
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+          description: 服务状态
+        version:
+          type: string
+          description: 服务版本号
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [ok, down]
+              message:
+                type: string
+          description: 各组件健康状态（数据库、Redis 等）
+
+    # -- 客户端禁止提交字段提醒 --
+    # 以下字段客户端不得在请求中提交，云端必须忽略或拒绝：
+    # user_id、device_id、role、plan_code、provider、model、
+    # estimated_cost、credits_charged、permission_granted、final_price
+    # 这些字段由云端服务端根据鉴权和业务逻辑自行决定
