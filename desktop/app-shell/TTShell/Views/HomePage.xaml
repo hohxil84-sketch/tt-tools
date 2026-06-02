@@ -1,0 +1,71 @@
+<Page x:Class="TTShell.Views.HomePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="首页"
+      Background="{DynamicResource BackgroundBrush}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 欢迎信息 -->
+        <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,0,0,40">
+            <!-- 应用图标 -->
+            <TextBlock Text="🛠️"
+                       FontSize="64"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,16" />
+
+            <!-- 欢迎标题 -->
+            <TextBlock Text="欢迎使用 TT Tools"
+                       Style="{DynamicResource TitleTextStyle}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,8" />
+
+            <!-- 版本信息 -->
+            <TextBlock Text="版本 0.1.0 - 开发中"
+                       FontSize="14"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,24" />
+
+            <!-- 模块状态概览 -->
+            <Border Background="{DynamicResource CardBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="24,16"
+                    Margin="0,0,0,16"
+                    MaxWidth="400">
+                <StackPanel>
+                    <TextBlock Text="模块开发状态"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               Margin="0,0,0,12" />
+                    <TextBlock Text="✅ 应用外壳 (app-shell)"
+                               FontSize="13"
+                               Foreground="{DynamicResource SuccessBrush}"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="⏳ 文件工作台 · 即将开发"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="⏳ AI 工具 · 即将开发"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="⏳ 导出 · 即将开发"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="⏳ 设置 · 即将开发"
+                               FontSize="13"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Grid>
+</Page>
