@@ -24,6 +24,15 @@
 14. environment/TOOLCHAIN.md
 15. 用户指定模块目录下的全部文档。
 
+## 开发前 Git 流程
+
+每次开发新模块前必须执行：
+
+1. 切回 `dev/full-product` 分支。
+2. 拉取最新 `dev/full-product`。
+3. 从最新 `dev/full-product` 创建当前模块分支。
+4. 开始开发当前模块。
+
 ## 硬规则
 
 - 只开发用户明确指定的模块。
