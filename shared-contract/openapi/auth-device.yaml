@@ -1,14 +1,26 @@
 openapi: 3.1.0
 info:
   title: TT Tools Auth and Device API
+  description: |
+    登录、刷新、退出、设备绑定 API 契约。
+    包含用户认证、令牌管理和设备生命周期管理接口。
   version: 0.1.0
+  contact:
+    name: TT Tools Team
 servers:
   - url: /api/v1
+tags:
+  - name: Auth
+    description: 用户认证相关接口（登录、刷新、退出）
+  - name: Device
+    description: 设备管理相关接口（设备查询、设备绑定）
 paths:
   /auth/login:
     post:
       operationId: authLogin
       summary: 登录并返回用户和设备状态
+      description: 使用账号、密码和设备指纹进行登录认证，成功返回访问令牌、刷新令牌、用户信息和设备绑定状态。
+      tags: [Auth]
       requestBody:
         required: true
         content:
@@ -26,6 +38,8 @@ paths:
     post:
       operationId: authRefresh
       summary: 刷新访问令牌
+      description: 使用有效的刷新令牌换取新的访问令牌和刷新令牌对，用于维持登录会话。
+      tags: [Auth]
       requestBody:
         required: true
         content:
@@ -43,6 +57,8 @@ paths:
     post:
       operationId: authLogout
       summary: 退出登录
+      description: 撤销指定的刷新令牌，使当前会话退出登录，对应的 access_token 和 refresh_token 均失效。
+      tags: [Auth]
       requestBody:
         required: true
         content:
@@ -60,6 +76,8 @@ paths:
     get:
       operationId: getCurrentDevice
       summary: 获取当前设备状态
+      description: 查询当前已认证设备的详细信息，包括设备指纹、名称、绑定状态和最近活跃时间。需要 Bearer Token 认证。
+      tags: [Device]
       security:
         - BearerAuth: []
       responses:
@@ -73,6 +91,8 @@ paths:
     post:
       operationId: bindDevice
       summary: 绑定当前设备
+      description: 将当前设备与已登录用户绑定，记录设备指纹、名称和客户端版本。新设备绑定后状态为 active，重复绑定的设备返回已有记录。需要 Bearer Token 认证。
+      tags: [Device]
       security:
         - BearerAuth: []
       requestBody:
