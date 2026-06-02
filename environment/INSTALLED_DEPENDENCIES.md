@@ -8,3 +8,4 @@
 | PostgreSQL | service | 待确认 | system / docker / remote | D:\localPath\downloads / D:\localPath\tools | 云端数据库 | cloud-shared | psql --version | planned | 云端开发前确认 |
 | Redis | service | 待确认 | system / docker / remote | D:\localPath\downloads / D:\localPath\tools | 缓存、队列、限流预留 | cloud-shared | redis-cli --version | planned | 云端开发前确认 |
 | GitHub CLI | toolchain | 待确认 | system | D:\localPath\downloads / D:\localPath\tools | 推送、PR、CI 查询 | project | gh --version | planned | 提交推送前确认 |
+| Spectral (Stoplight) | OpenAPI lint | 6.16.0 | npx 缓存 (D:\localPath\caches\npm) | D:\localPath\caches\npm | OpenAPI 3.1 规范校验 | contract-base-rules | npx @stoplight/spectral-cli lint | installed | 通过 npx 按需运行，npm 缓存指向 D:\localPath |

@@ -5,5 +5,5 @@
 - 所属端：shared-contract
 - 类型：契约基础
 - 建议分支：`feature/contract-base-rules`
-- 状态：`NOT_STARTED`
+- 状态：`COMPLETED`
 

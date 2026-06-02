@@ -1,0 +1,10 @@
+# Spectral OpenAPI lint 规则配置
+# 用于 TT Tools 项目 shared-contract 校验
+extends:
+  - spectral:oas
+
+# common.yaml 是公共组件文件，其中的 schema/parameter 供其他 OpenAPI 文件引用，
+# 在此文件中必然被检测为 "unused"，因此全局关闭该规则。
+# 每个具体 API 文件（auth-device.yaml 等）中的组件若未被引用，才是真正的问题。
+rules:
+  oas3-unused-component: off
