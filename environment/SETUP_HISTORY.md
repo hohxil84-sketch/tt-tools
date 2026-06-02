@@ -17,3 +17,10 @@
 - 确认 GitHub CLI 2.93.0 + Git 2.54.0 可用。
 - 本地 worker 公共层 5 个子模块创建完毕（errors、runtime、model_registry、file_io、logging）。
 - 40 项单元测试全部通过，0 失败 0 警告。
+
+2026-06-03（desktop-shared）：
+- 创建桌面端公共层类库项目 DesktopShared（TTShared，net8.0-windows WPF Library）。
+- 引入 NuGet 包 System.Security.Cryptography.ProtectedData 8.0.0 到 D:\localPath\caches\nuget。
+- 首次引入模块：desktop/shared。
+- 8 个子模块创建完毕：Auth、CloudApi、LocalRuntime、FileSystem、JobSystem、Logging、Settings、UI。
+- 59 项单元测试全部通过，0 失败 0 警告。

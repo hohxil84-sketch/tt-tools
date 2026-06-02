@@ -9,3 +9,4 @@
 | PostgreSQL | service | 待确认 | system / docker / remote | D:\localPath\downloads / D:\localPath\tools | 云端数据库 | cloud-shared | psql --version | planned | 云端开发前确认 |
 | Redis | service | 待确认 | system / docker / remote | D:\localPath\downloads / D:\localPath\tools | 缓存、队列、限流预留 | cloud-shared | redis-cli --version | planned | 云端开发前确认 |
 | GitHub CLI | toolchain | 2.93.0 | system (C:\Program Files\GitHub CLI\) | D:\localPath\downloads / D:\localPath\tools | 推送、PR、CI 查询 | project | gh --version | installed | 2026-06-03 确认已安装 gh 2.93.0 + git 2.54.0 |
+| System.Security.Cryptography.ProtectedData | nuget | 8.0.0 | D:\localPath\caches\nuget | D:\localPath\caches\nuget | Windows DPAPI 加密存储令牌 | desktop-shared | dotnet list package | installed | 2026-06-03 引入，用于 TokenStorage 的 access_token / refresh_token 本地安全存储 |
