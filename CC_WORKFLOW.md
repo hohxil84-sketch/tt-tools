@@ -4,6 +4,8 @@
 
 用户会指定一个模块目录，例如：按 desktop/modules/ocr/TASK.md 开发 OCR 模块。
 
+每次开发新模块前，必须切回 `dev/full-product` 并拉取 `origin/dev/full-product` 最新代码。
+
 CC 必须执行：
 
 1. 阅读根目录规则文档。

@@ -12,6 +12,7 @@
 
 ## 规则
 
+- 每次开发新模块前，必须切回 `dev/full-product` 并拉取 `origin/dev/full-product` 最新代码。
 - 一个模块一个分支。
 - 一个模块一个本地目录或 worktree。
 - 不允许同一分支混合开发多个模块。

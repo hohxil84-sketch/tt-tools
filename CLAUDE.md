@@ -26,10 +26,10 @@
 
 ## 开发前 Git 流程
 
-每次开发新模块前必须执行：
+每次开发新模块前，必须切回 `dev/full-product` 并拉取 `origin/dev/full-product` 最新代码。
 
 1. 切回 `dev/full-product` 分支。
-2. 拉取最新 `dev/full-product`。
+2. 拉取最新 `origin/dev/full-product`。
 3. 从最新 `dev/full-product` 创建当前模块分支。
 4. 开始开发当前模块。
 
