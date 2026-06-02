@@ -1,0 +1,14 @@
+<Application x:Class="TTShell.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- 默认加载浅色主题 -->
+                <ResourceDictionary Source="Resources/LightTheme.xaml" />
+                <!-- 公共样式 -->
+                <ResourceDictionary Source="Resources/CommonStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

@@ -39,6 +39,8 @@
 - 新依赖必须登记到 environment/INSTALLED_DEPENDENCIES.md 和 environment/SETUP_HISTORY.md。
 - 新模型必须登记到 environment/MODEL_REGISTRY.md。
 - 下载依赖、安装包、模型、工具缓存或任何外部资源时，必须优先放到 D:\localPath，并在依赖台账中记录实际路径。
+- D:\localPath 是下载、缓存、模型、安装包、临时文件的存放目录，不是所有软件的强制安装目录。
+- 对必须系统级安装的软件（如 .NET SDK），安装包必须下载到 D:\localPath\downloads，实际安装位置可以使用系统默认，安装原因和实际路径必须写入 environment/INSTALLED_DEPENDENCIES.md，安装动作必须写入 environment/SETUP_HISTORY.md。
 - 代码关键逻辑必须加中文注释。
 - 提交、推送、合并记录必须写中文备注。
 - 测试失败时必须先复现和定位根因，再做最小范围修复。

@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon />
+    <RootNamespace>TTShell</RootNamespace>
+    <AssemblyName>TTShell</AssemblyName>
+    <Version>0.1.0</Version>
+    <Authors>TT Tools Team</Authors>
+    <Description>TT Tools - Windows 桌面客户端主程序外壳</Description>
+  </PropertyGroup>
+
+</Project>
