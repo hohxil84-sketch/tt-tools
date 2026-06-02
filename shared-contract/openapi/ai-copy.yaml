@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: TT Tools AI Copy API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+security:
+  - BearerAuth: []
+paths:
+  /ai/copy/generate:
+    post:
+      operationId: generateAiCopy
+      summary: 生成广告文案
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiCopyGenerateRequest'
+      responses:
+        '200':
+          description: Generated copy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiCopyGenerateResponse'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    AiCopyGenerateRequest:
+      type: object
+      required: [scene, product_name, selling_points, tone, client_request_id]
+      properties:
+        scene:
+          type: string
+        product_name:
+          type: string
+        selling_points:
+          type: array
+          items:
+            type: string
+        target_audience:
+          type: string
+        tone:
+          type: string
+        platform:
+          type: string
+        extra_requirements:
+          type: string
+        client_request_id:
+          type: string
+      additionalProperties: false
+    AiCopyGenerateData:
+      type: object
+      required: [feature, text, variants, provider, model, estimated_cost, credits_charged, provider_call_id]
+      properties:
+        feature:
+          type: string
+          const: ai_copy_cloud
+        text:
+          type: string
+        variants:
+          type: array
+          items:
+            type: string
+        provider:
+          type: string
+        model:
+          type: string
+        estimated_cost:
+          type: number
+        credits_charged:
+          type: integer
+        provider_call_id:
+          type: string
+          format: uuid
+    AiCopyGenerateResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/AiCopyGenerateData'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string

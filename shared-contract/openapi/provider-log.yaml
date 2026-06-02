@@ -1,0 +1,139 @@
+openapi: 3.1.0
+info:
+  title: TT Tools Provider Log API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+security:
+  - BearerAuth: []
+paths:
+  /provider-call-logs:
+    get:
+      operationId: listProviderCallLogs
+      summary: 查询当前用户 Provider 调用日志
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: feature
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: provider
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provider logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderCallLogListResponse'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    ProviderCallLogItem:
+      type: object
+      required:
+        - id
+        - request_id
+        - feature
+        - provider
+        - model
+        - status
+        - input_tokens
+        - output_tokens
+        - total_tokens
+        - estimated_cost
+        - credits_charged
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+        feature:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        status:
+          type: string
+          enum: [success, failed, timeout]
+        error_code:
+          type: string
+          nullable: true
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+        estimated_cost:
+          type: number
+        credits_charged:
+          type: integer
+        latency_ms:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    ProviderCallLogListData:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderCallLogItem'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    ProviderCallLogListResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/ProviderCallLogListData'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string

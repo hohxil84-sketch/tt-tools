@@ -1,0 +1,4 @@
+﻿# 功能码
+
+ocr_local、remove_bg_local、id_photo_local、preflight_check_local、resize_image_local_paid、pdf_image_convert_local_paid、format_convert_local、ai_copy_cloud、ai_render_cloud、ai_image_tools_cloud。
+

@@ -1,0 +1,296 @@
+openapi: 3.1.0
+info:
+  title: TT Tools Auth and Device API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+paths:
+  /auth/login:
+    post:
+      operationId: authLogin
+      summary: 登录并返回用户和设备状态
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+  /auth/refresh:
+    post:
+      operationId: authRefresh
+      summary: 刷新访问令牌
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Refresh result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+  /auth/logout:
+    post:
+      operationId: authLogout
+      summary: 退出登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '200':
+          description: Logout result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+  /devices/current:
+    get:
+      operationId: getCurrentDevice
+      summary: 获取当前设备状态
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentDeviceResponse'
+  /devices/bind:
+    post:
+      operationId: bindDevice
+      summary: 绑定当前设备
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindDeviceRequest'
+      responses:
+        '200':
+          description: Bind result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BindDeviceResponse'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    LoginRequest:
+      type: object
+      required: [account, password, device_fingerprint]
+      properties:
+        account:
+          type: string
+        password:
+          type: string
+          format: password
+        device_fingerprint:
+          type: string
+        device_name:
+          type: string
+        client_version:
+          type: string
+    UserInfo:
+      type: object
+      required: [id, account, plan_code]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        plan_code:
+          type: string
+    DeviceInfo:
+      type: object
+      required: [id, status, is_new]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, blocked, removed]
+        is_new:
+          type: boolean
+    LoginData:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in, user, device]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+        user:
+          $ref: '#/components/schemas/UserInfo'
+        device:
+          $ref: '#/components/schemas/DeviceInfo'
+    LoginResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/LoginData'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    RefreshData:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        token_type:
+          type: string
+          const: bearer
+        expires_in:
+          type: integer
+    RefreshResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/RefreshData'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string
+    LogoutRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    LogoutResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          required: [logged_out]
+          properties:
+            logged_out:
+              type: boolean
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string
+    CurrentDevice:
+      type: object
+      required: [id, device_fingerprint, device_name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_fingerprint:
+          type: string
+        device_name:
+          type: string
+        status:
+          type: string
+        bound_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+    CurrentDeviceResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/CurrentDevice'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string
+    BindDeviceRequest:
+      type: object
+      required: [device_fingerprint]
+      properties:
+        device_fingerprint:
+          type: string
+        device_name:
+          type: string
+        client_version:
+          type: string
+    BindDeviceResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/DeviceInfo'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string
