@@ -10,3 +10,10 @@
 - NuGet 全局包缓存配置到 D:\localPath\caches\nuget（通过 desktop/app-shell/TTShell/nuget.config）。
 - 首次引入模块：desktop/app-shell。
 - WPF 主程序外壳项目创建并编译通过（0 错误 0 警告）。
+
+2026-06-03（local-worker-shared）：
+- 创建 Python 虚拟环境 D:\localPath\venvs\local-worker-shared（系统 Python 3.12.10）。
+- 首次引入模块：local-worker/shared。
+- 确认 GitHub CLI 2.93.0 + Git 2.54.0 可用。
+- 本地 worker 公共层 5 个子模块创建完毕（errors、runtime、model_registry、file_io、logging）。
+- 40 项单元测试全部通过，0 失败 0 警告。
