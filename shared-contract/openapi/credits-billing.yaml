@@ -1,9 +1,20 @@
 openapi: 3.1.0
 info:
   title: TT Tools Credits and Billing API
+  description: |
+    套餐权限、额度余额、额度流水和订单账单 API 契约。
+    包含用户 AI 额度查询、额度变动流水查询和本地付费功能套餐权限检查接口。
   version: 0.1.0
+  contact:
+    name: TT Tools Team
 servers:
   - url: /api/v1
+    description: TT Tools API v1
+tags:
+  - name: Credits
+    description: AI 额度余额和流水查询
+  - name: Entitlements
+    description: 套餐权限和本地付费功能权限检查
 security:
   - BearerAuth: []
 paths:
@@ -11,44 +22,75 @@ paths:
     get:
       operationId: getCreditBalance
       summary: 查询当前用户 AI 额度余额
+      description: |
+        返回当前登录用户的额度账户信息，包括套餐编码、周期赠送额度、
+        当前余额、计费周期起止时间和账户状态。
+        需要 Bearer Token 认证。
+      tags: [Credits]
+      security:
+        - BearerAuth: []
       responses:
         '200':
-          description: Credit balance
+          description: 额度余额查询成功
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreditBalanceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /credits/ledger:
     get:
       operationId: listCreditLedger
       summary: 查询当前用户 AI 额度流水
+      description: |
+        分页查询当前用户的额度变动流水记录，支持按变动类型（grant / consume / recharge / refund / adjust）筛选。
+        需要 Bearer Token 认证。
+      tags: [Credits]
+      security:
+        - BearerAuth: []
       parameters:
         - name: limit
           in: query
+          description: 每页返回的最大记录数，最大 100
           schema:
             type: integer
             default: 50
             maximum: 100
+            minimum: 1
         - name: offset
           in: query
+          description: 分页偏移量，默认从 0 开始
           schema:
             type: integer
             default: 0
+            minimum: 0
         - name: change_type
           in: query
+          description: 按额度变动类型筛选（grant / consume / recharge / refund / adjust）
           schema:
             type: string
+            enum: [grant, consume, recharge, refund, adjust]
       responses:
         '200':
-          description: Credit ledger
+          description: 额度流水查询成功
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreditLedgerResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /entitlements/check:
     post:
       operationId: checkEntitlement
       summary: 检查本地付费功能套餐权限
+      description: |
+        桌面端在调用本地付费功能前，通过本接口检查当前用户套餐是否允许使用指定功能。
+        不消耗 AI 额度，仅返回权限检查结果。
+        需要 Bearer Token 认证。
+        客户端不得提交 user_id、plan_code、permission_granted 等字段。
+      tags: [Entitlements]
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -57,160 +99,265 @@ paths:
               $ref: '#/components/schemas/EntitlementCheckRequest'
       responses:
         '200':
-          description: Entitlement check
+          description: 权限检查完成
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/EntitlementCheckResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        统一鉴权方式。
+        桌面端在请求头中携带 `Authorization: Bearer <access_token>`。
+        客户端不得自行决定鉴权结果。
+
+  responses:
+    Unauthorized:
+      description: 未认证或令牌无效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
+    # ---- 通用结构 ----
+
     ErrorDetail:
       type: object
+      description: 统一错误详情结构，与 common.yaml 保持一致
       required: [code, message]
       properties:
         code:
           type: string
+          description: |
+            统一错误码。
+            额度相关：PLAN_REQUIRED、CREDITS_NOT_ENOUGH、BILLING_FAILED
+            鉴权相关：AUTH_REQUIRED、AUTH_TOKEN_EXPIRED、PERMISSION_DENIED
         message:
           type: string
+          description: 人类可读的错误描述（中文）
         details:
           type: object
           additionalProperties: true
+          description: 可选补充信息，如字段级校验错误明细
+
+    ErrorResponse:
+      type: object
+      description: 标准错误响应体
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: 始终为 false
+        data:
+          type: 'null'
+          description: 错误时始终为 null
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        request_id:
+          type: string
+          description: 云端生成的请求追踪 ID
+
+    # ---- 余额 ----
+
     CreditBalance:
       type: object
+      description: AI 额度账户余额信息
       required: [user_id, plan_code, monthly_grant, balance, status, updated_at]
       properties:
         user_id:
           type: string
           format: uuid
+          description: 用户 ID
         plan_code:
           type: string
+          description: 当前套餐编码（free / standard / pro 等）
         monthly_grant:
           type: integer
+          description: 每计费周期赠送的 AI 额度
         balance:
           type: integer
+          description: 当前可用 AI 额度余额
         period_start:
           type: string
           format: date-time
           nullable: true
+          description: 当前计费周期开始时间（UTC）
         period_end:
           type: string
           format: date-time
           nullable: true
+          description: 当前计费周期结束时间（UTC）
         status:
           type: string
+          description: 账户状态（active / frozen）
         updated_at:
           type: string
           format: date-time
+          description: 余额最后更新时间（UTC）
+
     CreditBalanceResponse:
       type: object
+      description: 额度余额查询响应
       required: [success, data, error, request_id]
       properties:
         success:
           type: boolean
+          description: 请求是否成功
         data:
           $ref: '#/components/schemas/CreditBalance'
         error:
           anyOf:
             - $ref: '#/components/schemas/ErrorDetail'
             - type: 'null'
+          description: 错误详情，成功时为 null
         request_id:
           type: string
+          description: 云端生成的请求追踪 ID
+
+    # ---- 流水 ----
+
     CreditLedgerItem:
       type: object
+      description: 单条额度变动流水记录
       required: [id, change_type, amount, balance_after, source_type, created_at]
       properties:
         id:
           type: string
           format: uuid
+          description: 流水记录 ID
         change_type:
           type: string
           enum: [grant, consume, recharge, refund, adjust]
+          description: |
+            变动类型：
+            grant - 周期赠送、consume - 消费扣费、recharge - 充值、refund - 退款、adjust - 管理员调整
         amount:
           type: integer
+          description: 变动额度值（正数为增加，负数为扣减）
         balance_after:
           type: integer
+          description: 变动后的账户余额
         source_type:
           type: string
+          description: 来源类型（provider_call / order / system / admin）
         source_id:
           type: string
           format: uuid
           nullable: true
+          description: 来源记录 ID（如 Provider 调用 ID、订单 ID）
         description:
           type: string
           nullable: true
+          description: 变动说明（中文）
         created_at:
           type: string
           format: date-time
+          description: 流水记录创建时间（UTC）
+
     CreditLedgerData:
       type: object
+      description: 额度流水分页数据
       required: [items, total, limit, offset]
       properties:
         items:
           type: array
+          description: 流水记录列表
           items:
             $ref: '#/components/schemas/CreditLedgerItem'
         total:
           type: integer
+          description: 符合条件的总记录数
         limit:
           type: integer
+          description: 当前页大小
         offset:
           type: integer
+          description: 当前偏移量
+
     CreditLedgerResponse:
       type: object
+      description: 额度流水查询响应
       required: [success, data, error, request_id]
       properties:
         success:
           type: boolean
+          description: 请求是否成功
         data:
           $ref: '#/components/schemas/CreditLedgerData'
         error:
           anyOf:
             - $ref: '#/components/schemas/ErrorDetail'
             - type: 'null'
+          description: 错误详情，成功时为 null
         request_id:
           type: string
+          description: 云端生成的请求追踪 ID
+
+    # ---- 权限检查 ----
+
     EntitlementCheckRequest:
       type: object
+      description: |
+        套餐权限检查请求。
+        客户端不得提交 user_id、plan_code、provider、model 等字段。
       required: [feature, operation, client_request_id]
       properties:
         feature:
           type: string
+          description: 功能码，例如 resize_image_local_paid
         operation:
           type: string
+          description: 操作类型（single / batch 等）
         client_request_id:
           type: string
+          description: 桌面端生成的请求追踪 ID，用于去重和幂等
+
     EntitlementCheckData:
       type: object
+      description: 套餐权限检查结果
       required: [allowed, feature, plan_code]
       properties:
         allowed:
           type: boolean
+          description: 是否允许使用指定功能
         feature:
           type: string
+          description: 检查的功能码
         plan_code:
           type: string
+          description: 用户当前套餐编码
         remaining_free_quota:
           type: integer
           nullable: true
+          description: 免费套餐剩余免费额度（仅 free 套餐有意义）
         reason:
           type: string
           nullable: true
+          description: 不允许时的拒绝原因（中文）
+
     EntitlementCheckResponse:
       type: object
+      description: 套餐权限检查响应
       required: [success, data, error, request_id]
       properties:
         success:
           type: boolean
+          description: 请求是否成功
         data:
           $ref: '#/components/schemas/EntitlementCheckData'
         error:
           anyOf:
             - $ref: '#/components/schemas/ErrorDetail'
             - type: 'null'
+          description: 错误详情，成功时为 null
         request_id:
           type: string
+          description: 云端生成的请求追踪 ID

@@ -9,21 +9,29 @@
 - 接口字段变更必须先改 OpenAPI，再更新 DTO。
 - 桌面端和云端不得各自发明字段。
 
-## 建议目录
+## 目录结构
 
 ```text
 dto/
   csharp/
     README.md
+    CreditsBillingDto.cs
   python/
     README.md
+    __init__.py
+    credits_billing.py
+    test_credits_billing_dto.py
 ```
 
 ## 生成策略
 
-首个契约模块开发时再决定具体生成工具。工具一旦确定，必须登记到：
+- 方式：手写，严格对齐 OpenAPI。
+- 首个引入模块：`contract-credits-billing`。
+- Python：Pydantic >= 2.0 模型，使用 `model_validate_json` 反序列化。
+- C#：System.Text.Json 序列化，`JsonPropertyName` 映射，命名空间 `TTShared.Contract.*`。
 
-- `environment/INSTALLED_DEPENDENCIES.md`
-- `environment/SETUP_HISTORY.md`
-- 对应 contract 模块的 `ENVIRONMENT.md`
+## 已登记模块
 
+| 模块 | Python DTO | C# DTO | OpenAPI 来源 | 状态 |
+|------|------------|--------|-------------|------|
+| credits-billing | dto/python/credits_billing.py | dto/csharp/CreditsBillingDto.cs | credits-billing.yaml v0.1.0 | completed |
