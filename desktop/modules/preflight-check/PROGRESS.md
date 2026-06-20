@@ -58,8 +58,11 @@
 
 ## 提交记录
 
-暂无。
+- `7460380` feat(desktop-preflight-check): 完成印前检查桌面入口和风险报告展示
+  - 13 files changed, 2523 insertions(+), 18 deletions(-)
+  - 21 项单元测试全部通过
+  - 分支已推送到 origin
 
 ## 下一步
 
-提交并推送 feature/desktop-preflight-check 分支，等待用户指示合并到 dev/full-product。
+等待用户指示合并到 dev/full-product。
