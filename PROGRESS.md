@@ -11,5 +11,5 @@
 | desktop-file-workbench | desktop/modules/file-workbench | feature/desktop-file-workbench | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-20 已合并 |
 | desktop-job-system | desktop/modules/job-system | feature/desktop-job-system | DEVELOPMENT_COMPLETE | 71/71 通过 | 2026-06-20 已合并 |
 | desktop-export-settings | desktop/modules/export-settings | feature/desktop-export-settings | DEVELOPMENT_COMPLETE | 85/85 通过 | 2026-06-20 已合并 |
-| local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 29/29 通过 | 未合并 |
+| local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
