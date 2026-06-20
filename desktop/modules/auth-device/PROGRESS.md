@@ -43,7 +43,15 @@
 |---|---|---|
 | 2026-06-20 | `bc82c55` | feat(desktop-auth-device): 完成登录退出设备绑定状态展示模块 |
 
+## 提交记录
+
+| 日期 | 提交哈希 | 说明 |
+|---|---|---|
+| 2026-06-20 | `8a32fc0` | feat(desktop-auth-device): 完成登录退出设备绑定状态展示模块 |
+
+推送状态：✅ 已推送到 origin/feature/desktop-auth-device
+
 ## 下一步
 
-GitHub 当前网络不可达，需稍后手动执行 `git push origin feature/desktop-auth-device` 推送。
+模块开发完成并已推送，等待用户指定下一模块。
 
