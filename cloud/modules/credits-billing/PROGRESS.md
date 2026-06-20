@@ -1,8 +1,8 @@
-﻿# PROGRESS.md - cloud-credits-billing
+# PROGRESS.md - cloud-credits-billing
 
 ## 当前状态
 
-`NOT_STARTED`
+`IN_PROGRESS`
 
 ## 分支
 
@@ -11,16 +11,23 @@
 ## 已完成
 
 - 已创建模块文档骨架。
+- 已实现 ORM 数据模型（models.py）：Plan、CreditAccount、CreditLedger、UsageEvent。
+- 已实现 Pydantic DTO（schemas.py）：CreditBalanceData、CreditLedgerItem、CreditLedgerListData、EntitlementCheckRequest、EntitlementCheckData。
+- 已实现业务逻辑层（service.py）：额度余额查询、额度流水查询、套餐权限检查、额度扣费、额度赠送、月度赠送刷新、套餐种子数据。
+- 已实现 FastAPI 路由（router.py）：GET /credits/balance、GET /credits/ledger、POST /entitlements/check。
+- 已实现完整测试（30 项）：覆盖额度查询、流水查询、权限检查、扣费、赠送、种子数据、生命周期、冻结账户。
 
 ## 未完成
 
-- 尚未开始业务开发。
-- 尚未安装模块新增依赖。
-- 尚未运行测试。
+- cloud/shared/permissions.py 骨架仍待更新，待后续明确授权后修改。
+- 模块尚未合并到 dev/full-product。
 
 ## 测试记录
 
-暂无。
+日期：2026-06-20
+测试命令：pytest cloud/modules/credits-billing/tests/ -v
+结果：30 passed, 0 failed
+中文备注：首次测试全部通过。覆盖 3 个 API 端点、核心业务逻辑、套餐权限、扣费/赠送、种子数据和冻结账户场景。
 
 ## Bug 记录
 
@@ -28,9 +35,8 @@
 
 ## 提交记录
 
-暂无。
+- 2026-06-20: `a75c46b` — feat(cloud-credits-billing): 完成额度计费模块全部功能。10 文件变更，2079 行新增，30 项测试全部通过。已推送到 origin。
 
 ## 下一步
 
-等待用户明确指定本模块开始开发。
-
+等待用户确认是否合并到 dev/full-product。

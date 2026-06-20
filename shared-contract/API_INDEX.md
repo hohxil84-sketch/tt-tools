@@ -112,6 +112,52 @@ Response `data`:
 }
 ```
 
+## Local Paid Tools
+
+本地付费功能权限校验。桌面端在调用本地付费功能前，通过本接口检查套餐权限。
+
+### POST `/api/v1/entitlements/check`
+
+本地付费工具套餐权限检查。本接口与 Credits / Billing 中 `/entitlements/check` 为同一接口，从本地付费工具视角描述权限校验契约。
+
+用途：本地付费功能调用前，桌面端向云端检查套餐权限。
+
+Request:
+
+```json
+{
+  "feature": "resize_image_local_paid",
+  "operation": "single",
+  "client_request_id": "local_req_xxx"
+}
+```
+
+Response `data`:
+
+```json
+{
+  "allowed": true,
+  "feature": "resize_image_local_paid",
+  "plan_code": "standard",
+  "remaining_free_quota": null,
+  "reason": null
+}
+```
+
+免费套餐额度用完时的响应示例：
+
+```json
+{
+  "allowed": false,
+  "feature": "resize_image_local_paid",
+  "plan_code": "free",
+  "remaining_free_quota": 0,
+  "reason": "免费套餐当日使用次数已用完，请升级套餐"
+}
+```
+
+本地付费功能码见 `shared-contract/feature-codes.md`。权限规则见 `shared-contract/pricing-rules.md`。
+
 ## AI Copy
 
 ### POST `/api/v1/ai/copy/generate`

@@ -21,9 +21,14 @@ dto/
 
 ## 生成策略
 
-首个契约模块开发时再决定具体生成工具。工具一旦确定，必须登记到：
+- 方式：手写，严格对齐 OpenAPI。
+- 首个引入模块：`contract-credits-billing`。
+- Python：Pydantic >= 2.0 模型，使用 `model_validate_json` 反序列化。
+- C#：System.Text.Json 序列化，`JsonPropertyName` 映射，命名空间 `TTShared.Contract.*`。
 
-- `environment/INSTALLED_DEPENDENCIES.md`
-- `environment/SETUP_HISTORY.md`
-- 对应 contract 模块的 `ENVIRONMENT.md`
+## 已登记模块
+
+| 模块 | Python DTO | C# DTO | OpenAPI 来源 | 状态 |
+|------|------------|--------|-------------|------|
+| local-paid-tools | dto/python/local_paid_tools.py | dto/csharp/LocalPaidToolsDto.cs | local-paid-tools.yaml v0.1.0 | completed |
 
