@@ -44,8 +44,11 @@
 
 ## 提交记录
 
-暂无（待提交）。
+- `075d169` feat(contract-ai-copy): 完成云端文案生成 API 契约 DTO（2026-06-20）
+  - 新增 Python DTO、C# DTO、Python DTO 测试（44 项全部通过）
+  - 更新 dto/README.md 登记 ai-copy 模块
+  - 更新模块 PROGRESS.md、ACCEPTANCE.md、NOTES.md
 
 ## 下一步
 
-提交、推送，等待用户指定下一模块。
+等待用户指定合并到 dev/full-product 或指定下一模块。
