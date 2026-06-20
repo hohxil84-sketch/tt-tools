@@ -36,8 +36,9 @@
 
 ## 提交记录
 
-暂无。
+- `933f6c2` feat(desktop-job-system): 完成任务系统模块基础能力（18 文件，+2269/-19）
+- `88087ad` fix: 修复 .gitignore 误排除 C# Models/ 源码目录，补交遗漏文件（6 文件，+525/-1）
 
 ## 下一步
 
-等待用户确认后提交、推送。
+推送 feature/desktop-job-system 分支，等待合并到 dev/full-product。
