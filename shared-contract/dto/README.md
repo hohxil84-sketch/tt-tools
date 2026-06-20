@@ -31,4 +31,5 @@ dto/
 | 模块 | Python DTO | C# DTO | OpenAPI 来源 | 状态 |
 |------|------------|--------|-------------|------|
 | local-paid-tools | dto/python/local_paid_tools.py | dto/csharp/LocalPaidToolsDto.cs | local-paid-tools.yaml v0.1.0 | completed |
+| provider-log | dto/python/provider_log.py | dto/csharp/ProviderLogDto.cs | provider-log.yaml v0.1.0 | completed |
 

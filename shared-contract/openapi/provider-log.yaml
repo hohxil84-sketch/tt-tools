@@ -1,9 +1,18 @@
 openapi: 3.1.0
 info:
   title: TT Tools Provider Log API
+  description: |
+    Provider 调用日志查询 API 契约。
+    用于查询当前登录用户的 Provider（AI 服务）调用记录。
+    不返回完整 prompt、原图、API Key、Token、完整隐私内容。
   version: 0.1.0
+  contact:
+    name: TT Tools Team
 servers:
   - url: /api/v1
+tags:
+  - name: ProviderLog
+    description: Provider 调用日志查询接口
 security:
   - BearerAuth: []
 paths:
@@ -11,57 +20,105 @@ paths:
     get:
       operationId: listProviderCallLogs
       summary: 查询当前用户 Provider 调用日志
+      description: |
+        查询当前登录用户的 Provider（如 OpenAI、DeepSeek 等 AI 服务）调用日志。
+        支持按功能码、调用状态、Provider 名称筛选，支持分页。
+        返回字段不包含完整 prompt、API Key、Token、原图等隐私内容。
+      tags: [ProviderLog]
       parameters:
         - name: limit
           in: query
+          description: 每页返回的日志条数，最大 100
           schema:
             type: integer
             default: 50
             maximum: 100
+            minimum: 1
         - name: offset
           in: query
+          description: 分页偏移量，默认从第 0 条开始
           schema:
             type: integer
             default: 0
+            minimum: 0
         - name: feature
           in: query
+          description: 按功能码筛选（如 ai_copy_cloud、ai_render_cloud），可选
           schema:
             type: string
         - name: status
           in: query
+          description: 按调用状态筛选（success / failed / timeout），可选
           schema:
             type: string
+            enum: [success, failed, timeout]
         - name: provider
           in: query
+          description: 按 Provider 名称筛选（如 openai、deepseek），可选
           schema:
             type: string
       responses:
         '200':
-          description: Provider logs
+          description: 查询成功，返回 Provider 调用日志分页列表
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProviderCallLogListResponse'
+        '401':
+          description: 未认证，需要重新登录（Auth Token 无效或已过期）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: "统一 Bearer Token 鉴权，请求头 Authorization: Bearer <access_token>"
   schemas:
+    # -- 统一错误结构 --
     ErrorDetail:
       type: object
+      description: 统一错误详情结构，与 common.yaml 保持一致
       required: [code, message]
       properties:
         code:
           type: string
+          description: 统一错误码（如 AUTH_REQUIRED、VALIDATION_ERROR）
         message:
           type: string
+          description: 人类可读的错误描述（中文）
         details:
           type: object
           additionalProperties: true
+          description: 可选补充信息，如字段级校验错误明细
+
+    # -- 错误响应 --
+    ErrorResponse:
+      type: object
+      description: 标准错误响应体
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+          description: 始终为 false
+        data:
+          type: 'null'
+          description: 错误时始终为 null
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        request_id:
+          type: string
+          description: 云端生成的请求追踪 ID
+
+    # -- Provider 调用日志条目 --
     ProviderCallLogItem:
       type: object
+      description: |
+        Provider 调用日志条目，记录单次 AI Provider 调用的核心信息。
+        不得包含完整 prompt、API Key、Token、原图等隐私数据。
       required:
         - id
         - request_id
@@ -79,61 +136,89 @@ components:
         id:
           type: string
           format: uuid
+          description: 调用日志唯一 ID
         request_id:
           type: string
+          description: 请求追踪 ID，用于全链路追踪和问题排查
         feature:
           type: string
+          description: 功能码（如 ai_copy_cloud、ai_render_cloud、ai_image_tools_cloud）
         provider:
           type: string
+          description: AI Provider 名称（如 openai、deepseek、qwen）
         model:
           type: string
+          description: 使用的模型名称（如 gpt-4o、deepseek-chat）
         status:
           type: string
           enum: [success, failed, timeout]
+          description: 调用状态，success=成功、failed=失败、timeout=超时
         error_code:
           type: string
           nullable: true
+          description: 失败时的统一错误码（如 PROVIDER_TIMEOUT、PROVIDER_RATE_LIMITED），成功时为 null
         input_tokens:
           type: integer
+          description: 输入 token 数量
         output_tokens:
           type: integer
+          description: 输出 token 数量
         total_tokens:
           type: integer
+          description: 总 token 数量（input + output）
         estimated_cost:
           type: number
+          description: 云端估算的调用成本（单位：美元，仅供参考，不作为最终计费依据）
         credits_charged:
           type: integer
+          description: 本次调用实际扣除的 AI 额度
         latency_ms:
           type: integer
           nullable: true
+          description: 调用延迟（毫秒），超时时可能为 null
         created_at:
           type: string
           format: date-time
+          description: 调用发生时间（UTC）
+
+    # -- 分页列表数据 --
     ProviderCallLogListData:
       type: object
+      description: Provider 调用日志分页列表数据
       required: [items, total, limit, offset]
       properties:
         items:
           type: array
+          description: 当前页的调用日志条目列表
           items:
             $ref: '#/components/schemas/ProviderCallLogItem'
         total:
           type: integer
+          description: 符合条件的总记录数
         limit:
           type: integer
+          description: 当前每页条数
         offset:
           type: integer
+          description: 当前偏移量
+
+    # -- 列表响应 --
     ProviderCallLogListResponse:
       type: object
+      description: Provider 调用日志查询响应，遵循统一响应结构（success / data / error / request_id）
       required: [success, data, error, request_id]
       properties:
         success:
           type: boolean
+          description: 请求是否成功
         data:
           $ref: '#/components/schemas/ProviderCallLogListData'
+          description: 成功时返回分页列表数据
         error:
           anyOf:
             - $ref: '#/components/schemas/ErrorDetail'
             - type: 'null'
+          description: 错误详情，成功时为 null
         request_id:
           type: string
+          description: 云端生成的请求追踪 ID
