@@ -46,7 +46,9 @@
 
 ## 提交记录
 
-（待提交）
+- 532088f feat(cloud-shared): 完成云端公共层基础能力，8个源文件5个测试文件，47项测试全部通过
+  - 已推送至 origin/feature/cloud-shared
+  - 分支：feature/cloud-shared
 
 ## 下一步
 
