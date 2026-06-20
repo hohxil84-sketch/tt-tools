@@ -1,0 +1,196 @@
+openapi: 3.1.0
+info:
+  title: TT Tools Local Paid Tools API
+  description: |
+    本地付费工具权限校验 API 契约。
+    桌面端在调用本地付费功能（如改尺寸、PDF/图片互转等）前，
+    通过本契约定义的接口检查当前用户套餐是否允许使用指定功能。
+    权限检查不消耗 AI 额度，仅返回套餐权限结果。
+    需要 Bearer Token 认证。
+    客户端不得提交 user_id、plan_code、provider、model、estimated_cost、credits_charged、permission_granted、final_price 等字段。
+  version: 0.1.0
+  contact:
+    name: TT Tools Team
+servers:
+  - url: /api/v1
+    description: TT Tools API v1
+tags:
+  - name: LocalPaidTools
+    description: 本地付费工具权限校验
+security:
+  - BearerAuth: []
+paths:
+  /entitlements/check:
+    post:
+      operationId: checkLocalPaidToolEntitlement
+      summary: 检查本地付费功能套餐权限
+      description: |
+        桌面端在调用本地付费功能前，通过本接口检查当前用户套餐是否允许使用指定功能。
+
+        本地付费功能在本地执行，不消耗云端 AI 额度，但需要登录和套餐权限。
+        支持的本地付费功能码示例：resize_image_local_paid、pdf_image_convert_local_paid。
+
+        权限规则：
+        - free 套餐：可能限制每日/每月使用次数，由 remaining_free_quota 返回剩余配额。
+        - standard / pro 套餐：通常 allowed=true，无使用次数限制。
+        - 未登录或套餐无效：allowed=false，reason 返回具体原因。
+
+        需要 Bearer Token 认证。
+        客户端不得提交 user_id、plan_code、permission_granted 等字段。
+      tags: [LocalPaidTools]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalPaidToolEntitlementRequest'
+      responses:
+        '200':
+          description: 权限检查完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalPaidToolEntitlementResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        统一鉴权方式。
+        桌面端在请求头中携带 `Authorization: Bearer <access_token>`。
+        客户端不得自行决定鉴权结果。
+
+  responses:
+    Unauthorized:
+      description: 未认证或令牌无效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    # ---- 通用结构 ----
+
+    ErrorDetail:
+      type: object
+      description: 统一错误详情结构，与 common.yaml 保持一致
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: |
+            统一错误码。
+            鉴权相关：AUTH_REQUIRED、AUTH_TOKEN_EXPIRED、PERMISSION_DENIED
+            套餐相关：PLAN_REQUIRED
+            通用：UNKNOWN_ERROR、VALIDATION_ERROR、REQUEST_TIMEOUT、NETWORK_ERROR
+        message:
+          type: string
+          description: 人类可读的错误描述（中文）
+        details:
+          type: object
+          additionalProperties: true
+          description: 可选补充信息，如字段级校验错误明细
+
+    ErrorResponse:
+      type: object
+      description: 标准错误响应体
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: 始终为 false
+        data:
+          type: 'null'
+          description: 错误时始终为 null
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        request_id:
+          type: string
+          description: 云端生成的请求追踪 ID
+
+    # ---- 权限检查 ----
+
+    LocalPaidToolEntitlementRequest:
+      type: object
+      description: |
+        本地付费工具套餐权限检查请求。
+        客户端不得提交 user_id、plan_code、provider、model 等字段。
+      required: [feature, operation, client_request_id]
+      properties:
+        feature:
+          type: string
+          description: |
+            本地付费功能码。
+            当前支持：resize_image_local_paid（图片改尺寸）、pdf_image_convert_local_paid（PDF/图片互转）。
+            后续扩展的功能码将追加到 shared-contract/feature-codes.md。
+        operation:
+          type: string
+          description: |
+            操作类型，用于区分单次和批量操作。
+            single：单文件处理
+            batch：批量文件处理
+        client_request_id:
+          type: string
+          description: 桌面端生成的请求追踪 ID，用于去重和幂等。格式建议：local_req_<timestamp>_<seq>
+
+    LocalPaidToolEntitlementData:
+      type: object
+      description: 本地付费工具套餐权限检查结果
+      required: [allowed, feature, plan_code]
+      properties:
+        allowed:
+          type: boolean
+          description: |
+            是否允许使用指定功能。
+            true 表示权限通过，桌面端可继续调用本地 worker 执行功能。
+            false 表示权限不通过，桌面端应向用户展示 reason 中的拒绝原因。
+        feature:
+          type: string
+          description: 检查的功能码，与请求中的 feature 一致
+        plan_code:
+          type: string
+          description: |
+            用户当前套餐编码。
+            free：免费套餐，可能有次数限制
+            standard：标准套餐
+            pro：专业套餐
+        remaining_free_quota:
+          type: integer
+          nullable: true
+          description: |
+            免费套餐剩余免费使用次数。
+            仅 plan_code 为 free 且 allowed 时返回有意义的值。
+            非免费套餐或权限不通过时为 null。
+        reason:
+          type: string
+          nullable: true
+          description: |
+            不允许时的拒绝原因（中文），桌面端可直接展示给用户。
+            权限通过时为 null。
+            常见原因：免费额度已用完、套餐不支持该功能、账户已冻结。
+
+    LocalPaidToolEntitlementResponse:
+      type: object
+      description: 本地付费工具套餐权限检查响应
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+          description: 请求是否成功。注意：权限不通过（allowed=false）时 success 仍为 true，因为权限检查本身成功执行。
+        data:
+          $ref: '#/components/schemas/LocalPaidToolEntitlementData'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+          description: 错误详情，成功时为 null
+        request_id:
+          type: string
+          description: 云端生成的请求追踪 ID，用于全链路追踪
