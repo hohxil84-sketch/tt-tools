@@ -37,6 +37,7 @@
 | 提交哈希 | 说明 |
 |---|---|
 | 6558c16 | feat(desktop-export-settings): 完成导出、设置、日志查看、版本更新模块基础能力。85 项单元测试全部通过。 |
+| 56e5f42 | docs(desktop-export-settings): 更新 PROGRESS.md 提交记录 |
 
 ## 下一步
 
