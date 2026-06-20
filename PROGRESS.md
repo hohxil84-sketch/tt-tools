@@ -9,4 +9,5 @@
 | cloud-auth-device | cloud/modules/auth-device | feature/cloud-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-auth-device | desktop/modules/auth-device | feature/desktop-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-file-workbench | desktop/modules/file-workbench | feature/desktop-file-workbench | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-20 已合并 |
+| desktop-job-system | desktop/modules/job-system | feature/desktop-job-system | DEVELOPMENT_COMPLETE | 71/71 通过 | 2026-06-20 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
