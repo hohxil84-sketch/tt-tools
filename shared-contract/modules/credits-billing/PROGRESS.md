@@ -53,7 +53,7 @@
 
 ## 提交记录
 
-待提交。
+- `5378acb` feat(contract-credits-billing): 完成套餐权限、额度余额、额度流水 API 契约（已推送至 origin/feature/contract-credits-billing）
 
 ## 下一步
 
