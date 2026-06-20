@@ -21,4 +21,5 @@
 | cloud-provider-log | cloud/modules/provider-log | feature/cloud-provider-log | DEVELOPMENT_COMPLETE | 26/26 通过 | 2026-06-20 已合并 |
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
+| desktop-preflight-check | desktop/modules/preflight-check | feature/desktop-preflight-check | DEVELOPMENT_COMPLETE | 21/21 通过 | 2026-06-20 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
