@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>TTTools.JobSystem</RootNamespace>
+    <AssemblyName>TTTools.JobSystem</AssemblyName>
+    <Version>0.1.0</Version>
+    <Authors>TT Tools Team</Authors>
+    <Description>TT Tools - 桌面端任务系统模块，统一任务状态、任务历史、失败重试和任务详情</Description>
+  </PropertyGroup>
+
+  <!-- 全局隐式 using：补充 net8.0-windows WPF 库项目未自动包含的常用命名空间 -->
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <Using Include="System.Net.Http.Json" />
+    <Using Include="System.Text" />
+    <Using Include="System.Text.Json" />
+  </ItemGroup>
+
+  <!-- 引用 desktop-shared 公共层 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\shared\DesktopShared\DesktopShared.csproj" />
+  </ItemGroup>
+
+</Project>
