@@ -62,3 +62,11 @@
 - 技术选型：Pillow（HPND 许可证），用于图像元数据读取（DPI/颜色模式/Alpha 通道/尺寸），不依赖 OpenCV/GPU/ML 模型。
 - 印前检查模块 4 个源文件创建完毕（__init__.py、checker.py、report.py）、测试文件（__init__.py、test_preflight.py）。
 - 29 项单元测试全部通过，0 失败 0 警告（含格式检查、尺寸检查、DPI 检查、颜色模式检查、透明通道检查、低清风险检查、文件大小检查、错误处理、报告结构、枚举验证、阈值验证）。
+
+2026-06-20（local-worker-id-photo）：
+- 使用系统 Python 3.12.10 创建虚拟环境 D:\localPath\venvs\local-worker-id-photo。
+- 安装 pip 依赖：opencv-python 4.13.0.92（含 numpy 2.4.6）、Pillow 12.2.0、pytest 9.1.1。
+- 首次引入模块：local-worker/modules/id-photo。
+- 技术选型：OpenCV（Apache 2.0 许可证），用于颜色距离背景检测、GrabCut 分割、形态学处理、Alpha 混合；不依赖额外 ML 模型，所有算法纯图像处理，支持 CPU-only 运行。
+- 证件照换底色模块 3 个源文件创建完毕（__init__.py、specifications.py、processor.py）、测试文件（__init__.py、test_id_photo.py）。
+- 58 项单元测试全部通过，0 失败 0 警告（含规格/底色查询、背景检测、颜色遮罩/GrabCut 遮罩、背景替换、规格缩放、完整流程、文件 I/O、错误处理、元数据、输出合理性）。
