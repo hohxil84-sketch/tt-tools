@@ -47,7 +47,10 @@
 
 ## 提交记录
 
-待记录。
+- 2026-06-20: `6bec5f7` — feat: complete provider-runtime mock phase
+  - 分支：feature/cloud-provider-runtime
+  - 测试结果：103/103 通过
+  - 中文备注：完成 Provider 公共调用层 mock 阶段全部开发，已推送到 origin。
 
 ## 下一步
 
