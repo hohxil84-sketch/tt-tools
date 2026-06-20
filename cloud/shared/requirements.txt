@@ -1,0 +1,15 @@
+# cloud-shared 模块依赖
+# 数据库、鉴权、权限、错误响应、request_id、日志、配置公共层
+
+# 数据库
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0
+
+# 鉴权
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.1.0
+python-multipart>=0.0.9
+
+# 测试
+aiosqlite>=0.20.0

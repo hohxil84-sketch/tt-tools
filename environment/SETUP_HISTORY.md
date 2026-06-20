@@ -38,3 +38,11 @@
 - cloud-app-shell 模块 5 个源文件创建完毕（config.py、middleware.py、health.py、main.py、requirements.txt）。
 - 4 个测试文件创建完毕（conftest.py、test_config.py、test_health.py、test_middleware.py）。
 - 23 项单元测试全部通过，0 失败 0 警告。
+
+2026-06-20（cloud-shared）：
+- 在 D:\localPath\venvs\cloud-app-shell 追加安装依赖：sqlalchemy 2.0.51、asyncpg 0.31.0、python-jose 3.5.0、passlib 1.7.4、bcrypt 5.0.0、python-multipart 0.0.32、aiosqlite 0.22.1。
+- 该 venv 更新为 cloud 公共 venv（cloud-app-shell + cloud-shared 共用）。
+- 首次引入模块：cloud/shared。
+- cloud-shared 模块 8 个源文件创建完毕（config.py、database.py、errors.py、request_id.py、logging_config.py、auth.py、permissions.py、__init__.py）。
+- 6 个测试文件创建完毕（__init__.py、conftest.py、test_errors.py、test_request_id.py、test_auth.py、test_database.py、test_permissions.py）。
+- 47 项单元测试全部通过，0 失败 0 警告。
