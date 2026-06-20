@@ -54,3 +54,11 @@
 - OCR 选型：RapidOCR（基于 ONNX Runtime，PaddleOCR v4 模型，Apache 2.0）。
 - OCR 模块 4 个源文件创建完毕（__init__.py、engine.py、results.py）、测试文件（__init__.py、test_ocr.py）。
 - 29 项单元测试全部通过，0 失败 0 警告（含 Python 版本检查、引擎初始化、文件/数组/bytes 识别、输入校验、结果结构、批量识别、上下文管理器、GPU 检测、便捷函数、置信度过滤）。
+
+2026-06-20（local-worker-preflight-check）：
+- 使用系统 Python 3.12.10 创建虚拟环境 D:\localPath\venvs\local-worker-preflight-check。
+- 安装 pip 依赖：Pillow 12.2.0、pytest 9.1.1。
+- 首次引入模块：local-worker/modules/preflight-check。
+- 技术选型：Pillow（HPND 许可证），用于图像元数据读取（DPI/颜色模式/Alpha 通道/尺寸），不依赖 OpenCV/GPU/ML 模型。
+- 印前检查模块 4 个源文件创建完毕（__init__.py、checker.py、report.py）、测试文件（__init__.py、test_preflight.py）。
+- 29 项单元测试全部通过，0 失败 0 警告（含格式检查、尺寸检查、DPI 检查、颜色模式检查、透明通道检查、低清风险检查、文件大小检查、错误处理、报告结构、枚举验证、阈值验证）。
