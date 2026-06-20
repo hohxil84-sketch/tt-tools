@@ -47,7 +47,7 @@
 
 ## 提交记录
 
-<!-- 提交后补充 -->
+- `8c569d5` feat(contract-provider-log): complete provider log query API contract（已推送至 origin/feature/contract-provider-log）
 
 ## 下一步
 
