@@ -43,7 +43,11 @@
 
 ## 提交记录
 
-待首次提交。
+- `a5b65f0` feat(desktop-file-workbench): 完成文件工作台模块基础能力
+  - 分支：feature/desktop-file-workbench
+  - 日期：2026-06-20
+  - 测试结果：36 项测试全部通过
+  - 说明：实现文件拖拽导入、文件预览、最近文件和工作台基础流程，已推送到 origin。
 
 ## 下一步
 
