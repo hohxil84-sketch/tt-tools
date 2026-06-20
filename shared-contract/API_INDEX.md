@@ -224,7 +224,7 @@ Query: `limit`、`offset`、`feature`、`status`、`provider`
 
 Response `data`: `items`、`total`、`limit`、`offset`
 
-Item fields: `id`、`request_id`、`feature`、`provider`、`model`、`status`、`input_tokens`、`output_tokens`、`total_tokens`、`estimated_cost`、`credits_charged`、`latency_ms`、`created_at`
+Item fields: `id`、`request_id`、`feature`、`provider`、`model`、`status`、`error_code`、`input_tokens`、`output_tokens`、`total_tokens`、`estimated_cost`、`credits_charged`、`latency_ms`、`created_at`
 
 不得返回完整 prompt、原图、API Key、Token、完整隐私内容。
 
