@@ -67,7 +67,7 @@
 
 ## 提交记录
 
-暂无（待提交推送）。
+- `35685c2` feat(contract-local-paid-tools): 完成本地付费工具权限校验 API 契约（已推送至 origin/feature/contract-local-paid-tools）
 
 ## 下一步
 
