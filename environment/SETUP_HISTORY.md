@@ -46,3 +46,11 @@
 - cloud-shared 模块 8 个源文件创建完毕（config.py、database.py、errors.py、request_id.py、logging_config.py、auth.py、permissions.py、__init__.py）。
 - 6 个测试文件创建完毕（__init__.py、conftest.py、test_errors.py、test_request_id.py、test_auth.py、test_database.py、test_permissions.py）。
 - 47 项单元测试全部通过，0 失败 0 警告。
+
+2026-06-20（local-worker-ocr）：
+- 使用系统 Python 3.12.10 创建虚拟环境 D:\localPath\venvs\local-worker-ocr。
+- 安装 pip 依赖：rapidocr-onnxruntime 1.4.4（含 onnxruntime 1.27.0、opencv-python 4.13.0.92、numpy 2.4.6、Pillow 12.2.0 等依赖）、pytest 9.1.1。
+- 首次引入模块：local-worker/modules/ocr。
+- OCR 选型：RapidOCR（基于 ONNX Runtime，PaddleOCR v4 模型，Apache 2.0）。
+- OCR 模块 4 个源文件创建完毕（__init__.py、engine.py、results.py）、测试文件（__init__.py、test_ocr.py）。
+- 29 项单元测试全部通过，0 失败 0 警告（含 Python 版本检查、引擎初始化、文件/数组/bytes 识别、输入校验、结果结构、批量识别、上下文管理器、GPU 检测、便捷函数、置信度过滤）。

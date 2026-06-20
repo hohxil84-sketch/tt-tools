@@ -2,7 +2,9 @@
 
 | 模型 | 功能 | 来源 | 版本 | 存放位置 | 大小 | 是否提交 Git | 下载方式 | 许可证 | 状态 |
 |---|---|---|---|---|---|---|---|---|---|
-| 待定 | OCR | 待选型 | 待定 | 待定 | 待定 | 否 | 待定 | 待确认 | planned |
+| ch_PP-OCRv4_det_infer.onnx | OCR 文字检测 | RapidOCR/PaddleOCR | v4 | rapidocr_onnxruntime/models/（site-packages 内，随 pip 包安装） | ~4.5 MB | 否 | pip install rapidocr-onnxruntime | Apache 2.0 | active |
+| ch_ppocr_mobile_v2.0_cls_infer.onnx | OCR 文字方向分类 | RapidOCR/PaddleOCR | v2.0 | rapidocr_onnxruntime/models/（site-packages 内，随 pip 包安装） | ~0.6 MB | 否 | pip install rapidocr-onnxruntime | Apache 2.0 | active |
+| ch_PP-OCRv4_rec_infer.onnx | OCR 文字识别 | RapidOCR/PaddleOCR | v4 | rapidocr_onnxruntime/models/（site-packages 内，随 pip 包安装） | ~10.4 MB | 否 | pip install rapidocr-onnxruntime | Apache 2.0 | active |
 | 待定 | 抠图 | 待选型 | 待定 | 待定 | 待定 | 否 | 待定 | 待确认 | planned |
 
 ## 存放规则
