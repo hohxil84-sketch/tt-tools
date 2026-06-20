@@ -27,3 +27,14 @@
 
 2026-06-03（contract-base-rules）：
 - 引入 Spectral 6.16.0（OpenAPI 校验工具），通过 npx 按需运行，npm 缓存指向 D:\localPath\caches\npm。
+
+2026-06-20（cloud-app-shell）：
+- 发现系统无可用 Python（原台账登记 D:\APPLICATION\Python312 不存在）。
+- 下载 Python 3.11.9 安装包到 D:\localPath\downloads\python-3.11.9-amd64.exe。
+- 安装 Python 3.11.9 到 C:\Program Files\Python311（系统级安装，对齐 TOOLCHAIN.md 云端推荐版本）。
+- 创建 Python 虚拟环境 D:\localPath\venvs\cloud-app-shell。
+- 安装 pip 依赖：fastapi 0.138.0、uvicorn 0.49.0、pydantic-settings 2.14.2、httpx 0.28.1、pytest 9.1.1、pytest-asyncio 1.4.0。
+- 首次引入模块：cloud/app-shell。
+- cloud-app-shell 模块 5 个源文件创建完毕（config.py、middleware.py、health.py、main.py、requirements.txt）。
+- 4 个测试文件创建完毕（conftest.py、test_config.py、test_health.py、test_middleware.py）。
+- 23 项单元测试全部通过，0 失败 0 警告。

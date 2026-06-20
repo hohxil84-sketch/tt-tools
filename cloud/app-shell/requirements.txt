@@ -1,0 +1,10 @@
+# cloud-app-shell 模块依赖
+# FastAPI 云端启动、配置、路由装配、健康检查和基础中间件
+fastapi>=0.138.0
+uvicorn[standard]>=0.49.0
+pydantic-settings>=2.14.0
+
+# 开发依赖
+httpx>=0.28.0
+pytest>=9.0.0
+pytest-asyncio>=1.4.0
