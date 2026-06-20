@@ -20,8 +20,7 @@
 
 ## 未完成
 
-- 尚未更新全局依赖台账和安装历史。
-- 尚未提交和推送。
+暂无。
 
 ## 测试记录
 
@@ -37,8 +36,13 @@
 
 ## 提交记录
 
-暂无。
+- 2026-06-20: `e3fa1cf` — feat(local-worker-id-photo): 完成证件照换底色模块
+  - 分支: `feature/local-id-photo`
+  - 已推送: origin/feature/local-id-photo
+  - 新增源文件: __init__.py, specifications.py, processor.py, tests/__init__.py, tests/test_id_photo.py
+  - 更新记录: PROGRESS.md, ACCEPTANCE.md, INSTALLED_DEPENDENCIES.md, SETUP_HISTORY.md
+  - 测试: 58 passed, 0 failed
 
 ## 下一步
 
-更新全局依赖台账，提交推送。
+等待用户指定下一模块。
