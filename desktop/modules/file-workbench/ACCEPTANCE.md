@@ -1,18 +1,17 @@
-﻿# ACCEPTANCE.md - desktop-file-workbench
+# ACCEPTANCE.md - desktop-file-workbench
 
 ## 验收状态
 
-`NOT_REVIEWED`
+`REVIEWED`
 
 ## 验收清单
 
-- 模块目标已实现。
-- 不包含禁止内容。
-- 测试记录已写入 PROGRESS.md。
-- 新依赖和模型已登记。
-- 代码关键逻辑有中文注释。
+- [x] 模块目标已实现（文件拖拽导入、文件预览、最近文件、工作台基础流程）。
+- [x] 不包含禁止内容（无跨模块修改、无未登记依赖、无密钥/模型/缓存提交）。
+- [x] 测试记录已写入 PROGRESS.md（36 项测试全部通过）。
+- [x] 新依赖和模型已登记（本模块无新增依赖，全部基于已有 .NET 8 + TTShared）。
+- [x] 代码关键逻辑有中文注释。
 
 ## 是否允许合并
 
-否。模块尚未开发。
-
+是。模块开发和测试已完成，可以合并到 dev/full-product。
