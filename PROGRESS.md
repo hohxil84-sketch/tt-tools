@@ -15,5 +15,6 @@
 | contract-auth-device | shared-contract/modules/auth-device | feature/contract-auth-device | DEVELOPMENT_COMPLETE | 0 errors | 2026-06-19 已合并 |
 | contract-local-paid-tools | shared-contract/modules/local-paid-tools | feature/contract-local-paid-tools | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-20 已合并 |
 | cloud-credits-billing | cloud/modules/credits-billing | feature/cloud-credits-billing | DEVELOPMENT_COMPLETE | 30/30 通过 | 2026-06-20 已合并 |
+| contract-provider-log | shared-contract/modules/provider-log | feature/contract-provider-log | DEVELOPMENT_COMPLETE | Spectral 0 errors, DTO 28/28 通过 | 2026-06-20 已合并 |
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
