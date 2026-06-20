@@ -58,7 +58,9 @@
 
 ## 提交记录
 
-暂无。
+- `aac029a` feat(local-worker-preflight-check): 完成印前检查模块基础能力
+  - 10 files changed, 1289 insertions(+), 20 deletions(-)
+  - 29 项单元测试全部通过
 
 ## 下一步
 
