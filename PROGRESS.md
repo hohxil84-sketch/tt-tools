@@ -9,6 +9,7 @@
 | cloud-auth-device | cloud/modules/auth-device | feature/cloud-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-auth-device | desktop/modules/auth-device | feature/desktop-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-file-workbench | desktop/modules/file-workbench | feature/desktop-file-workbench | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-20 已合并 |
+| desktop-ocr | desktop/modules/ocr | feature/desktop-ocr | DEVELOPMENT_COMPLETE | 33/33 通过 | 2026-06-20 已合并 |
 | desktop-job-system | desktop/modules/job-system | feature/desktop-job-system | DEVELOPMENT_COMPLETE | 71/71 通过 | 2026-06-20 已合并 |
 | desktop-export-settings | desktop/modules/export-settings | feature/desktop-export-settings | DEVELOPMENT_COMPLETE | 85/85 通过 | 2026-06-20 已合并 |
 | contract-base-rules | shared-contract/modules/base-rules | feature/contract-base-rules | DEVELOPMENT_COMPLETE | 0 errors | 2026-06-03 已合并 |
