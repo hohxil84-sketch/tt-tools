@@ -79,3 +79,11 @@
 - 模型 u2net.onnx（168MB）、u2netp.onnx（4.4MB）手动下载到 %USERPROFILE%\.u2net\（rembg 默认缓存目录）。
 - 智能抠图模块 2 个源文件创建完毕（__init__.py、processor.py）、测试文件（__init__.py、test_remove_bg.py）。
 - 32 项单元测试全部通过，0 失败 0 警告（含 Python/依赖检查、模块导入、模型列表、模型缓存、背景去除、文件路径 API、纯色合成、输入校验、多模型、仅遮罩、RGBA 输入、复杂场景、Alpha Matting）。
+
+2026-06-21（local-worker-resize-image）：
+- 使用系统 Python 3.12.10 创建虚拟环境 D:\localPath\venvs\local-worker-resize-image。
+- 安装 pip 依赖：Pillow 12.2.0、pytest 9.1.1。
+- 首次引入模块：local-worker/modules/resize-image。
+- 技术选型：Pillow（HPND 许可证），纯本地图像处理，不依赖 GPU/ML 模型。
+- 图片改尺寸模块 3 个源文件创建完毕（__init__.py、specifications.py、processor.py）、测试文件（__init__.py、test_resize_image.py）。
+- 110 项单元测试全部通过，0 失败 0 警告（含模块导入/常量校验/参数校验/7种缩放模式/6种重采样滤镜/格式转换/预设尺寸/输入方式/文件输出/DPI处理/边缘情况/性能/便捷方法）。
