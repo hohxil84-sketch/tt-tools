@@ -52,7 +52,7 @@
 
 ## 提交记录
 
-暂无（待提交推送）。
+- 2026-06-21：`7ffc118` — feat(desktop-resize-image): 完成图片改尺寸桌面入口模块，已推送到 origin/feature/desktop-resize-image，54 项 C# 单测 + 4 项 Python bridge smoke tests 全部通过。
 
 ## 下一步
 
