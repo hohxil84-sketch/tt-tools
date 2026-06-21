@@ -1,0 +1,571 @@
+using System.Collections.ObjectModel;
+using System.Windows.Input;
+using System.Windows.Media;
+using Microsoft.Win32;
+using TTShared.UI;
+using TTShared.Logging;
+using TTShared.FileSystem;
+using TTShared.JobSystem;
+using TTTools.RemoveBg.Models;
+using TTTools.RemoveBg.Services;
+
+namespace TTTools.RemoveBg.ViewModels;
+
+/// <summary>
+/// 智能抠图模块主 ViewModel
+/// 管理图片文件选择、抠图处理触发、结果预览、参数配置的完整流程。
+/// 智能抠图是本地免费功能，不需要云端权限检查。
+/// </summary>
+public class RemoveBgViewModel : BaseViewModel
+{
+    private readonly RemoveBgService? _removeBgService;
+    private readonly FileSystemService _fileSystem;
+    private readonly JobManager? _jobManager;
+    private readonly AppLogger? _logger;
+
+    private bool _isRunning;
+    private string _statusMessage = "就绪 - 选择图片文件开始智能抠图";
+    private string? _errorMessage;
+    private int _progressValue;
+    private int _progressMax = 100;
+    private bool _isServiceAvailable;
+    private RemoveBgResult? _selectedResult;
+    private CancellationTokenSource? _currentCts;
+
+    // ---- 抠图参数 ----
+
+    private string _selectedModelName = "u2net";
+    private bool _alphaMatting;
+    private bool _outputRgba = true;
+    private bool _synthesizeBackground;
+    private int _bgRed = 255;
+    private int _bgGreen = 255;
+    private int _bgBlue = 255;
+
+    /// <summary>已处理的抠图结果列表</summary>
+    public ObservableCollection<RemoveBgResult> Results { get; } = new();
+
+    /// <summary>当前选中的结果（显示在预览区）</summary>
+    public RemoveBgResult? SelectedResult
+    {
+        get => _selectedResult;
+        set
+        {
+            if (SetProperty(ref _selectedResult, value))
+            {
+                OnPropertyChanged(nameof(HasSelectedResult));
+                OnPropertyChanged(nameof(SelectedPreviewText));
+            }
+        }
+    }
+
+    /// <summary>是否有选中结果</summary>
+    public bool HasSelectedResult => SelectedResult != null;
+
+    /// <summary>选中结果的预览文本</summary>
+    public string SelectedPreviewText => SelectedResult != null
+        ? $"模型: {SelectedResult.ModelSummary}\n尺寸: {SelectedResult.SizeSummary}\n格式: {SelectedResult.OutputFormatSummary}\n前景占比: {SelectedResult.ForegroundRatioSummary}"
+        : string.Empty;
+
+    /// <summary>当前状态栏消息</summary>
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        set => SetProperty(ref _statusMessage, value);
+    }
+
+    /// <summary>错误消息</summary>
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        set
+        {
+            if (SetProperty(ref _errorMessage, value))
+                OnPropertyChanged(nameof(HasError));
+        }
+    }
+
+    /// <summary>是否有错误</summary>
+    public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+
+    /// <summary>是否正在运行处理</summary>
+    public bool IsRunning
+    {
+        get => _isRunning;
+        set
+        {
+            if (SetProperty(ref _isRunning, value))
+            {
+                OnPropertyChanged(nameof(CanStart));
+                OnPropertyChanged(nameof(CanCancel));
+            }
+        }
+    }
+
+    /// <summary>是否可以开始处理</summary>
+    public bool CanStart => !IsRunning && _isServiceAvailable;
+
+    /// <summary>是否可以取消</summary>
+    public bool CanCancel => IsRunning;
+
+    /// <summary>抠图服务是否可用</summary>
+    public bool IsServiceAvailable
+    {
+        get => _isServiceAvailable;
+        set
+        {
+            if (SetProperty(ref _isServiceAvailable, value))
+            {
+                OnPropertyChanged(nameof(CanStart));
+                OnPropertyChanged(nameof(ServiceStatusText));
+            }
+        }
+    }
+
+    /// <summary>服务状态文本</summary>
+    public string ServiceStatusText => _isServiceAvailable ? "抠图引擎就绪" : "抠图引擎未连接";
+
+    // ---- 抠图参数属性 ----
+
+    /// <summary>当前选择的模型名称</summary>
+    public string SelectedModelName
+    {
+        get => _selectedModelName;
+        set => SetProperty(ref _selectedModelName, value);
+    }
+
+    /// <summary>是否启用 Alpha Matting 精细化边缘</summary>
+    public bool AlphaMatting
+    {
+        get => _alphaMatting;
+        set => SetProperty(ref _alphaMatting, value);
+    }
+
+    /// <summary>是否输出 RGBA 透明 PNG</summary>
+    public bool OutputRgba
+    {
+        get => _outputRgba;
+        set
+        {
+            if (SetProperty(ref _outputRgba, value))
+            {
+                OnPropertyChanged(nameof(ShowBackgroundColorPicker));
+            }
+        }
+    }
+
+    /// <summary>是否合成纯色背景</summary>
+    public bool SynthesizeBackground
+    {
+        get => _synthesizeBackground;
+        set
+        {
+            if (SetProperty(ref _synthesizeBackground, value))
+            {
+                OnPropertyChanged(nameof(ShowBackgroundColorPicker));
+            }
+        }
+    }
+
+    /// <summary>背景色 R 分量 (0-255)</summary>
+    public int BgRed
+    {
+        get => _bgRed;
+        set => SetProperty(ref _bgRed, Math.Clamp(value, 0, 255));
+    }
+
+    /// <summary>背景色 G 分量 (0-255)</summary>
+    public int BgGreen
+    {
+        get => _bgGreen;
+        set => SetProperty(ref _bgGreen, Math.Clamp(value, 0, 255));
+    }
+
+    /// <summary>背景色 B 分量 (0-255)</summary>
+    public int BgBlue
+    {
+        get => _bgBlue;
+        set => SetProperty(ref _bgBlue, Math.Clamp(value, 0, 255));
+    }
+
+    /// <summary>背景色预览（WPF 颜色）</summary>
+    public Color BackgroundColorPreview
+    {
+        get => Color.FromRgb((byte)BgRed, (byte)BgGreen, (byte)BgBlue);
+        set
+        {
+            BgRed = value.R;
+            BgGreen = value.G;
+            BgBlue = value.B;
+        }
+    }
+
+    /// <summary>是否显示背景色选择器（仅在合成背景时显示）</summary>
+    public bool ShowBackgroundColorPicker => SynthesizeBackground;
+
+    /// <summary>可用的模型列表</summary>
+    public ObservableCollection<RemoveBgModelInfo> AvailableModels { get; } = new();
+
+    /// <summary>进度值 (0-100)</summary>
+    public int ProgressValue
+    {
+        get => _progressValue;
+        set => SetProperty(ref _progressValue, value);
+    }
+
+    /// <summary>进度最大值</summary>
+    public int ProgressMax
+    {
+        get => _progressMax;
+        set => SetProperty(ref _progressMax, value);
+    }
+
+    /// <summary>已处理结果数量</summary>
+    public int ResultCount => Results.Count;
+
+    /// <summary>成功处理数量</summary>
+    public int SuccessCount => Results.Count(r => r.IsSuccess);
+
+    /// <summary>失败处理数量</summary>
+    public int FailedCount => Results.Count(r => !r.IsSuccess);
+
+    // ---- 命令 ----
+
+    /// <summary>选择文件命令</summary>
+    public ICommand SelectFilesCommand { get; }
+
+    /// <summary>开始抠图处理命令</summary>
+    public ICommand StartProcessingCommand { get; }
+
+    /// <summary>取消当前处理命令</summary>
+    public ICommand CancelCommand { get; }
+
+    /// <summary>清除所有结果命令</summary>
+    public ICommand ClearResultsCommand { get; }
+
+    /// <summary>打开输出文件命令</summary>
+    public ICommand OpenOutputFileCommand { get; }
+
+    /// <summary>选择结果项命令</summary>
+    public ICommand SelectResultCommand { get; }
+
+    /// <summary>设置白色背景命令</summary>
+    public ICommand SetWhiteBackgroundCommand { get; }
+
+    /// <summary>设置红色背景命令</summary>
+    public ICommand SetRedBackgroundCommand { get; }
+
+    /// <summary>设置蓝色背景命令</summary>
+    public ICommand SetBlueBackgroundCommand { get; }
+
+    public RemoveBgViewModel(RemoveBgService? removeBgService, FileSystemService fileSystem,
+        JobManager? jobManager = null, AppLogger? logger = null)
+    {
+        _removeBgService = removeBgService;
+        _fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+        _jobManager = jobManager;
+        _logger = logger;
+
+        SelectFilesCommand = new RelayCommand(SelectFiles);
+        StartProcessingCommand = new RelayCommand(StartProcessingAsync, () => CanStart);
+        CancelCommand = new RelayCommand(CancelProcessing, () => CanCancel);
+        ClearResultsCommand = new RelayCommand(ClearResults, () => Results.Count > 0);
+        OpenOutputFileCommand = new RelayCommand(OpenOutputFile, () => HasSelectedResult);
+        SelectResultCommand = new RelayCommand<RemoveBgResult?>(r => SelectedResult = r);
+        SetWhiteBackgroundCommand = new RelayCommand(() => SetBackgroundColor(255, 255, 255));
+        SetRedBackgroundCommand = new RelayCommand(() => SetBackgroundColor(255, 0, 0));
+        SetBlueBackgroundCommand = new RelayCommand(() => SetBackgroundColor(0, 0, 255));
+
+        // 监听结果列表变更以更新命令状态
+        Results.CollectionChanged += (_, _) => RefreshCommandStates();
+    }
+
+    /// <summary>
+    /// 默认构造函数（用于设计时）
+    /// </summary>
+    public RemoveBgViewModel() : this(null, new FileSystemService()) { }
+
+    /// <summary>
+    /// 初始化抠图服务
+    /// 异步启动 worker 进程并进行健康检查，加载可用模型列表。
+    /// </summary>
+    public async Task InitializeAsync()
+    {
+        if (_removeBgService == null)
+        {
+            StatusMessage = "抠图服务未配置";
+            IsServiceAvailable = false;
+            return;
+        }
+
+        StatusMessage = "正在启动抠图引擎...";
+        try
+        {
+            IsServiceAvailable = await _removeBgService.StartAsync();
+            if (IsServiceAvailable)
+            {
+                StatusMessage = "抠图引擎就绪 - 选择图片文件开始智能抠图";
+
+                // 加载可用模型列表
+                try
+                {
+                    var models = await _removeBgService.GetModelsAsync(useCache: false);
+                    AvailableModels.Clear();
+                    foreach (var model in models)
+                        AvailableModels.Add(model);
+                }
+                catch
+                {
+                    // 加载模型列表失败不是致命错误
+                }
+            }
+            else
+            {
+                StatusMessage = $"抠图引擎启动失败: {_removeBgService.AvailabilityError}";
+            }
+        }
+        catch (Exception ex)
+        {
+            IsServiceAvailable = false;
+            StatusMessage = $"抠图引擎启动失败: {ex.Message}";
+            _logger?.Error($"抠图服务初始化失败: {ex.Message}", ex, "desktop-remove-bg");
+        }
+    }
+
+    /// <summary>
+    /// 打开文件选择对话框，选择要抠图的图片文件
+    /// </summary>
+    private void SelectFiles()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择要抠图的图片",
+            Filter = "图片文件|*.png;*.jpg;*.jpeg;*.bmp;*.tiff;*.tif;*.webp|所有文件|*.*",
+            Multiselect = true,
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog() == true && dialog.FileNames.Length > 0)
+        {
+            _ = StartProcessingForFilesAsync(dialog.FileNames.ToList());
+        }
+    }
+
+    /// <summary>
+    /// 开始处理（通过拖拽文件触发）- 在 View 层由拖拽事件调用
+    /// </summary>
+    /// <param name="filePaths">拖入的文件路径列表</param>
+    public void ProcessDroppedFiles(IEnumerable<string> filePaths)
+    {
+        if (filePaths == null) return;
+
+        var imageFiles = filePaths
+            .Where(f => _removeBgService?.IsFormatSupported(f) ?? FileSystemService.IsImageFile(f))
+            .ToList();
+
+        if (imageFiles.Count == 0)
+        {
+            StatusMessage = "没有有效的图片文件";
+            return;
+        }
+
+        _ = StartProcessingForFilesAsync(imageFiles);
+    }
+
+    /// <summary>
+    /// 开始处理命令处理（视图命令绑定）
+    /// </summary>
+    private void StartProcessingAsync()
+    {
+        SelectFiles();
+    }
+
+    /// <summary>
+    /// 对指定文件列表启动抠图处理的核心逻辑
+    /// </summary>
+    private async Task StartProcessingForFilesAsync(List<string> filePaths)
+    {
+        if (_removeBgService == null || filePaths.Count == 0) return;
+
+        IsRunning = true;
+        ErrorMessage = null;
+        ProgressValue = 0;
+        ProgressMax = filePaths.Count;
+
+        _currentCts = new CancellationTokenSource();
+
+        StatusMessage = $"正在处理 {filePaths.Count} 张图片...";
+
+        try
+        {
+            for (var i = 0; i < filePaths.Count; i++)
+            {
+                _currentCts.Token.ThrowIfCancellationRequested();
+
+                var filePath = filePaths[i];
+                try
+                {
+                    RemoveBgResult result;
+                    if (_synthesizeBackground)
+                    {
+                        // 合成纯色背景模式
+                        var compositeColor = new List<int> { BgRed, BgGreen, BgBlue };
+                        result = await _removeBgService.ProcessAsync(
+                            filePath,
+                            modelName: SelectedModelName,
+                            alphaMatting: AlphaMatting,
+                            outputRgba: false,
+                            compositeColor: compositeColor,
+                            ct: _currentCts.Token);
+                    }
+                    else
+                    {
+                        // RGBA 透明输出模式
+                        result = await _removeBgService.ProcessAsync(
+                            filePath,
+                            modelName: SelectedModelName,
+                            alphaMatting: AlphaMatting,
+                            outputRgba: OutputRgba,
+                            ct: _currentCts.Token);
+                    }
+
+                    // 将结果添加到列表（UI 线程）
+                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                        Results.Insert(0, result));
+                }
+                catch (Exception ex)
+                {
+                    // 单张处理失败不影响其余文件
+                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                        Results.Insert(0, new RemoveBgResult
+                        {
+                            IsSuccess = false,
+                            ErrorMessage = ex.Message,
+                            InputPath = filePath
+                        }));
+                    _logger?.Error(
+                        $"第 {i + 1}/{filePaths.Count} 张抠图处理失败: {ex.Message}",
+                        ex, "desktop-remove-bg");
+                }
+
+                // 更新进度（UI 线程）
+                var current = i + 1;
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    ProgressValue = current;
+                    StatusMessage = $"正在处理... {current}/{filePaths.Count}";
+                });
+            }
+
+            // 如果有结果，选中第一个
+            if (Results.Count > 0)
+            {
+                var firstSuccess = Results.FirstOrDefault(r => r.IsSuccess);
+                SelectedResult = firstSuccess ?? Results[0];
+            }
+
+            var successCount = Results.Count(r => r.IsSuccess);
+            var failCount = Results.Count - successCount;
+
+            if (failCount > 0)
+                StatusMessage = $"处理完成: {successCount} 成功, {failCount} 失败";
+            else
+                StatusMessage = $"处理完成: {successCount} 张图片全部成功";
+
+            _logger?.Info(
+                $"抠图处理完成: {successCount} 成功, {failCount} 失败", "desktop-remove-bg");
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "处理已取消";
+            _logger?.Info("抠图处理已取消", "desktop-remove-bg");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"处理失败: {ex.Message}";
+            StatusMessage = "处理出错，请查看错误信息";
+            _logger?.Error($"抠图处理异常: {ex.Message}", ex, "desktop-remove-bg");
+        }
+        finally
+        {
+            IsRunning = false;
+            _currentCts?.Dispose();
+            _currentCts = null;
+            RefreshCommandStates();
+        }
+    }
+
+    /// <summary>
+    /// 取消当前处理任务
+    /// </summary>
+    private void CancelProcessing()
+    {
+        _currentCts?.Cancel();
+        StatusMessage = "正在取消...";
+    }
+
+    /// <summary>
+    /// 清除所有处理结果
+    /// </summary>
+    private void ClearResults()
+    {
+        Results.Clear();
+        SelectedResult = null;
+        ErrorMessage = null;
+        ProgressValue = 0;
+        StatusMessage = "结果已清除 - 选择图片文件开始智能抠图";
+        RefreshCommandStates();
+    }
+
+    /// <summary>
+    /// 在文件资源管理器中打开输出文件
+    /// </summary>
+    private void OpenOutputFile()
+    {
+        if (SelectedResult == null || string.IsNullOrEmpty(SelectedResult.OutputPath)) return;
+
+        try
+        {
+            var path = SelectedResult.OutputPath;
+            if (File.Exists(path))
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+            }
+            else
+            {
+                StatusMessage = $"输出文件不存在: {path}";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"打开文件失败: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// 设置背景色
+    /// </summary>
+    private void SetBackgroundColor(int r, int g, int b)
+    {
+        BgRed = r;
+        BgGreen = g;
+        BgBlue = b;
+        SynthesizeBackground = true;
+        OnPropertyChanged(nameof(BackgroundColorPreview));
+    }
+
+    /// <summary>
+    /// 刷新命令可执行状态
+    /// </summary>
+    private void RefreshCommandStates()
+    {
+        OnPropertyChanged(nameof(ResultCount));
+        OnPropertyChanged(nameof(SuccessCount));
+        OnPropertyChanged(nameof(FailedCount));
+
+        (StartProcessingCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (CancelCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (ClearResultsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (OpenOutputFileCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
+}
