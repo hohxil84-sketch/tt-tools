@@ -70,3 +70,12 @@
 - 技术选型：OpenCV（Apache 2.0 许可证），用于颜色距离背景检测、GrabCut 分割、形态学处理、Alpha 混合；不依赖额外 ML 模型，所有算法纯图像处理，支持 CPU-only 运行。
 - 证件照换底色模块 3 个源文件创建完毕（__init__.py、specifications.py、processor.py）、测试文件（__init__.py、test_id_photo.py）。
 - 58 项单元测试全部通过，0 失败 0 警告（含规格/底色查询、背景检测、颜色遮罩/GrabCut 遮罩、背景替换、规格缩放、完整流程、文件 I/O、错误处理、元数据、输出合理性）。
+
+2026-06-21（local-worker-remove-bg）：
+- 使用系统 Python 3.12.10 创建虚拟环境 D:\localPath\venvs\local-worker-remove-bg。
+- 安装 pip 依赖：rembg[cpu] 2.0.76（含 onnxruntime 1.27.0）、opencv-python 4.13.0.92、Pillow 12.2.0、numpy 2.4.6、pytest 9.1.1。
+- 首次引入模块：local-worker/modules/remove-bg。
+- 技术选型：rembg（MIT 许可证），基于 ONNX Runtime + u2net 模型族，无需 PyTorch/GPU，支持 CPU-only 运行。
+- 模型 u2net.onnx（168MB）、u2netp.onnx（4.4MB）手动下载到 %USERPROFILE%\.u2net\（rembg 默认缓存目录）。
+- 智能抠图模块 2 个源文件创建完毕（__init__.py、processor.py）、测试文件（__init__.py、test_remove_bg.py）。
+- 32 项单元测试全部通过，0 失败 0 警告（含 Python/依赖检查、模块导入、模型列表、模型缓存、背景去除、文件路径 API、纯色合成、输入校验、多模型、仅遮罩、RGBA 输入、复杂场景、Alpha Matting）。
