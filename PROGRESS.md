@@ -34,4 +34,5 @@
 | contract-ai-image-tools | shared-contract/modules/ai-image-tools | feature/contract-ai-image-tools | DEVELOPMENT_COMPLETE | DTO 100/100 通过 | 2026-06-21 已合并 |
 | desktop-id-photo | desktop/modules/id-photo | feature/desktop-id-photo | DEVELOPMENT_COMPLETE | 20/20 C# 通过, 4/4 Python router 通过 | 2026-06-21 已合并 |
 | desktop-remove-bg | desktop/modules/remove-bg | feature/desktop-remove-bg | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-21 已合并 |
+| desktop-resize-image | desktop/modules/resize-image | feature/desktop-resize-image | DEVELOPMENT_COMPLETE | 54/54 C# + 4/4 Python smoke 通过 | 2026-06-21 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
