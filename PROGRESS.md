@@ -29,4 +29,5 @@
 | contract-ai-copy | shared-contract/modules/ai-copy | feature/contract-ai-copy | DEVELOPMENT_COMPLETE | DTO 44/44 通过, 全量 108/108 | 2026-06-20 已合并 |
 | contract-ai-render | shared-contract/modules/ai-render | feature/contract-ai-render | DEVELOPMENT_COMPLETE | Spectral 0 errors, DTO 81/81 通过, 全量 189/189 | 2026-06-21 已合并 |
 | desktop-id-photo | desktop/modules/id-photo | feature/desktop-id-photo | DEVELOPMENT_COMPLETE | 20/20 C# 通过, 4/4 Python router 通过 | 2026-06-21 已合并 |
+| desktop-remove-bg | desktop/modules/remove-bg | feature/desktop-remove-bg | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-21 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
