@@ -30,8 +30,9 @@
 
 ## 未完成
 
-- C5: 桌面壳注册未实施（模块本体完整，壳层注册需单独授权）
-- 无。
+- C5: 已注册到桌面壳（TTShell 引用 DesktopResizeImage，导航栏增加"图片改尺寸"入口）。
+  - 壳层暂无统一 AuthState/CloudApiClient 注入机制，当前使用 ViewModel 默认构造函数（IsServiceAvailable=false）。
+  - 剩余集成项：待壳层统一 DI 就位后，将默认构造函数替换为带参构造函数（注入 ResizeImageService + AuthState + CloudApiClient）。
 
 ## 测试记录
 
@@ -52,7 +53,8 @@
 
 ## 提交记录
 
-- 2026-06-21：`7ffc118` — feat(desktop-resize-image): 完成图片改尺寸桌面入口模块，已推送到 origin/feature/desktop-resize-image，54 项 C# 单测 + 4 项 Python bridge smoke tests 全部通过。
+- 2026-06-21：`7ffc118` — feat(desktop-resize-image): 完成图片改尺寸桌面入口模块，54 项 C# 单测 + 4 项 Python bridge smoke tests 全部通过。
+- 2026-06-21：C5 壳层注册 — TTShell.csproj 引用 DesktopResizeImage，MainWindow.xaml 增加导航按钮，MainWindow.xaml.cs switch 增加 ResizeImageView 入口。
 
 ## 下一步
 
