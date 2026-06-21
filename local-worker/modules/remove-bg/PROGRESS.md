@@ -35,7 +35,11 @@
 
 ## 提交记录
 
-待提交。
+| 提交哈希 | 分支 | 说明 |
+|----------|------|------|
+| 1b8cd9e | feature/local-remove-bg | feat(local-worker-remove-bg): 完成智能抠图模块，32 项测试全部通过 |
+
+推送状态：已推送到 origin/feature/local-remove-bg。
 
 ## 下一步
 
