@@ -81,7 +81,7 @@ desktop/modules/remove-bg/
 
 ## 提交记录
 
-暂无。
+- 2026-06-21: `70c282d` — feat(desktop-remove-bg): 完成智能抠图桌面入口模块，36 项测试全部通过，已推送到 origin/feature/desktop-remove-bg
 
 ## 下一步
 
