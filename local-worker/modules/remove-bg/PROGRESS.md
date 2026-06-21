@@ -1,8 +1,8 @@
-﻿# PROGRESS.md - local-worker-remove-bg
+# PROGRESS.md - local-worker-remove-bg
 
 ## 当前状态
 
-`NOT_STARTED`
+`TESTED`
 
 ## 分支
 
@@ -10,17 +10,24 @@
 
 ## 已完成
 
-- 已创建模块文档骨架。
+- 已完成模块文档骨架。
+- 已完成技术选型：rembg（MIT）+ ONNX Runtime + u2net 模型族。
+- 已创建虚拟环境并安装依赖（rembg[cpu]、opencv-python、Pillow、numpy、pytest）。
+- 已手动下载模型 u2net.onnx（168MB）和 u2netp.onnx（4.4MB）。
+- 已实现核心处理器 processor.py（背景去除、纯色合成、模型缓存）。
+- 已实现模块入口 __init__.py。
+- 已编写 32 项单元测试并全部通过。
 
 ## 未完成
 
-- 尚未开始业务开发。
-- 尚未安装模块新增依赖。
-- 尚未运行测试。
+- 无。
 
 ## 测试记录
 
-暂无。
+日期：2026-06-21
+测试命令：pytest test_remove_bg.py -v --tb=short
+结果：32 passed, 0 failed, 0 warnings (10.24s)
+中文备注：Python/依赖检查(4)、模块导入(2)、模型列表(2)、模型缓存(4)、背景去除(3)、文件路径 API(3)、纯色合成(2)、输入校验(4)、不同模型(2)、仅遮罩(1)、RGBA 输入(1)、结果结构(2)、复杂场景(1)、Alpha Matting(1)。
 
 ## Bug 记录
 
@@ -28,9 +35,8 @@
 
 ## 提交记录
 
-暂无。
+待提交。
 
 ## 下一步
 
-等待用户明确指定本模块开始开发。
-
+等待合并到 dev/full-product。
