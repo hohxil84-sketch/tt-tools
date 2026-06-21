@@ -1,9 +1,19 @@
 openapi: 3.1.0
 info:
   title: TT Tools AI Render API
+  description: |
+    云端效果图生成 API 契约。
+    支持创建和查询 AI 效果图生成任务。
+    功能码：ai_render_cloud（云端 AI 付费功能）。
   version: 0.1.0
+  contact:
+    name: TT Tools Team
 servers:
   - url: /api/v1
+    description: TT Tools API v1
+tags:
+  - name: AI Render
+    description: 云端效果图生成
 security:
   - BearerAuth: []
 paths:
@@ -11,6 +21,13 @@ paths:
     post:
       operationId: createAiRenderTask
       summary: 创建效果图生成任务
+      tags:
+        - AI Render
+      description: |
+        提交效果图生成任务。
+        客户端提交场景类型、提示词、输入文件和可选参数。
+        客户端不得提交 user_id、device_id、role、plan_code、
+        provider、model、estimated_cost、credits_charged 等字段。
       requestBody:
         required: true
         content:
@@ -19,29 +36,63 @@ paths:
               $ref: '#/components/schemas/CreateAiRenderTaskRequest'
       responses:
         '200':
-          description: Task created
+          description: 任务创建成功
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateAiRenderTaskResponse'
+        '401':
+          description: 未认证
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiRenderErrorResponse'
+        '402':
+          description: 额度不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiRenderErrorResponse'
+        '403':
+          description: 套餐权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiRenderErrorResponse'
   /ai/render/tasks/{task_id}:
     get:
       operationId: getAiRenderTask
       summary: 查询效果图生成任务
+      tags:
+        - AI Render
+      description: 根据任务 ID 查询效果图生成任务的状态和结果。
       parameters:
         - name: task_id
           in: path
           required: true
+          description: 效果图生成任务 ID（UUID）
           schema:
             type: string
             format: uuid
       responses:
         '200':
-          description: Task status
+          description: 任务查询成功
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiRenderTaskResponse'
+        '401':
+          description: 未认证
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiRenderErrorResponse'
+        '404':
+          description: 任务不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiRenderErrorResponse'
 components:
   securitySchemes:
     BearerAuth:
@@ -49,118 +100,204 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    # -- 统一错误结构 --
+    # 统一错误码结构，所有错误响应必须使用此结构
     ErrorDetail:
       type: object
+      description: 统一错误详情结构
       required: [code, message]
       properties:
         code:
           type: string
+          description: |
+            统一错误码。
+            额度：CREDITS_NOT_ENOUGH、BILLING_FAILED
+            鉴权：AUTH_REQUIRED、AUTH_TOKEN_EXPIRED、PERMISSION_DENIED
+            Provider：PROVIDER_TIMEOUT、PROVIDER_RATE_LIMITED、PROVIDER_BAD_RESPONSE、PROVIDER_UNAVAILABLE
+            详见 shared-contract/error-codes.md
         message:
           type: string
+          description: 人类可读的错误描述（中文）
         details:
           type: object
           additionalProperties: true
+          description: 可选补充信息
+
+    # -- 错误响应结构 --
+    AiRenderErrorResponse:
+      type: object
+      description: 标准错误响应体
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+          const: false
+          description: 始终为 false
+        data:
+          type: 'null'
+          description: 错误时始终为 null
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+        request_id:
+          type: string
+          description: 云端生成的请求追踪 ID
+
+    # -- 创建任务请求 --
     CreateAiRenderTaskRequest:
       type: object
+      description: |
+        创建效果图生成任务请求。
+        客户端不得提交 user_id、device_id、role、plan_code、
+        provider、model、estimated_cost、credits_charged、permission_granted、final_price 等字段。
       required: [scene_type, prompt, input_file_ids, client_request_id]
       properties:
         scene_type:
           type: string
+          description: 场景类型（如 interior_design 室内设计、product_showcase 产品展示、poster_design 海报设计）
         prompt:
           type: string
+          description: 效果图生成提示词，描述期望的视觉效果
         input_file_ids:
           type: array
+          description: 输入文件 ID 列表（已上传至云端的文件 UUID）
           items:
             type: string
             format: uuid
         style:
           type: string
+          description: 风格参考（如 modern 现代、minimalist 极简、chinese 中式、european 欧式）
         size:
           type: string
+          description: 输出尺寸规格（如 1920x1080、1024x1024）
         client_request_id:
           type: string
+          description: 桌面端生成的请求追踪 ID，用于去重和幂等
       additionalProperties: false
+
+    # -- 创建任务响应数据 --
     CreatedTaskData:
       type: object
+      description: 效果图生成任务创建成功响应数据
       required: [task_id, status, feature, estimated_credits]
       properties:
         task_id:
           type: string
           format: uuid
+          description: 任务的唯一 ID
         status:
           type: string
           enum: [queued, running, succeeded, failed]
+          description: 任务当前状态（queued 排队中、running 处理中、succeeded 成功、failed 失败）
         feature:
           type: string
           const: ai_render_cloud
+          description: 功能码，固定为 ai_render_cloud
         estimated_credits:
           type: integer
+          description: 预估消耗的 AI 额度
+
+    # -- 创建任务响应 --
     CreateAiRenderTaskResponse:
       type: object
+      description: 效果图生成任务创建 API 响应，遵循统一响应结构
       required: [success, data, error, request_id]
       properties:
         success:
           type: boolean
+          description: 请求是否成功
         data:
           $ref: '#/components/schemas/CreatedTaskData'
         error:
           anyOf:
             - $ref: '#/components/schemas/ErrorDetail'
             - type: 'null'
+          description: 错误详情，成功时为 null
         request_id:
           type: string
+          description: 云端生成的请求追踪 ID
+
+    # -- 结果文件 --
     ResultFile:
       type: object
+      description: 生成的效果图文件信息
       required: [file_id, mime_type]
       properties:
         file_id:
           type: string
           format: uuid
+          description: 结果文件 ID
         url:
           type: string
+          description: 文件访问 URL（临时签名链接）
         mime_type:
           type: string
+          description: 文件 MIME 类型（如 image/png、image/jpeg）
         width:
           type: integer
+          description: 图片宽度（像素）
         height:
           type: integer
+          description: 图片高度（像素）
+
+    # -- 任务查询响应数据 --
     AiRenderTaskData:
       type: object
-      required: [task_id, status, result_files]
+      description: 效果图生成任务查询响应数据。
+        provider、model、estimated_cost、credits_charged、provider_call_id 由云端决定，
+        客户端只读展示，不得提交。
+      required: [task_id, status, feature, result_files]
       properties:
         task_id:
           type: string
           format: uuid
+          description: 任务的唯一 ID
         status:
           type: string
           enum: [queued, running, succeeded, failed]
+          description: 任务当前状态
+        feature:
+          type: string
+          const: ai_render_cloud
+          description: 功能码，固定为 ai_render_cloud
         result_files:
           type: array
+          description: 生成的效果图文件列表（succeeded 时包含结果，其他状态为空数组）
           items:
             $ref: '#/components/schemas/ResultFile'
         provider:
           type: string
+          description: 实际调用的 AI Provider 名称
         model:
           type: string
+          description: 实际使用的模型名称
         estimated_cost:
           type: number
+          description: 云端估算的调用成本（美元，仅供参考）
         credits_charged:
           type: integer
+          description: 本次调用实际扣除的 AI 额度
         provider_call_id:
           type: string
           format: uuid
           nullable: true
+          description: Provider 调用日志关联 ID（运行中/完成时有值）
+
+    # -- 任务查询响应 --
     AiRenderTaskResponse:
       type: object
+      description: 效果图生成任务查询 API 响应，遵循统一响应结构
       required: [success, data, error, request_id]
       properties:
         success:
           type: boolean
+          description: 请求是否成功
         data:
           $ref: '#/components/schemas/AiRenderTaskData'
         error:
           anyOf:
             - $ref: '#/components/schemas/ErrorDetail'
             - type: 'null'
+          description: 错误详情，成功时为 null
         request_id:
           type: string
+          description: 云端生成的请求追踪 ID
