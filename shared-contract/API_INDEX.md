@@ -202,7 +202,7 @@ Response `data`: `task_id`、`status`、`feature`、`estimated_credits`
 
 ### GET `/api/v1/ai/render/tasks/{task_id}`
 
-Response `data`: `task_id`、`status`、`result_files`、`provider`、`model`、`estimated_cost`、`credits_charged`、`provider_call_id`
+Response `data`: `task_id`、`status`、`feature`、`result_files`、`provider`、`model`、`estimated_cost`、`credits_charged`、`provider_call_id`
 
 ## AI Image Tools
 

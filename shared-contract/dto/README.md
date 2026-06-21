@@ -33,4 +33,5 @@ dto/
 | local-paid-tools | dto/python/local_paid_tools.py | dto/csharp/LocalPaidToolsDto.cs | local-paid-tools.yaml v0.1.0 | completed |
 | provider-log | dto/python/provider_log.py | dto/csharp/ProviderLogDto.cs | provider-log.yaml v0.1.0 | completed |
 | ai-copy | dto/python/ai_copy.py | dto/csharp/AiCopyDto.cs | ai-copy.yaml v0.1.0 | completed |
+| ai-render | dto/python/ai_render.py | dto/csharp/AiRenderDto.cs | ai-render.yaml v0.1.0 | completed |
 
