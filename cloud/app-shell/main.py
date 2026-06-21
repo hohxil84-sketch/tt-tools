@@ -60,9 +60,13 @@ def create_app() -> FastAPI:
 
     # -- 后续业务模块路由注册点 --
     # 格式：app.include_router(xxx_router, prefix="/api/v1")
-    # 示例：
-    #   auth_router = __import__("cloud.modules.auth_device.router", fromlist=["router"]).router
-    #   app.include_router(auth_router, prefix="/api/v1")
+
+    # 注册 ai-render 效果图生成模块路由
+    _ai_render_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "ai-render")
+    if _ai_render_dir not in sys.path:
+        sys.path.insert(0, _ai_render_dir)
+    from router import router as ai_render_router  # noqa: E402
+    app.include_router(ai_render_router, prefix="/api/v1")
 
     return app
 

@@ -5,5 +5,5 @@
 - 所属端：cloud
 - 类型：云端 AI 付费
 - 建议分支：`feature/cloud-ai-render`
-- 状态：`NOT_STARTED`
+- 状态：`DEVELOPED`
 
