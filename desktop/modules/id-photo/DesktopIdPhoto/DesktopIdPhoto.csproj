@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>TTTools.IdPhoto</RootNamespace>
+    <AssemblyName>TTTools.IdPhoto</AssemblyName>
+    <Version>0.1.0</Version>
+    <Authors>TT Tools Team</Authors>
+    <Description>TT Tools - 桌面端证件照换底色入口、底色选择、规格选择、导出</Description>
+  </PropertyGroup>
+
+  <!-- 全局隐式 using -->
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <Using Include="System.Net.Http.Json" />
+    <Using Include="System.Text" />
+    <Using Include="System.Text.Json" />
+  </ItemGroup>
+
+  <!-- 引用 desktop-shared 公共层 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\shared\DesktopShared\DesktopShared.csproj" />
+  </ItemGroup>
+
+  <!-- 将 Python router 脚本复制到输出目录 -->
+  <ItemGroup>
+    <None Update="id_photo_router.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
