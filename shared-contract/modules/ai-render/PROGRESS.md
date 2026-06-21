@@ -58,7 +58,13 @@
 
 ## 提交记录
 
-暂无（待首次提交）。
+- `5da3346` feat(contract-ai-render): complete AI render contract（2026-06-21）
+  - 完善 ai-render.yaml（补全 description/tags/contact/AiRenderErrorResponse/错误响应，AiRenderTaskData 新增 feature）
+  - 新增 Python DTO、C# DTO、Python DTO 测试（81 项全部通过）
+  - 更新 API_INDEX.md GET 响应添加 feature 字段
+  - 更新 dto/README.md 登记 ai-render 模块
+  - 更新模块 PROGRESS.md、ACCEPTANCE.md、README.md、NOTES.md
+  - Spectral OpenAPI lint 0 errors，全量 DTO 189 项通过 0 回归
 
 ## 下一步
 
