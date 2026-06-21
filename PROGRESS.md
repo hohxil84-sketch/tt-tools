@@ -25,6 +25,7 @@
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
 | local-worker-remove-bg | local-worker/modules/remove-bg | feature/local-remove-bg | DEVELOPMENT_COMPLETE | 32/32 通过 | 2026-06-21 已合并 |
+| local-worker-resize-image | local-worker/modules/resize-image | feature/local-resize-image | DEVELOPMENT_COMPLETE | 110/110 通过 | 未合并 |
 | desktop-preflight-check | desktop/modules/preflight-check | feature/desktop-preflight-check | DEVELOPMENT_COMPLETE | 21/21 通过 | 2026-06-20 已合并 |
 | contract-ai-copy | shared-contract/modules/ai-copy | feature/contract-ai-copy | DEVELOPMENT_COMPLETE | DTO 44/44 通过, 全量 108/108 | 2026-06-20 已合并 |
 | contract-ai-render | shared-contract/modules/ai-render | feature/contract-ai-render | DEVELOPMENT_COMPLETE | Spectral 0 errors, DTO 81/81 通过, 全量 189/189 | 2026-06-21 已合并 |

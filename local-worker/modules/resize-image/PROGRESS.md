@@ -37,7 +37,7 @@
 
 ## 提交记录
 
-暂无（待提交）。
+- 2026-06-21：`71a05f4` — feat(local-worker-resize-image): 完成图片改尺寸本地实现，已推送到 origin/feature/local-resize-image，110 项测试全部通过。
 
 ## 下一步
 
