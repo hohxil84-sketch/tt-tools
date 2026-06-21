@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:TTShell"
         xmlns:views="clr-namespace:TTShell.Views"
+        xmlns:resize="clr-namespace:TTTools.ResizeImage.Views;assembly=TTTools.ResizeImage"
         Title="TT Tools"
         MinHeight="680"
         MinWidth="1024"
@@ -122,6 +123,11 @@
                                 Style="{StaticResource NavButtonStyle}"
                                 Content="🤖  AI 工具"
                                 Tag="AiTools"
+                                Click="OnNavigationClick" />
+                        <Button x:Name="NavResizeImage"
+                                Style="{StaticResource NavButtonStyle}"
+                                Content="📐  图片改尺寸"
+                                Tag="ResizeImage"
                                 Click="OnNavigationClick" />
                         <!-- 分隔线 -->
                         <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />

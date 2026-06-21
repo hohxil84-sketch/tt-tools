@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using TTShell.Views;
+using TTTools.ResizeImage.Views;
 
 namespace TTShell;
 
@@ -46,6 +47,13 @@ public partial class MainWindow : Window
             "Home" => new HomePage(),
             "FileWorkbench" => CreatePlaceholderPage("文件工作台", "模块开发中，即将上线"),
             "AiTools" => CreatePlaceholderPage("AI 工具", "AI 功能模块开发中，即将上线"),
+            // 图片改尺寸模块已实现，壳层暂无 AuthState/CloudApiClient 注入机制，
+            // 使用 ViewModel 默认构造函数（IsServiceAvailable=false），显示"服务未配置"。
+            // 后续统一 DI 机制就位后替换为带参构造函数。
+            "ResizeImage" => new ResizeImageView
+            {
+                DataContext = new TTTools.ResizeImage.ViewModels.ResizeImageViewModel()
+            },
             "Export" => CreatePlaceholderPage("导出", "导出功能模块开发中，即将上线"),
             "Settings" => CreatePlaceholderPage("设置", "设置功能模块开发中，即将上线"),
             _ => new HomePage()
@@ -57,6 +65,7 @@ public partial class MainWindow : Window
             "Home" => "首页",
             "FileWorkbench" => "文件工作台",
             "AiTools" => "AI 工具",
+            "ResizeImage" => "图片改尺寸",
             "Export" => "导出",
             "Settings" => "设置",
             _ => "首页"

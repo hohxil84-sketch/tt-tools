@@ -14,4 +14,8 @@
     <Description>TT Tools - Windows 桌面客户端主程序外壳</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\modules\resize-image\DesktopResizeImage\DesktopResizeImage.csproj" />
+  </ItemGroup>
+
 </Project>
