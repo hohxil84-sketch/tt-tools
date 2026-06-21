@@ -228,6 +228,62 @@ Item fields: `id`、`request_id`、`feature`、`provider`、`model`、`status`�
 
 不得返回完整 prompt、原图、API Key、Token、完整隐私内容。
 
+## Orders / Recharge
+
+### POST `/api/v1/orders`
+
+创建订单（套餐购买 / 额度充值）。
+
+Request:
+
+```json
+{
+  "order_type": "credits",
+  "product_code": "credits_100",
+  "client_request_id": "req_client_xxx"
+}
+```
+
+Response `data`:
+
+```json
+{
+  "id": "uuid",
+  "order_no": "ORD-20260621-a1b2c3d4",
+  "order_type": "credits",
+  "product_code": "credits_100",
+  "amount_cents": 1000,
+  "credit_amount": 100,
+  "currency": "CNY",
+  "status": "pending",
+  "paid_at": null,
+  "created_at": "2026-06-21T...",
+  "updated_at": "2026-06-21T..."
+}
+```
+
+客户端不得提交 `user_id`、`final_price`、`plan_code` 等决策字段。金额由服务端定价表决定。
+
+### GET `/api/v1/orders`
+
+查询当前用户订单列表。
+
+Query: `limit`、`offset`、`order_type`、`status`
+
+Response `data`: `items`、`total`、`limit`、`offset`
+
+Item fields: `id`、`order_no`、`order_type`、`product_code`、`amount_cents`、`credit_amount`、`currency`、`status`、`paid_at`、`created_at`、`updated_at`
+
+### POST `/api/v1/orders/{order_id}/confirm`
+
+确认支付（**mock/dev 预留**，不接入真实支付网关，生产前必须接支付回调验签）。
+
+确认当前用户 pending 订单为 paid，并执行对应业务：credits 订单发放额度，plan 订单更新套餐。接口幂等，重复确认不重复发放额度。
+
+客户端不得提交支付金额、套餐编码、额度数量等决策字段。
+
+Response `data`: 同 OrderData，status 变为 `paid`。
+
 ## Admin
 
 后台接口统一使用 `/api/v1/admin/*` 前缀。后台模块开发前必须先补充对应契约，且必须经过管理员权限检查。

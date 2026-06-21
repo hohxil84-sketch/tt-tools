@@ -153,12 +153,16 @@
 | user_id | uuid | fk users.id, not null | 用户 ID |
 | order_no | varchar(100) | unique, not null | 订单号 |
 | order_type | varchar(50) | not null | plan / credits |
+| product_code | varchar(100) | not null | 具体产品编码：standard / pro / credits_100 / credits_500 / credits_2000 |
 | amount_cents | integer | not null | 金额，单位分 |
+| credit_amount | integer | nullable | 充值额度数量（仅 order_type=credits 时有值） |
 | currency | varchar(20) | not null default `CNY` | 币种 |
 | status | varchar(50) | not null | pending / paid / closed / refunded |
 | paid_at | timestamptz | nullable | 支付时间 |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |
+
+索引：unique `order_no`，index `user_id`，index `status`，index `created_at`
 
 ## files
 

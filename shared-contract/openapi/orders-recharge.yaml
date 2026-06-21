@@ -1,0 +1,244 @@
+openapi: 3.1.0
+info:
+  title: TT Tools Orders and Recharge API
+  description: |
+    订单创建、查询和支付确认（mock/dev 预留）API 契约。
+    支付确认为预留接口，不接入真实支付网关；生产前必须接支付回调验签。
+  version: 0.1.0
+servers:
+  - url: /api/v1
+security:
+  - BearerAuth: []
+tags:
+  - name: Orders
+    description: 订单管理接口
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      summary: 创建订单（套餐购买 / 额度充值）
+      description: |
+        客户端提交订单类型和产品编码，服务端计算金额并生成订单。
+        客户端不得提交 user_id、final_price 等决策字段。
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '200':
+          description: 订单创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+    get:
+      operationId: listOrders
+      summary: 查询当前用户订单列表
+      description: 支持按 order_type、status 筛选和分页。
+      tags: [Orders]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: order_type
+          in: query
+          schema:
+            type: string
+            enum: [plan, credits]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, paid, closed, refunded]
+      responses:
+        '200':
+          description: 订单列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+  /orders/{order_id}/confirm:
+    post:
+      operationId: confirmOrder
+      summary: 确认支付（mock/dev 预留）
+      description: |
+        **注意：本接口为开发/测试预留，不接入真实支付网关。生产前必须接支付回调验签。**
+        确认当前用户的 pending 订单为已支付，并执行对应业务操作：
+        - credits 订单：调用 credits-billing 发放额度
+        - plan 订单：更新用户套餐
+        本接口幂等：重复确认同一订单不会重复发放额度。
+      tags: [Orders]
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 确认成功（含幂等）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorDetail:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    # ============================================================
+    # 请求 DTO
+    # ============================================================
+
+    CreateOrderRequest:
+      type: object
+      required: [order_type, product_code, client_request_id]
+      properties:
+        order_type:
+          type: string
+          enum: [plan, credits]
+          description: 订单类型：plan（套餐购买）/ credits（额度充值）
+        product_code:
+          type: string
+          description: |
+            产品编码。
+            plan 类型：standard / pro
+            credits 类型：credits_100 / credits_500 / credits_2000
+        client_request_id:
+          type: string
+          description: 客户端请求追踪 ID，用于去重
+      # 客户端禁止提交：user_id、final_price、plan_code 决策字段
+
+    # ============================================================
+    # 响应 DTO（数据部分）
+    # ============================================================
+
+    OrderData:
+      type: object
+      required:
+        - id
+        - order_no
+        - order_type
+        - product_code
+        - amount_cents
+        - currency
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 订单 ID
+        order_no:
+          type: string
+          description: 订单号（服务端生成，格式 ORD-YYYYMMDD-xxxxxxxx）
+        order_type:
+          type: string
+          enum: [plan, credits]
+          description: 订单类型
+        product_code:
+          type: string
+          description: 产品编码
+        amount_cents:
+          type: integer
+          description: 订单金额（单位：分）
+        credit_amount:
+          type: integer
+          nullable: true
+          description: 充值额度数量（仅 credits 类型有值）
+        currency:
+          type: string
+          description: 币种（CNY）
+        status:
+          type: string
+          enum: [pending, paid, closed, refunded]
+          description: 订单状态
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付时间
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    OrderListData:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderData'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    # ============================================================
+    # 外层响应
+    # ============================================================
+
+    OrderResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/OrderData'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string
+
+    OrderListResponse:
+      type: object
+      required: [success, data, error, request_id]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/OrderListData'
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: 'null'
+        request_id:
+          type: string

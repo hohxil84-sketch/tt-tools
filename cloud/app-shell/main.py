@@ -79,6 +79,16 @@ def create_app() -> FastAPI:
     from router import router as ai_image_tools_router  # noqa: E402
     app.include_router(ai_image_tools_router, prefix="/api/v1")
 
+    # 注册 orders-recharge 订单/充值模块路由
+    _orders_recharge_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "orders_recharge")
+    if _orders_recharge_dir not in sys.path:
+        sys.path.insert(0, _orders_recharge_dir)
+    for _key in list(sys.modules.keys()):
+        if _key == "router" or _key.startswith("router."):
+            del sys.modules[_key]
+    from router import router as orders_recharge_router  # noqa: E402
+    app.include_router(orders_recharge_router, prefix="/api/v1")
+
     return app
 
 
