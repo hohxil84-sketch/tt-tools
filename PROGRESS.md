@@ -22,6 +22,7 @@
 | cloud-ai-copy | cloud/modules/ai-copy | feature/cloud-ai-copy | DEVELOPMENT_COMPLETE | 16/16 通过 | 2026-06-21 已合并 |
 | cloud-ai-render | cloud/modules/ai-render | feature/cloud-ai-render | DEVELOPMENT_COMPLETE | 22/22 通过 | 2026-06-21 已合并 |
 | cloud-ai-image-tools | cloud/modules/ai-image-tools | feature/cloud-ai-image-tools | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-21 已合并 |
+| cloud-orders-recharge | cloud/modules/orders-recharge | feature/cloud-orders-recharge | DEVELOPMENT_COMPLETE | 25/25 通过 | 2026-06-21 已合并 |
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
