@@ -68,6 +68,17 @@ def create_app() -> FastAPI:
     from router import router as ai_render_router  # noqa: E402
     app.include_router(ai_render_router, prefix="/api/v1")
 
+    # 注册 ai-image-tools 高级图片 AI 模块路由
+    _ai_image_tools_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "ai-image-tools")
+    if _ai_image_tools_dir not in sys.path:
+        sys.path.insert(0, _ai_image_tools_dir)
+    # 清理可能冲突的模块名（ai-image-tools 的 router 与 ai-render 的 router 冲突）
+    for _key in list(sys.modules.keys()):
+        if _key == "router" or _key.startswith("router."):
+            del sys.modules[_key]
+    from router import router as ai_image_tools_router  # noqa: E402
+    app.include_router(ai_image_tools_router, prefix="/api/v1")
+
     return app
 
 

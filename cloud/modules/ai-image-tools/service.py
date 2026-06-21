@@ -1,0 +1,1139 @@
+"""
+cloud-ai-image-tools 业务逻辑层。
+
+实现高级图片 AI 处理的核心业务流程，遵循标准云端 AI 调用链
+（对齐 MODULE_INTERFACES.md）：
+
+    API endpoint -> auth/device check -> permission check -> credits precheck
+    -> create ai_task (queued) -> provider-runtime -> provider-call-log
+    -> credits charge -> update ai_task (succeeded) -> unified response
+
+当前阶段为 Mock 实现：
+  - 创建任务后立即同步处理（模拟真实异步 worker）
+  - 通过 MockProvider 获取模拟结果
+  - 根据不同子功能生成对应的 Mock 结果文件
+
+支持 5 种高级图片 AI 子功能：
+  - upscale_image_cloud（高清修复）：模拟输出高分辨率 PNG
+  - vectorize_image_cloud（转矢量）：模拟输出 SVG 矢量文件
+  - ai_edit_image_cloud（AI 改图）：模拟输出编辑后的图片
+  - remove_bg_cloud（高级抠图）：模拟输出透明背景 PNG
+  - ocr_cloud（高级 OCR）：模拟输出 OCR 文本识别结果
+
+关键规则：
+- 不得直接调用 OpenAI、DeepSeek 或其他第三方 AI，必须通过 provider-runtime。
+- 客户端不得提交 user_id、provider、model、estimated_cost、credits_charged。
+- 跨模块数据访问使用 raw SQL（sqlalchemy.text），避免 ORM 模型重复注册。
+- Provider 调用通过 provider-runtime 的 MockProvider + ProviderRouter 完成。
+"""
+from __future__ import annotations
+
+import sys
+import os
+import uuid
+import json
+from datetime import datetime, timezone
+from typing import Optional, List
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from cloud.shared import ErrorCode, AppError
+
+from schemas import (
+    CreateAiImageToolTaskRequest,
+    CreatedTaskData,
+    AiImageToolTaskData,
+    ResultFile,
+    ImageToolContext,
+)
+
+
+# ============================================================
+# 路径常量
+# ============================================================
+
+_PROJECT_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..")
+)
+
+_PROVIDER_RUNTIME_DIR = os.path.join(
+    _PROJECT_ROOT, "cloud", "modules", "provider-runtime"
+)
+
+
+# ============================================================
+# 从 provider-runtime 导入（仅数据模型和无 ORM 的工具类）
+# ============================================================
+
+# provider-runtime 的文件不含 ORM 模型，不会注册表到 Base.metadata，
+# 可以安全地通过 sys.path 临时切换导入。
+
+# 可能冲突的模块名（provider-runtime 内部使用）
+_PR_CONFLICT_NAMES = {"models", "mock", "router", "base", "errors", "cost"}
+
+
+def _import_from_provider_runtime(source_name: str, *names: str):
+    """从 provider-runtime 目录安全导入非 ORM 符号。
+
+    Args:
+        source_name: 源文件名（不含 .py）
+        *names: 要导入的符号名称
+
+    Returns:
+        单个符号或多个符号的元组
+    """
+    _saved_path = list(sys.path)
+    _saved_modules = {}
+    for _cn in _PR_CONFLICT_NAMES:
+        for k in list(sys.modules.keys()):
+            if k == _cn or k.startswith(_cn + "."):
+                _saved_modules[k] = sys.modules.pop(k)
+
+    while _PROVIDER_RUNTIME_DIR in sys.path:
+        sys.path.remove(_PROVIDER_RUNTIME_DIR)
+    sys.path.insert(0, _PROVIDER_RUNTIME_DIR)
+
+    try:
+        mod = __import__(source_name)
+        result = tuple(getattr(mod, n) for n in names)
+    finally:
+        sys.path.clear()
+        sys.path.extend(_saved_path)
+        for _cn in _PR_CONFLICT_NAMES:
+            for k in list(sys.modules.keys()):
+                if k == _cn or k.startswith(_cn + "."):
+                    if k not in _saved_modules:
+                        del sys.modules[k]
+        for k, v in _saved_modules.items():
+            sys.modules[k] = v
+
+    return result[0] if len(result) == 1 else result
+
+
+# 导入 provider-runtime 的核心类型和工具
+ProviderCallRequest, ChatMessage = _import_from_provider_runtime(
+    "models", "ProviderCallRequest", "ChatMessage",
+)
+MockProvider = _import_from_provider_runtime(
+    "mock", "MockProvider",
+)
+ProviderRouter = _import_from_provider_runtime(
+    "router", "ProviderRouter",
+)
+
+
+# ============================================================
+# 常量
+# ============================================================
+
+# 默认使用 deepseek-chat（性价比高，中文能力强）
+_DEFAULT_MODEL = "deepseek-chat"
+
+# 各子功能消耗的默认额度（对齐功能码复杂度）
+# upscale / vectorize: 3 额度（中等计算量）
+# ai_edit: 5 额度（最复杂，涉及图片理解和生成）
+# remove_bg / ocr: 2 额度（标准处理）
+_FEATURE_CREDITS: dict = {
+    "upscale_image_cloud": 3,
+    "vectorize_image_cloud": 3,
+    "ai_edit_image_cloud": 5,
+    "remove_bg_cloud": 2,
+    "ocr_cloud": 2,
+}
+
+# 默认额度（当功能码未知时）
+_DEFAULT_CREDITS_PER_CALL = 2
+
+# 当前时间（UTC）获取函数
+_utcnow = lambda: datetime.now(timezone.utc)
+
+# 各子功能的中文标签
+_FEATURE_LABELS: dict = {
+    "upscale_image_cloud": "高清修复",
+    "vectorize_image_cloud": "转矢量",
+    "ai_edit_image_cloud": "AI 改图",
+    "remove_bg_cloud": "高级抠图",
+    "ocr_cloud": "高级 OCR",
+}
+
+
+# ============================================================
+# Mock 结果文件（按功能码提供不同的模拟输出）
+# ============================================================
+
+# 高清修复：输出 4K 分辨率 PNG
+_MOCK_UPSCALE_FILES: List[dict] = [
+    {
+        "file_id": "00000000-0000-0000-0000-000000000011",
+        "url": "https://mock-cdn.tt-tools.com/image-tools/upscaled_4k.png",
+        "mime_type": "image/png",
+        "width": 3840,
+        "height": 2160,
+    },
+]
+
+# 转矢量：输出 SVG 矢量文件
+_MOCK_VECTORIZE_FILES: List[dict] = [
+    {
+        "file_id": "00000000-0000-0000-0000-000000000012",
+        "url": "https://mock-cdn.tt-tools.com/image-tools/vectorized.svg",
+        "mime_type": "image/svg+xml",
+        "width": None,
+        "height": None,
+    },
+]
+
+# AI 改图：输出编辑后的图片
+_MOCK_AI_EDIT_FILES: List[dict] = [
+    {
+        "file_id": "00000000-0000-0000-0000-000000000013",
+        "url": "https://mock-cdn.tt-tools.com/image-tools/ai_edited.png",
+        "mime_type": "image/png",
+        "width": 1920,
+        "height": 1080,
+    },
+]
+
+# 高级抠图：输出透明背景 PNG
+_MOCK_REMOVE_BG_FILES: List[dict] = [
+    {
+        "file_id": "00000000-0000-0000-0000-000000000014",
+        "url": "https://mock-cdn.tt-tools.com/image-tools/removed_bg.png",
+        "mime_type": "image/png",
+        "width": 1024,
+        "height": 1024,
+    },
+]
+
+# 高级 OCR：输出 TXT 文本识别结果
+_MOCK_OCR_FILES: List[dict] = [
+    {
+        "file_id": "00000000-0000-0000-0000-000000000015",
+        "url": "https://mock-cdn.tt-tools.com/image-tools/ocr_result.txt",
+        "mime_type": "text/plain",
+        "width": None,
+        "height": None,
+    },
+]
+
+# 按功能码映射的 Mock 结果文件
+_MOCK_RESULT_FILES_BY_FEATURE: dict = {
+    "upscale_image_cloud": _MOCK_UPSCALE_FILES,
+    "vectorize_image_cloud": _MOCK_VECTORIZE_FILES,
+    "ai_edit_image_cloud": _MOCK_AI_EDIT_FILES,
+    "remove_bg_cloud": _MOCK_REMOVE_BG_FILES,
+    "ocr_cloud": _MOCK_OCR_FILES,
+}
+
+# 各功能码的 Mock result_json（不同功能有不同的自定义结果数据）
+_MOCK_RESULT_JSON_BY_FEATURE: dict = {
+    "upscale_image_cloud": {
+        "original_width": 1920,
+        "original_height": 1080,
+        "output_width": 3840,
+        "output_height": 2160,
+        "scale_factor": 2.0,
+        "algorithm": "ai_super_resolution_v2",
+    },
+    "vectorize_image_cloud": {
+        "layer_count": 3,
+        "path_count": 128,
+        "output_format": "svg",
+        "color_mode": "indexed",
+    },
+    "ai_edit_image_cloud": {
+        "edit_type": "intelligent_enhancement",
+        "applied_filters": ["denoise", "sharpen", "color_correction"],
+        "confidence": 0.95,
+    },
+    "remove_bg_cloud": {
+        "detected_subjects": 1,
+        "edge_refinement": "matting_v2",
+        "has_transparency": True,
+    },
+    "ocr_cloud": {
+        "text_lines": [
+            {"text": "TT Tools 快印工作助手", "confidence": 0.99, "bbox": [10, 20, 300, 50]},
+            {"text": "当天取件 · 高清印刷", "confidence": 0.97, "bbox": [10, 60, 280, 90]},
+            {"text": "联系电话：400-888-0000", "confidence": 0.98, "bbox": [10, 100, 320, 130]},
+        ],
+        "language": "zh",
+        "text_direction": "horizontal",
+        "total_lines": 3,
+    },
+}
+
+
+# ============================================================
+# Prompt 模板构建（按功能码构建不同的提示词）
+# ============================================================
+
+
+def _build_system_prompt(feature: str) -> str:
+    """根据功能码构建系统提示词。
+
+    Args:
+        feature: AI 图片工具功能码
+
+    Returns:
+        对应功能的中文系统提示词
+    """
+    prompts = {
+        "upscale_image_cloud": (
+            "你是一个专业的高清图像修复专家，精通 AI 超分辨率技术。"
+            "你的任务是对用户提供的图片进行高清修复，提升分辨率和细节表现。"
+        ),
+        "vectorize_image_cloud": (
+            "你是一个专业的图像矢量化专家，精通位图转矢量技术。"
+            "你的任务是将用户提供的位图转换为可缩放的矢量图形（SVG 格式）。"
+        ),
+        "ai_edit_image_cloud": (
+            "你是一个专业的 AI 图像编辑专家，精通智能图像增强和修改。"
+            "你的任务是根据用户需求对图片进行智能编辑、增强和美化。"
+        ),
+        "remove_bg_cloud": (
+            "你是一个专业的背景移除专家，精通 AI 抠图技术。"
+            "你的任务是精确识别图片主体并移除背景，输出透明背景图片。"
+        ),
+        "ocr_cloud": (
+            "你是一个专业的 OCR 文字识别专家，精通多语言文字检测和识别。"
+            "你的任务是识别图片中的文字内容，返回精确的文字和位置信息。"
+        ),
+    }
+    return prompts.get(feature, prompts["ocr_cloud"])
+
+
+def _build_user_prompt(req: CreateAiImageToolTaskRequest) -> str:
+    """根据请求参数构建用户提示词。
+
+    将功能码、输入文件和自定义选项组装为结构化的提示词。
+
+    Args:
+        req: 图片 AI 任务创建请求
+
+    Returns:
+        结构化的用户提示词文本
+    """
+    feature_label = _FEATURE_LABELS.get(req.feature, req.feature)
+    parts = [f"【处理任务】{feature_label}"]
+
+    # 输入文件信息
+    if req.input_file_ids:
+        parts.append(f"【输入文件】共 {len(req.input_file_ids)} 个文件")
+    else:
+        parts.append("【输入文件】无")
+
+    # 自定义选项
+    if req.options:
+        parts.append(f"【处理选项】{json.dumps(req.options, ensure_ascii=False)}")
+
+    return "\n".join(parts)
+
+
+# ============================================================
+# AI 图片处理核心逻辑
+# ============================================================
+
+
+async def create_image_tool_task(
+    db: AsyncSession,
+    req: CreateAiImageToolTaskRequest,
+    ctx: ImageToolContext,
+) -> CreatedTaskData:
+    """创建并执行高级图片 AI 任务，遵循标准云端 AI 调用链。
+
+    调用链步骤（对齐 MODULE_INTERFACES.md）：
+    1. 套餐权限检查（用户套餐是否支持指定的功能码）
+    2. 额度预检查（余额是否足够）
+    3. 创建任务记录（ai_tasks 表，状态 queued）
+    4. 调用 Provider Runtime 执行图片 AI 处理
+    5. 写入 Provider 调用日志
+    6. 扣除 AI 额度
+    7. 更新任务状态为 succeeded 并写入结果
+
+    Args:
+        db: 数据库异步会话
+        req: 图片 AI 任务创建请求
+        ctx: 图片 AI 上下文（用户、设备、请求追踪信息）
+
+    Returns:
+        CreatedTaskData（包含 task_id、status、feature、estimated_credits）
+    """
+    # 确定本功能码的消耗额度
+    credits_per_call = _FEATURE_CREDITS.get(req.feature, _DEFAULT_CREDITS_PER_CALL)
+
+    # ---- 步骤 1: 套餐权限检查 ----
+    await _check_feature_permission(db, ctx.plan_code, req.feature)
+
+    # ---- 步骤 2: 额度预检查 ----
+    await _check_credits_balance(db, ctx.user_id, credits_per_call)
+
+    # ---- 步骤 3: 创建任务记录（状态 queued） ----
+    task_id = await _create_task_record(
+        db=db,
+        ctx=ctx,
+        req=req,
+        status="queued",
+    )
+
+    # ---- 步骤 4: 构建 prompt 并调用 Provider Runtime ----
+    system_prompt = _build_system_prompt(req.feature)
+    user_prompt = _build_user_prompt(req)
+
+    provider_result = await _call_provider(
+        model=_DEFAULT_MODEL,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        feature=req.feature,
+        request_id=ctx.request_id,
+    )
+
+    # 检查 Provider 调用结果
+    if provider_result.status == "failed":
+        # Provider 调用失败，写入失败日志，更新任务状态为 failed
+        await _insert_provider_log(
+            db=db,
+            ctx=ctx,
+            feature=req.feature,
+            provider=provider_result.provider,
+            model=provider_result.model,
+            status="failed",
+            error_code=provider_result.error_code,
+            input_tokens=provider_result.usage.input_tokens,
+            output_tokens=provider_result.usage.output_tokens,
+            total_tokens=provider_result.usage.total_tokens,
+            reasoning_tokens=provider_result.usage.reasoning_tokens,
+            cached_tokens=provider_result.usage.cached_tokens,
+            image_count=provider_result.usage.image_count,
+            estimated_cost=0.0,
+            credits_charged=0,
+            latency_ms=provider_result.latency_ms or 0,
+            raw_usage_json=provider_result.raw_usage_json,
+        )
+        # 更新任务状态为 failed
+        await _update_task_status(
+            db=db,
+            task_id=task_id,
+            status="failed",
+            error_code=provider_result.error_code,
+        )
+        raise AppError(
+            code=provider_result.error_code or ErrorCode.PROVIDER_UNAVAILABLE,
+            message=provider_result.error_message or "AI 图片处理服务暂时不可用，请稍后重试",
+            status_code=502,
+        )
+
+    # ---- 步骤 5: 写入 Provider 调用日志（成功） ----
+    provider_call_id = await _insert_provider_log(
+        db=db,
+        ctx=ctx,
+        feature=req.feature,
+        provider=provider_result.provider,
+        model=provider_result.model,
+        status="success",
+        error_code=None,
+        input_tokens=provider_result.usage.input_tokens,
+        output_tokens=provider_result.usage.output_tokens,
+        total_tokens=provider_result.usage.total_tokens,
+        reasoning_tokens=provider_result.usage.reasoning_tokens,
+        cached_tokens=provider_result.usage.cached_tokens,
+        image_count=provider_result.usage.image_count,
+        estimated_cost=provider_result.estimated_cost,
+        credits_charged=credits_per_call,
+        latency_ms=provider_result.latency_ms or 0,
+        raw_usage_json=provider_result.raw_usage_json,
+    )
+
+    # ---- 步骤 6: 扣除 AI 额度 ----
+    feature_label = _FEATURE_LABELS.get(req.feature, req.feature)
+    await _consume_credits(
+        db=db,
+        user_id=ctx.user_id,
+        amount=credits_per_call,
+        source_id=provider_call_id,
+        description=f"AI 图片处理 · {feature_label}",
+    )
+
+    # ---- 步骤 7: 更新任务为 succeeded，写入结果 ----
+    # 根据功能码获取对应的 Mock 结果文件和自定义数据
+    mock_result_files = _get_mock_result_files(req.feature)
+    mock_result_json = _MOCK_RESULT_JSON_BY_FEATURE.get(req.feature)
+    await _update_task_result(
+        db=db,
+        task_id=task_id,
+        status="succeeded",
+        provider_call_id=provider_call_id,
+        provider=provider_result.provider,
+        model=provider_result.model,
+        estimated_cost=provider_result.estimated_cost,
+        credits_charged=credits_per_call,
+        result_files=mock_result_files,
+        result_json=mock_result_json,
+    )
+
+    return CreatedTaskData(
+        task_id=task_id,
+        status="succeeded",
+        feature=req.feature,
+        estimated_credits=credits_per_call,
+    )
+
+
+async def query_image_tool_task(
+    db: AsyncSession,
+    task_id: str,
+    user_id: str,
+) -> AiImageToolTaskData:
+    """查询高级图片 AI 任务的状态和结果。
+
+    使用 raw SQL 查询 ai_tasks 表（对齐 DATABASE_SCHEMA.md），
+    避免 ORM 模型注册冲突。
+
+    Args:
+        db: 数据库异步会话
+        task_id: 任务 ID（UUID）
+        user_id: 用户 ID（用于权限校验）
+
+    Returns:
+        AiImageToolTaskData（任务状态和结果）
+
+    Raises:
+        AppError: 任务不存在或无权访问
+    """
+    result = await db.execute(
+        text(
+            "SELECT id, user_id, feature, status, input_json, result_json, "
+            "provider_call_id, credits_charged, error_code, created_at, updated_at "
+            "FROM ai_tasks WHERE id = :tid"
+        ),
+        {"tid": task_id},
+    )
+    row = result.fetchone()
+
+    if row is None:
+        raise AppError(
+            code=ErrorCode.VALIDATION_ERROR,
+            message="任务不存在",
+            status_code=404,
+        )
+
+    # 校验任务归属（用户只能查询自己的任务）
+    (
+        tid, owner_id, feature, status, input_json_raw, result_json_raw,
+        p_call_id, credits_charged, error_code, created_at, updated_at,
+    ) = row
+
+    if owner_id != user_id:
+        raise AppError(
+            code=ErrorCode.PERMISSION_DENIED,
+            message="无权访问此任务",
+            status_code=403,
+        )
+
+    # 解析结果文件
+    result_files: List[ResultFile] = []
+    result_json: Optional[dict] = None
+    provider = None
+    model = None
+    estimated_cost = None
+    provider_call_id = None
+
+    if result_json_raw:
+        result_data = _parse_json_field(result_json_raw)
+        if result_data:
+            for f in result_data.get("files", []):
+                result_files.append(ResultFile(
+                    file_id=f.get("file_id", ""),
+                    url=f.get("url"),
+                    mime_type=f.get("mime_type", "image/png"),
+                    width=f.get("width"),
+                    height=f.get("height"),
+                ))
+            provider = result_data.get("provider")
+            model = result_data.get("model")
+            estimated_cost = result_data.get("estimated_cost")
+            provider_call_id = result_data.get("provider_call_id") or p_call_id
+            result_json = result_data.get("result_json")
+
+    return AiImageToolTaskData(
+        task_id=tid,
+        status=status,
+        feature=feature,
+        result_files=result_files,
+        result_json=result_json,
+        provider=provider,
+        model=model,
+        estimated_cost=estimated_cost,
+        credits_charged=credits_charged if credits_charged else None,
+        provider_call_id=provider_call_id or (str(p_call_id) if p_call_id else None),
+    )
+
+
+# ============================================================
+# 调用链辅助函数（全部使用 raw SQL，避免 ORM 跨模块冲突）
+# ============================================================
+
+
+async def _check_feature_permission(
+    db: AsyncSession,
+    plan_code: str,
+    feature: str,
+) -> None:
+    """检查当前套餐是否支持指定的功能码。
+
+    使用 raw SQL 查询 plans 表的 enabled_features_json 字段，
+    避免导入 credits-billing 的 Plan ORM 模型（该模型注册到 Base.metadata）。
+
+    Args:
+        db: 数据库异步会话
+        plan_code: 用户当前套餐编码
+        feature: 要检查的功能码
+
+    Raises:
+        AppError: 套餐不存在或不支持此功能
+    """
+    result = await db.execute(
+        text(
+            "SELECT enabled_features_json FROM plans "
+            "WHERE code = :code AND status = 'active'"
+        ),
+        {"code": plan_code},
+    )
+    row = result.fetchone()
+
+    if row is None:
+        raise AppError(
+            code=ErrorCode.PLAN_REQUIRED,
+            message="当前套餐不支持此功能，请升级套餐",
+            status_code=403,
+        )
+
+    # enabled_features_json 在 SQLite 中存储为 TEXT/JSON 字符串
+    features = _parse_json_field(row[0])
+
+    # 优先检查伞形功能开关 ai_image_tools_cloud（plans 中的顶层开关）
+    # 如果伞形开关打开，则所有子功能（upscale / vectorize / ai_edit / remove_bg / ocr）均可用
+    umbrella_enabled = features.get("ai_image_tools_cloud", False)
+    if _is_feature_enabled(umbrella_enabled):
+        return
+
+    # 伞形开关未打开时，检查具体子功能是否单独启用（支持更细粒度的权限控制）
+    feature_enabled = features.get(feature, False)
+    if not _is_feature_enabled(feature_enabled):
+        raise AppError(
+            code=ErrorCode.PERMISSION_DENIED,
+            message=f"当前套餐不支持{_FEATURE_LABELS.get(feature, feature)}功能，请升级套餐",
+            status_code=403,
+        )
+
+
+async def _check_credits_balance(
+    db: AsyncSession,
+    user_id: str,
+    required_credits: int,
+) -> None:
+    """检查用户额度是否足够。
+
+    使用 raw SQL 查询 credit_accounts 表（对齐 DATABASE_SCHEMA.md），
+    优先复用已有额度账户，不存在则自动创建。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 用户 ID
+        required_credits: 需要的额度数量
+
+    Raises:
+        AppError: 额度不足或账户冻结
+    """
+    # 查询或创建额度账户
+    result = await db.execute(
+        text(
+            "SELECT id, balance, status FROM credit_accounts "
+            "WHERE user_id = :user_id"
+        ),
+        {"user_id": user_id},
+    )
+    row = result.fetchone()
+
+    if row is not None:
+        account_id, balance, status = row[0], row[1], row[2]
+        if status == "frozen":
+            raise AppError(
+                code=ErrorCode.PLAN_REQUIRED,
+                message="账户已被冻结，请联系客服",
+                status_code=403,
+            )
+    else:
+        # 自动创建额度账户（获取用户套餐以确定赠额）
+        user_result = await db.execute(
+            text("SELECT plan_code FROM users WHERE id = :uid"),
+            {"uid": user_id},
+        )
+        user_row = user_result.fetchone()
+        plan_code = user_row[0] if user_row else "free"
+
+        plan_result = await db.execute(
+            text("SELECT monthly_grant FROM plans WHERE code = :code AND status = 'active'"),
+            {"code": plan_code},
+        )
+        plan_row = plan_result.fetchone()
+        monthly_grant = plan_row[0] if plan_row else 0
+
+        account_id = str(uuid.uuid4())
+        now = _utcnow()
+        balance = monthly_grant
+
+        # 插入额度账户
+        await db.execute(
+            text(
+                "INSERT INTO credit_accounts "
+                "(id, user_id, plan_code, balance, monthly_grant, "
+                " period_start, period_end, status, created_at, updated_at) "
+                "VALUES (:id, :uid, :pc, :bal, :mg, :ps, :pe, 'active', :now, :now)"
+            ),
+            {
+                "id": account_id,
+                "uid": user_id,
+                "pc": plan_code,
+                "bal": balance,
+                "mg": monthly_grant,
+                "ps": now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
+                "pe": _next_month_start(now),
+                "now": now,
+            },
+        )
+
+        # 写入初始赠送流水
+        if monthly_grant > 0:
+            await db.execute(
+                text(
+                    "INSERT INTO credit_ledger "
+                    "(id, user_id, account_id, change_type, amount, balance_after, "
+                    " source_type, description, created_at) "
+                    "VALUES (:id, :uid, :aid, 'grant', :amt, :ba, 'system', :desc, :now)"
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "uid": user_id,
+                    "aid": account_id,
+                    "amt": monthly_grant,
+                    "ba": balance,
+                    "desc": "新账户初始赠送额度",
+                    "now": now,
+                },
+            )
+
+    # 重新查询最新余额（处理自动创建后的情况）
+    result = await db.execute(
+        text("SELECT balance FROM credit_accounts WHERE user_id = :user_id"),
+        {"user_id": user_id},
+    )
+    row = result.fetchone()
+    balance = row[0] if row else 0
+
+    if balance < required_credits:
+        raise AppError(
+            code=ErrorCode.CREDITS_NOT_ENOUGH,
+            message=(
+                f"AI 额度不足（当前 {balance}"
+                f"，需要 {required_credits}），请充值后再试"
+            ),
+            status_code=402,
+        )
+
+
+async def _create_task_record(
+    db: AsyncSession,
+    ctx: ImageToolContext,
+    req: CreateAiImageToolTaskRequest,
+    status: str,
+) -> str:
+    """在 ai_tasks 表中创建任务记录。
+
+    使用 raw SQL INSERT 直接写入，对齐 DATABASE_SCHEMA.md ai_tasks 表定义。
+
+    Args:
+        db: 数据库异步会话
+        ctx: 图片 AI 上下文
+        req: 创建请求
+        status: 任务初始状态
+
+    Returns:
+        新创建的任务 ID（UUID）
+    """
+    task_id = str(uuid.uuid4())
+    now = _utcnow()
+
+    # 构造脱敏输入 JSON
+    input_data = {
+        "feature": req.feature,
+        "input_file_ids": req.input_file_ids,
+        "options": req.options,
+        "client_request_id": req.client_request_id,
+    }
+
+    await db.execute(
+        text(
+            "INSERT INTO ai_tasks "
+            "(id, user_id, device_id, feature, status, input_json, "
+            " credits_charged, created_at, updated_at) "
+            "VALUES (:id, :uid, :did, :feat, :st, :input, 0, :now, :now)"
+        ),
+        {
+            "id": task_id,
+            "uid": ctx.user_id,
+            "did": ctx.device_id,
+            "feat": req.feature,
+            "st": status,
+            "input": json.dumps(input_data),
+            "now": now,
+        },
+    )
+
+    return task_id
+
+
+async def _update_task_status(
+    db: AsyncSession,
+    task_id: str,
+    status: str,
+    error_code: Optional[str] = None,
+) -> None:
+    """更新任务状态。
+
+    Args:
+        db: 数据库异步会话
+        task_id: 任务 ID
+        status: 新状态
+        error_code: 错误码（失败时写入）
+    """
+    now = _utcnow()
+    await db.execute(
+        text(
+            "UPDATE ai_tasks SET status = :st, error_code = :ec, "
+            "updated_at = :now WHERE id = :tid"
+        ),
+        {"st": status, "ec": error_code, "now": now, "tid": task_id},
+    )
+
+
+async def _update_task_result(
+    db: AsyncSession,
+    task_id: str,
+    status: str,
+    provider_call_id: str,
+    provider: str,
+    model: str,
+    estimated_cost: float,
+    credits_charged: int,
+    result_files: List[dict],
+    result_json: Optional[dict] = None,
+) -> None:
+    """更新任务为完成状态并写入结果。
+
+    Args:
+        db: 数据库异步会话
+        task_id: 任务 ID
+        status: 完成状态（succeeded）
+        provider_call_id: Provider 调用日志 ID
+        provider: Provider 名称
+        model: 模型名称
+        estimated_cost: 估算成本
+        credits_charged: 扣除额度
+        result_files: 结果文件列表
+        result_json: 各功能自定义结果数据
+    """
+    now = _utcnow()
+    result_data = {
+        "files": result_files,
+        "provider": provider,
+        "model": model,
+        "estimated_cost": estimated_cost,
+        "provider_call_id": provider_call_id,
+    }
+    # 各子功能的自定义结果数据（如 OCR 文本、矢量图层信息等）
+    if result_json is not None:
+        result_data["result_json"] = result_json
+
+    await db.execute(
+        text(
+            "UPDATE ai_tasks SET status = :st, result_json = :result, "
+            "provider_call_id = :pcid, credits_charged = :cc, "
+            "updated_at = :now WHERE id = :tid"
+        ),
+        {
+            "st": status,
+            "result": json.dumps(result_data),
+            "pcid": provider_call_id,
+            "cc": credits_charged,
+            "now": now,
+            "tid": task_id,
+        },
+    )
+
+
+async def _call_provider(
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    feature: str,
+    request_id: str,
+):
+    """调用 Provider Runtime 执行图片 AI 处理。
+
+    使用 MockProvider + ProviderRouter 执行调用。
+    当前阶段全部使用 Mock Provider。
+
+    Args:
+        model: 模型名称
+        system_prompt: 系统提示词
+        user_prompt: 用户提示词
+        feature: 功能码
+        request_id: 请求追踪 ID
+
+    Returns:
+        Provider 调用结果
+    """
+    call_request = ProviderCallRequest(
+        model=model,
+        messages=[
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=user_prompt),
+        ],
+        feature=feature,
+        max_tokens=2048,
+        temperature=0.7,
+        request_id=request_id,
+    )
+
+    provider = MockProvider()
+    router = ProviderRouter()
+    result = await router.call(request=call_request, provider=provider)
+
+    return result
+
+
+async def _insert_provider_log(
+    db: AsyncSession,
+    ctx: ImageToolContext,
+    feature: str,
+    provider: str,
+    model: str,
+    status: str,
+    error_code: Optional[str],
+    input_tokens: int,
+    output_tokens: int,
+    total_tokens: int,
+    reasoning_tokens: int,
+    cached_tokens: int,
+    image_count: int,
+    estimated_cost: float,
+    credits_charged: int,
+    latency_ms: int,
+    raw_usage_json: dict,
+) -> str:
+    """写入 Provider 调用日志到 provider_call_log 表。
+
+    使用 raw SQL INSERT 直接写入，避免导入 provider-log 的 ORM 模型。
+    返回新写入的日志 UUID（供后续扣费关联使用）。
+
+    对齐 DATABASE_SCHEMA.md provider_call_log 表定义和写入边界规则：
+    provider_call_log 由 Provider Runtime 或其封装服务写入。
+    """
+    log_id = str(uuid.uuid4())
+    raw_meta = json.dumps({"feature": feature, "mock": True})
+
+    await db.execute(
+        text(
+            "INSERT INTO provider_call_log "
+            "(id, request_id, user_id, device_id, feature, provider, model, "
+            " status, error_code, input_tokens, output_tokens, total_tokens, "
+            " reasoning_tokens, cached_tokens, image_count, estimated_cost, "
+            " credits_charged, latency_ms, raw_usage_json, raw_meta_json, created_at) "
+            "VALUES (:id, :rid, :uid, :did, :feat, :prov, :mod, "
+            " :st, :ec, :it, :ot, :tt, :rt, :ct, :ic, :ecost, "
+            " :cc, :lat, :ruj, :rmj, :now)"
+        ),
+        {
+            "id": log_id,
+            "rid": ctx.request_id,
+            "uid": ctx.user_id,
+            "did": ctx.device_id,
+            "feat": feature,
+            "prov": provider,
+            "mod": model,
+            "st": status,
+            "ec": error_code,
+            "it": input_tokens,
+            "ot": output_tokens,
+            "tt": total_tokens,
+            "rt": reasoning_tokens,
+            "ct": cached_tokens,
+            "ic": image_count,
+            "ecost": estimated_cost,
+            "cc": credits_charged,
+            "lat": latency_ms,
+            "ruj": json.dumps(raw_usage_json) if raw_usage_json else None,
+            "rmj": raw_meta,
+            "now": _utcnow(),
+        },
+    )
+
+    return log_id
+
+
+async def _consume_credits(
+    db: AsyncSession,
+    user_id: str,
+    amount: int,
+    source_id: str,
+    description: str,
+) -> None:
+    """扣除 AI 额度。
+
+    使用 raw SQL 更新 credit_accounts 表并写入 credit_ledger 流水。
+    对齐 DATABASE_SCHEMA.md 写入边界规则：credit_ledger 由计费服务写入。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 用户 ID
+        amount: 扣除额度（正整数）
+        source_id: 来源 ID（provider_call_log.id）
+        description: 中文说明
+
+    Raises:
+        AppError: 额度不足
+    """
+    # 查询当前余额和账户 ID
+    result = await db.execute(
+        text(
+            "SELECT id, balance FROM credit_accounts "
+            "WHERE user_id = :user_id AND status = 'active'"
+        ),
+        {"user_id": user_id},
+    )
+    row = result.fetchone()
+    if row is None:
+        raise AppError(
+            code=ErrorCode.CREDITS_NOT_ENOUGH,
+            message="未找到有效的额度账户",
+            status_code=402,
+        )
+    account_id, balance = row[0], row[1]
+
+    if balance < amount:
+        raise AppError(
+            code=ErrorCode.CREDITS_NOT_ENOUGH,
+            message=f"AI 额度不足（当前 {balance}，需要 {amount}）",
+            status_code=402,
+        )
+
+    new_balance = balance - amount
+    now = _utcnow()
+
+    # 更新余额
+    await db.execute(
+        text(
+            "UPDATE credit_accounts SET balance = :bal, updated_at = :now "
+            "WHERE id = :aid"
+        ),
+        {"bal": new_balance, "now": now, "aid": account_id},
+    )
+
+    # 写入额度流水
+    await db.execute(
+        text(
+            "INSERT INTO credit_ledger "
+            "(id, user_id, account_id, change_type, amount, balance_after, "
+            " source_type, source_id, description, created_at) "
+            "VALUES (:id, :uid, :aid, 'consume', :amt, :ba, "
+            " 'provider_call', :sid, :desc, :now)"
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "uid": user_id,
+            "aid": account_id,
+            "amt": -amount,
+            "ba": new_balance,
+            "sid": source_id,
+            "desc": description,
+            "now": now,
+        },
+    )
+
+
+# ============================================================
+# 工具函数
+# ============================================================
+
+
+def _is_feature_enabled(value) -> bool:
+    """判断功能开关是否启用。
+
+    兼容 bool 值和 dict 格式（如 {"daily_limit": 3}）。
+
+    Args:
+        value: 功能开关值（True / False / dict）
+
+    Returns:
+        是否启用
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, dict):
+        # dict 格式（如本地付费功能的配额配置），非空即视为启用
+        return bool(value)
+    return False
+
+
+def _next_month_start(dt: datetime) -> datetime:
+    """计算下一个月的第一天。
+
+    Args:
+        dt: 当前日期时间
+
+    Returns:
+        下个月第一天的 UTC datetime
+    """
+    if dt.month == 12:
+        return dt.replace(year=dt.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    return dt.replace(month=dt.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _get_mock_result_files(feature: str) -> List[dict]:
+    """根据功能码获取对应的 Mock 结果文件列表。
+
+    Mock 阶段返回固定的模拟文件信息，模拟真实图片 AI 处理的输出。
+    后续接入真实图片 AI Provider 时替换此处逻辑。
+
+    Args:
+        feature: AI 图片工具功能码
+
+    Returns:
+        对应功能的模拟结果文件列表
+    """
+    return _MOCK_RESULT_FILES_BY_FEATURE.get(feature, _MOCK_REMOVE_BG_FILES)
+
+
+def _parse_json_field(raw) -> dict:
+    """安全解析数据库中的 JSON 字段。
+
+    兼容 SQLite（存储为 TEXT 字符串）和 PostgreSQL（存储为 JSONB）两种格式。
+
+    Args:
+        raw: 原始字段值（可能是 str、dict 或 None）
+
+    Returns:
+        解析后的 dict（解析失败返回空 dict）
+    """
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    return {}
