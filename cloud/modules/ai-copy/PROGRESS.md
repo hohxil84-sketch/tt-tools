@@ -38,8 +38,8 @@
 
 ## 提交记录
 
-暂无。
+- `e175793` feat(cloud-ai-copy): 完成云端文案生成 API 模块 (2026-06-21, 已推送 origin/feature/cloud-ai-copy)
 
 ## 下一步
 
-提交、推送，等待合并到 dev/full-product。
+等待合并到 dev/full-product。
