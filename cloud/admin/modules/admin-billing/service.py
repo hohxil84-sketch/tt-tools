@@ -1,0 +1,914 @@
+"""
+admin-billing 业务逻辑层。
+
+提供后台套餐管理、订单管理和额度管理的核心逻辑：
+- 套餐：列表、详情、创建、更新、状态切换
+- 订单：跨用户列表查询、详情查询
+- 额度：跨用户账户列表、账户详情、流水查询、手动调整
+
+模型复用策略：
+本模块不定义 ORM 模型，直接通过 importlib 加载已有模块的模型：
+- Plan / CreditAccount / CreditLedger ← cloud/modules/credits-billing/models.py
+- Order ← cloud/modules/orders_recharge/models.py
+- User ← cloud/admin/modules/admin-users/models.py
+
+调用方（conftest）需要预先将模型类注册到 sys.modules 的别名键下，
+service.py 通过 _get_model() 惰性加载。
+
+手动调整额度时：
+- 正数 amount：调用 credits-billing 的 grant_credits()
+- 负数 amount：调用 credits-billing 的 consume_credits()（取绝对值）
+- source_type 统一为 "admin"，description 记录调整原因
+"""
+from __future__ import annotations
+
+import importlib.util
+import os
+import sys
+from datetime import datetime, timezone
+from typing import Optional
+
+from sqlalchemy import select, func, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from cloud.shared import ErrorCode, AppError
+
+from schemas import (
+    PlanItem,
+    PlanDetail,
+    PlanListData,
+    AdminOrderItem,
+    AdminOrderDetail,
+    AdminOrderListData,
+    AdminCreditAccountItem,
+    AdminCreditAccountDetail,
+    AdminCreditAccountListData,
+    AdminCreditLedgerItem,
+    AdminCreditLedgerListData,
+)
+
+# ============================================================
+# 分页常量
+# ============================================================
+
+MAX_LIMIT = 100
+
+# ============================================================
+# 跨模块模型加载
+# ============================================================
+
+# 缓存的模型类和函数引用
+_Plan = None
+_CreditAccount = None
+_CreditLedger = None
+_Order = None
+_User = None
+_grant_credits = None
+_consume_credits = None
+
+
+def _get_project_root() -> str:
+    """获取项目根目录的绝对路径。"""
+    # 从当前文件向上：admin-billing → modules → admin → cloud → TT Tools
+    return os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+    )
+
+
+def _load_module_models():
+    """惰性加载所有跨模块模型类和函数引用。
+
+    预期调用方（conftest）已将模型类注册到 sys.modules 的别名键下：
+    - "credits_billing_models" → credits-billing 的 models 模块
+    - "orders_recharge_models" → orders-recharge 的 models 模块
+    - "admin_users_models" → admin-users 的 models 模块
+    """
+    global _Plan, _CreditAccount, _CreditLedger, _Order, _User
+    global _grant_credits, _consume_credits
+
+    if _Plan is not None:
+        return  # 已加载
+
+    # 加载 credits-billing 模型
+    if "credits_billing_models" in sys.modules:
+        cb_models = sys.modules["credits_billing_models"]
+        _Plan = cb_models.Plan
+        _CreditAccount = cb_models.CreditAccount
+        _CreditLedger = cb_models.CreditLedger
+    else:
+        # 回退：直接通过 importlib 加载
+        _plan_tmp = _import_model_file("credits-billing", "models", "credits_billing_models")
+        _Plan = _plan_tmp.Plan
+        _CreditAccount = _plan_tmp.CreditAccount
+        _CreditLedger = _plan_tmp.CreditLedger
+
+    # 加载 credits-billing 服务函数
+    _grant_credits, _consume_credits = _load_billing_functions()
+
+    # 加载订单模型
+    if "orders_recharge_models" in sys.modules:
+        _Order = sys.modules["orders_recharge_models"].Order
+    else:
+        _order_tmp = _import_model_file("orders_recharge", "models", "orders_recharge_models")
+        _Order = _order_tmp.Order
+
+    # 加载用户模型
+    if "admin_users_models" in sys.modules:
+        _User = sys.modules["admin_users_models"].User
+
+
+def _import_model_file(module_dir_name: str, module_file: str, alias: str):
+    """通过 importlib 按文件路径加载模块。
+
+    Args:
+        module_dir_name: 模块目录名（如 credits-billing、orders_recharge）
+        module_file: 文件名（如 models、service）
+        alias: 在 sys.modules 中注册的别名
+
+    Returns:
+        加载的模块对象
+    """
+    root = _get_project_root()
+    dir_path = os.path.join(root, "cloud", "modules", module_dir_name)
+    file_path = os.path.join(dir_path, f"{module_file}.py")
+
+    # 临时将目录加入 sys.path
+    _orig_path = list(sys.path)
+    if dir_path in sys.path:
+        sys.path.remove(dir_path)
+    sys.path.insert(0, dir_path)
+
+    # 保存可能冲突的模块
+    _saved = {}
+    for _key in ("models", "service", "schemas", "router"):
+        if _key in sys.modules:
+            _saved[_key] = sys.modules.pop(_key)
+
+    try:
+        spec = importlib.util.spec_from_file_location(alias, file_path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[alias] = mod
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        # 恢复 sys.modules
+        for _key in ("models", "service", "schemas", "router"):
+            sys.modules.pop(_key, None)
+        for _key, _val in _saved.items():
+            sys.modules[_key] = _val
+        # 恢复 sys.path
+        sys.path.clear()
+        sys.path.extend(_orig_path)
+
+
+def _load_billing_functions():
+    """加载 credits-billing 的 grant_credits 和 consume_credits 函数。
+
+    通过 importlib 加载 service.py，使用与 _import_model_file 相同的模式。
+    """
+    root = _get_project_root()
+    dir_path = os.path.join(root, "cloud", "modules", "credits-billing")
+    file_path = os.path.join(dir_path, "service.py")
+
+    _orig_path = list(sys.path)
+    if dir_path in sys.path:
+        sys.path.remove(dir_path)
+    sys.path.insert(0, dir_path)
+
+    _saved = {}
+    for _key in ("models", "service", "schemas", "router"):
+        if _key in sys.modules:
+            _saved[_key] = sys.modules.pop(_key)
+
+    # 将 credits_billing_models 别名为 models，使 service.py 的 import 正确解析
+    if "credits_billing_models" in sys.modules:
+        sys.modules["models"] = sys.modules["credits_billing_models"]
+
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "credits_billing_service", file_path
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.grant_credits, mod.consume_credits
+    finally:
+        for _key in ("models", "service", "schemas", "router"):
+            sys.modules.pop(_key, None)
+        for _key, _val in _saved.items():
+            sys.modules[_key] = _val
+        sys.path.clear()
+        sys.path.extend(_orig_path)
+
+
+# ============================================================
+# 套餐管理
+# ============================================================
+
+
+async def list_plans(db: AsyncSession) -> PlanListData:
+    """查询所有套餐列表。
+
+    Args:
+        db: 数据库异步会话
+
+    Returns:
+        PlanListData 套餐列表
+    """
+    _load_module_models()
+
+    result = await db.execute(
+        select(_Plan).order_by(_Plan.created_at)
+    )
+    plans = result.scalars().all()
+
+    items = [
+        PlanItem(
+            id=p.id,
+            code=p.code,
+            name=p.name,
+            monthly_grant=p.monthly_grant,
+            status=p.status,
+            created_at=p.created_at,
+        )
+        for p in plans
+    ]
+
+    return PlanListData(items=items)
+
+
+async def get_plan_detail(db: AsyncSession, plan_id: str) -> PlanDetail:
+    """查询套餐详情。
+
+    Args:
+        db: 数据库异步会话
+        plan_id: 套餐 ID（UUID）
+
+    Returns:
+        PlanDetail 套餐详细信息
+
+    Raises:
+        AppError: 套餐不存在时抛出 404
+    """
+    _load_module_models()
+
+    result = await db.execute(select(_Plan).where(_Plan.id == plan_id))
+    plan = result.scalar_one_or_none()
+
+    if plan is None:
+        raise AppError(
+            code="PLAN_NOT_FOUND",
+            message=f"套餐 {plan_id} 不存在",
+            status_code=404,
+        )
+
+    return PlanDetail(
+        id=plan.id,
+        code=plan.code,
+        name=plan.name,
+        monthly_grant=plan.monthly_grant,
+        enabled_features_json=plan.enabled_features_json or {},
+        status=plan.status,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
+    )
+
+
+async def create_plan(
+    db: AsyncSession,
+    code: str,
+    name: str,
+    monthly_grant: int = 0,
+    enabled_features_json: Optional[dict] = None,
+) -> PlanDetail:
+    """创建新套餐。
+
+    Args:
+        db: 数据库异步会话
+        code: 套餐编码（必须唯一）
+        name: 套餐名称
+        monthly_grant: 每周期赠送额度
+        enabled_features_json: 功能开关配置
+
+    Returns:
+        PlanDetail 创建的套餐信息
+
+    Raises:
+        AppError: 套餐编码已存在时抛出 409
+    """
+    _load_module_models()
+
+    # 检查编码是否已存在
+    existing = await db.execute(select(_Plan).where(_Plan.code == code))
+    if existing.scalar_one_or_none() is not None:
+        raise AppError(
+            code="PLAN_CODE_EXISTS",
+            message=f"套餐编码 {code} 已存在",
+            status_code=409,
+        )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    plan = _Plan(
+        code=code,
+        name=name,
+        monthly_grant=monthly_grant,
+        enabled_features_json=enabled_features_json or {},
+        status="active",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(plan)
+    await db.flush()
+
+    return PlanDetail(
+        id=plan.id,
+        code=plan.code,
+        name=plan.name,
+        monthly_grant=plan.monthly_grant,
+        enabled_features_json=plan.enabled_features_json or {},
+        status=plan.status,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
+    )
+
+
+async def update_plan(
+    db: AsyncSession,
+    plan_id: str,
+    name: Optional[str] = None,
+    monthly_grant: Optional[int] = None,
+    enabled_features_json: Optional[dict] = None,
+) -> PlanDetail:
+    """更新套餐配置。
+
+    只更新传入的非 None 字段。套餐编码不可修改。
+
+    Args:
+        db: 数据库异步会话
+        plan_id: 套餐 ID
+        name: 新名称（可选）
+        monthly_grant: 新月赠额度（可选）
+        enabled_features_json: 新功能配置（可选）
+
+    Returns:
+        PlanDetail 更新后的套餐信息
+
+    Raises:
+        AppError: 套餐不存在时抛出 404
+    """
+    _load_module_models()
+
+    result = await db.execute(select(_Plan).where(_Plan.id == plan_id))
+    plan = result.scalar_one_or_none()
+
+    if plan is None:
+        raise AppError(
+            code="PLAN_NOT_FOUND",
+            message=f"套餐 {plan_id} 不存在",
+            status_code=404,
+        )
+
+    # 只更新传入的非 None 字段
+    if name is not None:
+        plan.name = name
+    if monthly_grant is not None:
+        plan.monthly_grant = monthly_grant
+    if enabled_features_json is not None:
+        plan.enabled_features_json = enabled_features_json
+
+    plan.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.flush()
+
+    return PlanDetail(
+        id=plan.id,
+        code=plan.code,
+        name=plan.name,
+        monthly_grant=plan.monthly_grant,
+        enabled_features_json=plan.enabled_features_json or {},
+        status=plan.status,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
+    )
+
+
+async def update_plan_status(
+    db: AsyncSession, plan_id: str, new_status: str
+) -> PlanDetail:
+    """启用/停用套餐。
+
+    Args:
+        db: 数据库异步会话
+        plan_id: 套餐 ID
+        new_status: 目标状态（active / disabled）
+
+    Returns:
+        PlanDetail 更新后的套餐信息
+
+    Raises:
+        AppError: 套餐不存在或状态值无效
+    """
+    _load_module_models()
+
+    if new_status not in ("active", "disabled"):
+        raise AppError(
+            code=ErrorCode.VALIDATION_ERROR,
+            message=f"无效的套餐状态：{new_status}，允许值：active / disabled",
+            status_code=400,
+        )
+
+    result = await db.execute(select(_Plan).where(_Plan.id == plan_id))
+    plan = result.scalar_one_or_none()
+
+    if plan is None:
+        raise AppError(
+            code="PLAN_NOT_FOUND",
+            message=f"套餐 {plan_id} 不存在",
+            status_code=404,
+        )
+
+    plan.status = new_status
+    plan.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.flush()
+
+    return PlanDetail(
+        id=plan.id,
+        code=plan.code,
+        name=plan.name,
+        monthly_grant=plan.monthly_grant,
+        enabled_features_json=plan.enabled_features_json or {},
+        status=plan.status,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
+    )
+
+
+# ============================================================
+# 订单管理
+# ============================================================
+
+
+async def list_all_orders(
+    db: AsyncSession,
+    limit: int = 20,
+    offset: int = 0,
+    user_id: Optional[str] = None,
+    order_type: Optional[str] = None,
+    status: Optional[str] = None,
+) -> AdminOrderListData:
+    """查询全部订单列表（管理员视角，跨用户）。
+
+    支持按 user_id、order_type、status 多条件筛选和分页。
+    关联 users 表获取用户账号信息。
+
+    Args:
+        db: 数据库异步会话
+        limit: 每页条数
+        offset: 偏移量
+        user_id: 按用户 ID 筛选
+        order_type: 按订单类型筛选
+        status: 按订单状态筛选
+
+    Returns:
+        AdminOrderListData 订单列表及分页信息
+    """
+    _load_module_models()
+
+    limit = max(1, min(limit, MAX_LIMIT))
+    offset = max(0, offset)
+
+    # 构建筛选条件
+    conditions = []
+    if user_id:
+        conditions.append(_Order.user_id == user_id)
+    if order_type:
+        conditions.append(_Order.order_type == order_type)
+    if status:
+        conditions.append(_Order.status == status)
+
+    # 查询总数
+    count_query = select(func.count()).select_from(_Order)
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    total_result = await db.execute(count_query)
+    total = total_result.scalar_one()
+
+    # 查询分页数据（按创建时间倒序）
+    query = (
+        select(_Order)
+        .where(and_(*conditions) if conditions else True)
+        .order_by(_Order.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    orders = result.scalars().all()
+
+    # 批量查询关联用户账号（避免 N+1 查询）
+    user_ids = list({o.user_id for o in orders})
+    user_map = await _get_user_account_map(db, user_ids)
+
+    items = [
+        AdminOrderItem(
+            id=o.id,
+            order_no=o.order_no,
+            order_type=o.order_type,
+            product_code=o.product_code,
+            amount_cents=o.amount_cents,
+            credit_amount=o.credit_amount,
+            currency=o.currency,
+            status=o.status,
+            paid_at=o.paid_at,
+            user_id=o.user_id,
+            user_account=user_map.get(o.user_id),
+            created_at=o.created_at,
+            updated_at=o.updated_at,
+        )
+        for o in orders
+    ]
+
+    return AdminOrderListData(items=items, total=total, limit=limit, offset=offset)
+
+
+async def get_admin_order_detail(db: AsyncSession, order_id: str) -> AdminOrderDetail:
+    """查询订单详情（管理员视角，任意用户订单）。
+
+    Args:
+        db: 数据库异步会话
+        order_id: 订单 ID（UUID）
+
+    Returns:
+        AdminOrderDetail 订单详情（含用户信息）
+
+    Raises:
+        AppError: 订单不存在时抛出 404
+    """
+    _load_module_models()
+
+    result = await db.execute(select(_Order).where(_Order.id == order_id))
+    order = result.scalar_one_or_none()
+
+    if order is None:
+        raise AppError(
+            code="ORDER_NOT_FOUND",
+            message=f"订单 {order_id} 不存在",
+            status_code=404,
+        )
+
+    # 查询关联用户信息
+    user_account = None
+    user_display_name = None
+    if _User is not None:
+        user_result = await db.execute(
+            select(_User.account, _User.display_name).where(_User.id == order.user_id)
+        )
+        user_row = user_result.one_or_none()
+        if user_row:
+            user_account = user_row[0]
+            user_display_name = user_row[1]
+
+    return AdminOrderDetail(
+        id=order.id,
+        order_no=order.order_no,
+        order_type=order.order_type,
+        product_code=order.product_code,
+        amount_cents=order.amount_cents,
+        credit_amount=order.credit_amount,
+        currency=order.currency,
+        status=order.status,
+        paid_at=order.paid_at,
+        user_id=order.user_id,
+        user_account=user_account,
+        user_display_name=user_display_name,
+        created_at=order.created_at,
+        updated_at=order.updated_at,
+    )
+
+
+# ============================================================
+# 额度管理
+# ============================================================
+
+
+async def list_credit_accounts(
+    db: AsyncSession,
+    limit: int = 20,
+    offset: int = 0,
+    status: Optional[str] = None,
+    plan_code: Optional[str] = None,
+) -> AdminCreditAccountListData:
+    """查询所有额度账户列表（管理员视角，跨用户）。
+
+    支持按状态和套餐编码筛选。关联 users 表获取用户账号。
+
+    Args:
+        db: 数据库异步会话
+        limit: 每页条数
+        offset: 偏移量
+        status: 按账户状态筛选
+        plan_code: 按套餐编码筛选
+
+    Returns:
+        AdminCreditAccountListData 额度账户列表
+    """
+    _load_module_models()
+
+    limit = max(1, min(limit, MAX_LIMIT))
+    offset = max(0, offset)
+
+    conditions = []
+    if status:
+        conditions.append(_CreditAccount.status == status)
+    if plan_code:
+        conditions.append(_CreditAccount.plan_code == plan_code)
+
+    # 查询总数
+    count_query = select(func.count()).select_from(_CreditAccount)
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    total_result = await db.execute(count_query)
+    total = total_result.scalar_one()
+
+    # 查询分页数据
+    query = (
+        select(_CreditAccount)
+        .where(and_(*conditions) if conditions else True)
+        .order_by(_CreditAccount.updated_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    accounts = result.scalars().all()
+
+    # 批量查询关联用户账号
+    user_ids = list({a.user_id for a in accounts})
+    user_map = await _get_user_account_map(db, user_ids)
+
+    items = [
+        AdminCreditAccountItem(
+            id=a.id,
+            user_id=a.user_id,
+            user_account=user_map.get(a.user_id),
+            plan_code=a.plan_code,
+            balance=a.balance,
+            monthly_grant=a.monthly_grant,
+            status=a.status,
+            period_start=a.period_start,
+            period_end=a.period_end,
+            updated_at=a.updated_at,
+        )
+        for a in accounts
+    ]
+
+    return AdminCreditAccountListData(items=items, total=total, limit=limit, offset=offset)
+
+
+async def get_credit_account_detail(
+    db: AsyncSession, account_id: str
+) -> AdminCreditAccountDetail:
+    """查询额度账户详情（管理员视角）。
+
+    Args:
+        db: 数据库异步会话
+        account_id: 额度账户 ID（UUID）
+
+    Returns:
+        AdminCreditAccountDetail 账户详情（含用户信息）
+
+    Raises:
+        AppError: 账户不存在时抛出 404
+    """
+    _load_module_models()
+
+    result = await db.execute(
+        select(_CreditAccount).where(_CreditAccount.id == account_id)
+    )
+    account = result.scalar_one_or_none()
+
+    if account is None:
+        raise AppError(
+            code="CREDIT_ACCOUNT_NOT_FOUND",
+            message=f"额度账户 {account_id} 不存在",
+            status_code=404,
+        )
+
+    # 查询关联用户信息
+    user_account = None
+    user_display_name = None
+    if _User is not None:
+        user_result = await db.execute(
+            select(_User.account, _User.display_name).where(
+                _User.id == account.user_id
+            )
+        )
+        user_row = user_result.one_or_none()
+        if user_row:
+            user_account = user_row[0]
+            user_display_name = user_row[1]
+
+    return AdminCreditAccountDetail(
+        id=account.id,
+        user_id=account.user_id,
+        user_account=user_account,
+        user_display_name=user_display_name,
+        plan_code=account.plan_code,
+        balance=account.balance,
+        monthly_grant=account.monthly_grant,
+        status=account.status,
+        period_start=account.period_start,
+        period_end=account.period_end,
+        created_at=account.created_at,
+        updated_at=account.updated_at,
+    )
+
+
+async def list_all_credit_ledger(
+    db: AsyncSession,
+    limit: int = 20,
+    offset: int = 0,
+    user_id: Optional[str] = None,
+    change_type: Optional[str] = None,
+    source_type: Optional[str] = None,
+) -> AdminCreditLedgerListData:
+    """查询全部额度流水（管理员视角，跨用户）。
+
+    支持按 user_id、change_type、source_type 多条件筛选和分页。
+    关联 users 表获取用户账号。
+
+    Args:
+        db: 数据库异步会话
+        limit: 每页条数
+        offset: 偏移量
+        user_id: 按用户 ID 筛选
+        change_type: 按变化类型筛选
+        source_type: 按来源类型筛选
+
+    Returns:
+        AdminCreditLedgerListData 流水列表及分页信息
+    """
+    _load_module_models()
+
+    limit = max(1, min(limit, MAX_LIMIT))
+    offset = max(0, offset)
+
+    conditions = []
+    if user_id:
+        conditions.append(_CreditLedger.user_id == user_id)
+    if change_type:
+        conditions.append(_CreditLedger.change_type == change_type)
+    if source_type:
+        conditions.append(_CreditLedger.source_type == source_type)
+
+    # 查询总数
+    count_query = select(func.count()).select_from(_CreditLedger)
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    total_result = await db.execute(count_query)
+    total = total_result.scalar_one()
+
+    # 查询分页数据（按创建时间倒序）
+    query = (
+        select(_CreditLedger)
+        .where(and_(*conditions) if conditions else True)
+        .order_by(_CreditLedger.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    entries = result.scalars().all()
+
+    # 批量查询关联用户账号
+    user_ids = list({e.user_id for e in entries})
+    user_map = await _get_user_account_map(db, user_ids)
+
+    items = [
+        AdminCreditLedgerItem(
+            id=e.id,
+            user_id=e.user_id,
+            user_account=user_map.get(e.user_id),
+            account_id=e.account_id,
+            change_type=e.change_type,
+            amount=e.amount,
+            balance_after=e.balance_after,
+            source_type=e.source_type,
+            source_id=e.source_id,
+            description=e.description,
+            created_at=e.created_at,
+        )
+        for e in entries
+    ]
+
+    return AdminCreditLedgerListData(items=items, total=total, limit=limit, offset=offset)
+
+
+async def adjust_credits(
+    db: AsyncSession,
+    user_id: str,
+    amount: int,
+    description: Optional[str] = None,
+) -> AdminCreditAccountDetail:
+    """手动调整用户额度（管理员操作）。
+
+    正数 amount 为赠送额度，负数 amount 为扣除额度。
+    写入 credit_ledger 时 source_type 为 "admin"。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 目标用户 ID
+        amount: 调整额度（正数为赠送，负数为扣除，不允许为 0）
+        description: 调整原因说明
+
+    Returns:
+        AdminCreditAccountDetail 调整后的账户信息
+
+    Raises:
+        AppError: amount 为 0 时抛出 422，用户不存在时抛出 404
+    """
+    _load_module_models()
+
+    if amount == 0:
+        raise AppError(
+            code=ErrorCode.VALIDATION_ERROR,
+            message="调整额度不能为 0",
+            status_code=422,
+        )
+
+    # 确认用户存在
+    user_result = await db.execute(
+        select(_User).where(_User.id == user_id)
+    )
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise AppError(
+            code="USER_NOT_FOUND",
+            message=f"用户 {user_id} 不存在",
+            status_code=404,
+        )
+
+    # 根据 amount 正负决定调用赠送还是扣费
+    if amount > 0:
+        # 赠送额度
+        await _grant_credits(
+            db,
+            user_id=user_id,
+            amount=amount,
+            source_type="admin",
+            description=description or f"管理员手动赠送 {amount} 额度",
+        )
+    else:
+        # 扣除额度（consume_credits 要求正数金额）
+        await _consume_credits(
+            db,
+            user_id=user_id,
+            amount=abs(amount),
+            source_type="admin",
+            description=description or f"管理员手动扣除 {abs(amount)} 额度",
+        )
+
+    await db.flush()
+
+    # 查询调整后的账户信息
+    result = await db.execute(
+        select(_CreditAccount).where(_CreditAccount.user_id == user_id)
+    )
+    account = result.scalar_one_or_none()
+
+    return AdminCreditAccountDetail(
+        id=account.id,
+        user_id=account.user_id,
+        user_account=user.account,
+        user_display_name=user.display_name,
+        plan_code=account.plan_code,
+        balance=account.balance,
+        monthly_grant=account.monthly_grant,
+        status=account.status,
+        period_start=account.period_start,
+        period_end=account.period_end,
+        created_at=account.created_at,
+        updated_at=account.updated_at,
+    )
+
+
+# ============================================================
+# 内部辅助函数
+# ============================================================
+
+
+async def _get_user_account_map(
+    db: AsyncSession, user_ids: list[str]
+) -> dict[str, Optional[str]]:
+    """批量查询用户 ID → 账号的映射，避免 N+1 查询。
+
+    Args:
+        db: 数据库异步会话
+        user_ids: 用户 ID 列表
+
+    Returns:
+        dict: user_id → user_account 映射
+    """
+    if not user_ids or _User is None:
+        return {}
+
+    result = await db.execute(
+        select(_User.id, _User.account).where(_User.id.in_(user_ids))
+    )
+    rows = result.all()
+    return {row[0]: row[1] for row in rows}
