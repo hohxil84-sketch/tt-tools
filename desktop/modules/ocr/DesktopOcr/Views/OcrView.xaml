@@ -17,23 +17,45 @@
         <SolidColorBrush x:Key="SuccessBrush" Color="#2E7D32"/>
         <!-- 错误状态颜色 -->
         <SolidColorBrush x:Key="ErrorBrush" Color="#C62828"/>
-        <!-- 高置信度文字颜色 -->
-        <SolidColorBrush x:Key="HighConfBrush" Color="#1B5E20"/>
-        <!-- 低置信度文字颜色 -->
-        <SolidColorBrush x:Key="LowConfBrush" Color="#E65100"/>
-        <!-- 正常置信度文字颜色 -->
-        <SolidColorBrush x:Key="NormalConfBrush" Color="#212121"/>
+        <!-- 低置信度 XX 占位符颜色 -->
+        <SolidColorBrush x:Key="LowConfReplacementBrush" Color="#D32F2F"/>
+        <!-- 正常文本颜色 -->
+        <SolidColorBrush x:Key="NormalTextBrush" Color="#212121"/>
 
-        <!-- 文字行置信度颜色转换器 -->
-        <local:ScoreToBrushConverter x:Key="ScoreToBrushConverter"/>
+        <!-- 文件路径到缩略图转换器 -->
+        <local:FilePathToThumbnailConverter x:Key="ThumbnailConverter"/>
+
+        <!-- 结果列表项：选中时背景色 -->
+        <Style x:Key="ResultListBoxItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="4,4"/>
+            <Setter Property="Margin" Value="0,1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder" Padding="{TemplateBinding Padding}"
+                                CornerRadius="4" Background="Transparent">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#E3F2FD"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#F5F5F5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- 工具栏 -->
-            <RowDefinition Height="Auto"/>  <!-- 状态栏 -->
+            <RowDefinition Height="Auto"/>  <!-- 错误提示条 -->
             <RowDefinition Height="*"/>      <!-- 主内容区 -->
-            <RowDefinition Height="Auto"/>  <!-- 底部状态 -->
+            <RowDefinition Height="Auto"/>  <!-- 底部状态栏 -->
         </Grid.RowDefinitions>
 
         <!-- ===== 工具栏 ===== -->
@@ -79,7 +101,7 @@
                     <Slider Minimum="0" Maximum="100" Value="{Binding TextScorePercent}"
                             Width="120" SmallChange="5" LargeChange="10"
                             TickFrequency="10" IsSnapToTickEnabled="True"
-                            ToolTip="低于此百分比的识别结果将被过滤"/>
+                            ToolTip="低于此百分比的识别文字将用 XX 替换"/>
                     <TextBlock Text="{Binding TextScorePercent, StringFormat={}{0}%}" VerticalAlignment="Center"
                                FontSize="12" Width="40" Margin="6,0,0,0"/>
                 </StackPanel>
@@ -112,12 +134,12 @@
         <!-- ===== 主内容区：左右分栏 ===== -->
         <Grid Grid.Row="2" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280" MinWidth="200"/>  <!-- 结果列表 -->
+                <ColumnDefinition Width="280" MinWidth="220"/>  <!-- 结果列表 -->
                 <ColumnDefinition Width="Auto"/>               <!-- 分隔线 -->
                 <ColumnDefinition Width="*" MinWidth="300"/>    <!-- 详情预览 -->
             </Grid.ColumnDefinitions>
 
-            <!-- 左侧：结果列表 -->
+            <!-- 左侧：结果列表（含缩略图） -->
             <Border Grid.Column="0" BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
                     BorderThickness="1" CornerRadius="4">
                 <Grid>
@@ -131,29 +153,41 @@
                             Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}">
                         <TextBlock FontSize="14" FontWeight="SemiBold">
                             <Run Text="识别结果 "/>
-                            <Run Text="{Binding ResultCount, Mode=OneWay, StringFormat=({0})}" FontSize="12" Foreground="Gray"/>
+                            <Run Text="{Binding ResultCount, StringFormat=({0})}" FontSize="12" Foreground="Gray"/>
                         </TextBlock>
                     </Border>
 
-                    <!-- 结果列表 -->
+                    <!-- 结果列表（每项含缩略图 + 信息） -->
                     <ListBox Grid.Row="1" ItemsSource="{Binding Results}"
                              SelectedItem="{Binding SelectedResult}"
+                             ItemContainerStyle="{StaticResource ResultListBoxItemStyle}"
                              BorderThickness="0" Background="Transparent"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Padding="8,6" Margin="2" CornerRadius="3"
-                                        Background="Transparent">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="64"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
 
+                                    <!-- 缩略图 -->
+                                    <Border Grid.Column="0" Width="56" Height="56"
+                                            BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                                            BorderThickness="1" CornerRadius="2"
+                                            Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                                            VerticalAlignment="Top" Margin="0,0,8,0">
+                                        <Image Source="{Binding FilePath, Converter={StaticResource ThumbnailConverter}}"
+                                               Stretch="Uniform" Width="52" Height="52"
+                                               ToolTip="点击查看大图"/>
+                                    </Border>
+
+                                    <!-- 文件信息 -->
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
                                         <!-- 文件名 -->
-                                        <TextBlock Grid.Row="0" FontSize="13" FontWeight="SemiBold"
+                                        <TextBlock FontSize="12" FontWeight="SemiBold"
                                                    TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="180"
                                                    ToolTip="{Binding FilePath}">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -166,33 +200,28 @@
                                             </TextBlock.Style>
                                         </TextBlock>
 
-                                        <!-- 状态和统计 -->
-                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0">
+                                        <!-- 统计信息 -->
+                                        <StackPanel Margin="0,2,0,0">
                                             <TextBlock FontSize="11" Foreground="Gray">
-                                                <Run Text="图片: "/>
-                                                <Run Text="{Binding ImageSizeSummary, Mode=OneWay}"/>
-                                            </TextBlock>
-                                            <TextBlock FontSize="11" Foreground="Gray" Margin="8,0,0,0">
                                                 <Run Text="行数: "/>
                                                 <Run Text="{Binding LineCount, Mode=OneWay}"/>
+                                                <Run Text="  耗时: "/>
+                                                <Run Text="{Binding ElapsedTotal, StringFormat={}{0:F1}s, Mode=OneWay}"/>
                                             </TextBlock>
                                         </StackPanel>
 
-                                        <!-- 耗时和置信度 -->
-                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,2,0,0">
-                                            <TextBlock FontSize="11" Foreground="Gray">
-                                                <Run Text="耗时: "/>
-                                                <Run Text="{Binding ElapsedTotal, StringFormat={}{0:F2}s, Mode=OneWay}"/>
-                                            </TextBlock>
-                                            <TextBlock FontSize="11" Margin="8,0,0,0">
-                                                <Run Text="置信度: "/>
-                                                <Run Text="{Binding AvgScore, StringFormat={}{0:P1}, Mode=OneWay}"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
+                                            <TextBlock FontSize="11">
+                                                <Run Text="高: "/>
+                                                <Run Text="{Binding HighConfidenceCount, Mode=OneWay}" Foreground="Green" FontWeight="SemiBold"/>
+                                                <Run Text="  低: "/>
+                                                <Run Text="{Binding LowConfidenceCount, Mode=OneWay}" Foreground="Red" FontWeight="SemiBold"/>
                                             </TextBlock>
                                         </StackPanel>
 
                                         <!-- 失败标记 -->
-                                        <TextBlock Grid.Row="1" Text="✕ 识别失败" FontSize="12"
-                                                   Foreground="{StaticResource ErrorBrush}" Margin="0,2,0,0">
+                                        <TextBlock Text="✕ 识别失败" FontSize="11"
+                                                   Foreground="{StaticResource ErrorBrush}" Margin="0,1,0,0">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -204,8 +233,8 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                    </Grid>
-                                </Border>
+                                    </StackPanel>
+                                </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -216,7 +245,7 @@
             <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch"
                           Background="Transparent"/>
 
-            <!-- 右侧：详情预览 -->
+            <!-- 右侧：格式化文本详情 -->
             <Border Grid.Column="2" BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
                     BorderThickness="1" CornerRadius="4" Margin="8,0,0,0">
                 <Grid>
@@ -240,27 +269,30 @@
                     <Border Grid.Row="1" Padding="8,4" Margin="8,4"
                             Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
                             CornerRadius="3">
-                        <StackPanel>
-                            <TextBlock FontSize="12" Foreground="Gray"
-                                       Text="{Binding SelectedResult.EngineName, StringFormat='引擎: {0}', TargetNullValue='引擎: -'}"
-                                       Margin="0,0,0,2"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock FontSize="12" Foreground="Gray" Margin="0,0,16,0"
-                                           Text="{Binding SelectedResult.ImageSizeSummary, StringFormat='图片尺寸: {0}', TargetNullValue='图片尺寸: -'}"/>
-                                <TextBlock FontSize="12" Foreground="Green"
-                                           Text="{Binding SelectedResult.HighConfidenceCount, StringFormat='高置信: {0} 行'}"/>
-                                <TextBlock FontSize="12" Foreground="{StaticResource LowConfBrush}" Margin="12,0,0,0"
-                                           Text="{Binding SelectedResult.LowConfidenceCount, StringFormat='低置信: {0} 行'}"/>
-                            </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontSize="12" Foreground="Gray" Margin="0,0,12,0"
+                                       Text="{Binding SelectedResult.EngineName, StringFormat='引擎: {0}', TargetNullValue='引擎: -'}"/>
+                            <TextBlock FontSize="12" Foreground="Gray" Margin="0,0,12,0"
+                                       Text="{Binding SelectedResult.ImageSizeSummary, StringFormat='图片: {0}', TargetNullValue='图片: -'}"/>
+                            <TextBlock FontSize="12" Foreground="Green">
+                                <Run Text="高置信: "/>
+                                <Run Text="{Binding SelectedResult.HighConfidenceCount, Mode=OneWay}"/>
+                                <Run Text=" 行"/>
+                            </TextBlock>
+                            <TextBlock FontSize="12" Foreground="Red" Margin="12,0,0,0">
+                                <Run Text="已遮: "/>
+                                <Run Text="{Binding SelectedResult.LowConfidenceCount, Mode=OneWay}"/>
+                                <Run Text=" 行"/>
+                            </TextBlock>
                         </StackPanel>
                     </Border>
 
-                    <!-- 识别内容区域 -->
+                    <!-- 格式化文本展示区 -->
                     <Border Grid.Row="2" Margin="8,8,8,8">
                         <Grid>
                             <!-- 无结果时的提示 -->
                             <TextBlock FontSize="14" Foreground="Gray" HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" Text="选择左侧结果查看详情">
+                                       VerticalAlignment="Center" Text="选择左侧结果查看文字识别详情">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Visibility" Value="Visible"/>
@@ -273,71 +305,39 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <!-- 有结果时显示文字行列表 -->
+                            <!-- 有结果时按原始排版展示，低置信度行显示红色 XX -->
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding SelectedResult.TextLines}">
+                            <ScrollViewer.Style>
+                                <Style TargetType="ScrollViewer">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasSelectedResult}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ScrollViewer.Style>
+
+                            <ItemsControl ItemsSource="{Binding SelectedResult.DisplayLines}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Padding="6,4" Margin="0,2" CornerRadius="3"
-                                                Background="{DynamicResource {x:Static SystemColors.ControlLightLightBrushKey}}">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-
-                                                <!-- 置信度指示器 -->
-                                                <Ellipse Grid.Column="0" Width="10" Height="10" Margin="0,0,8,0"
-                                                         VerticalAlignment="Center">
-                                                    <Ellipse.Style>
-                                                        <Style TargetType="Ellipse">
-                                                            <Setter Property="Fill" Value="Gray"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsHighConfidence}" Value="True">
-                                                                    <Setter Property="Fill" Value="{StaticResource HighConfBrush}"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsLowConfidence}" Value="True">
-                                                                    <Setter Property="Fill" Value="{StaticResource LowConfBrush}"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Ellipse.Style>
-                                                </Ellipse>
-
-                                                <!-- 文字内容 -->
-                                                <TextBlock Grid.Column="1" Text="{Binding Text}"
-                                                           FontSize="14" TextWrapping="Wrap"
-                                                           VerticalAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="{StaticResource NormalConfBrush}"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsLowConfidence}" Value="True">
-                                                                    <Setter Property="Foreground" Value="{StaticResource LowConfBrush}"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-
-                                                <!-- 置信度分数 -->
-                                                <TextBlock Grid.Column="2" Text="{Binding ScorePercent}"
-                                                           FontSize="11" Margin="12,0,0,0"
-                                                           VerticalAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="Gray"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsLowConfidence}" Value="True">
-                                                                    <Setter Property="Foreground" Value="{StaticResource LowConfBrush}"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                            </Grid>
-                                        </Border>
+                                        <!-- 每行：正常文字用黑字，低置信度用红色 XX -->
+                                        <TextBlock FontSize="15" FontFamily="Microsoft YaHei"
+                                                   LineHeight="24" TextWrapping="Wrap"
+                                                   ToolTip="{Binding OriginalText}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{Binding DisplayText}"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource NormalTextBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLowConfidence}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource LowConfReplacementBrush}"/>
+                                                            <Setter Property="FontWeight" Value="Bold"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
