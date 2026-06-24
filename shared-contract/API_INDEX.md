@@ -376,3 +376,65 @@ Response `data`:
   "uptime_seconds": 3600.0
 }
 ```
+
+## Admin Users — 后台用户管理
+
+### GET `/api/v1/admin/users`
+
+查询所有用户列表，支持分页、状态筛选和账号搜索。
+
+Query: `limit`、`offset`、`status`、`search`
+
+Response `data`: `items`、`total`、`limit`、`offset`
+
+Item fields: `id`、`account`、`display_name`、`role`、`status`、`plan_code`、`created_at`
+
+### GET `/api/v1/admin/users/{user_id}`
+
+查询用户详情。
+
+Response `data`: `id`、`account`、`display_name`、`role`、`status`、`plan_code`、`created_at`、`updated_at`
+
+### PATCH `/api/v1/admin/users/{user_id}/status`
+
+修改用户状态（active / blocked / deleted）。
+
+Request: `{ "status": "blocked" }`
+
+Response `data`: 同用户详情结构。
+
+### GET `/api/v1/admin/users/{user_id}/devices`
+
+查询指定用户的设备列表。
+
+Query: `limit`、`offset`
+
+Response `data`: `items`、`total`、`limit`、`offset`
+
+Item fields: `id`、`user_id`、`device_name`、`client_version`、`status`、`bound_at`、`last_seen_at`
+
+## Admin Users — 后台设备管理
+
+### GET `/api/v1/admin/devices`
+
+查询所有设备列表，支持分页和状态筛选。
+
+Query: `limit`、`offset`、`status`
+
+Response `data`: `items`、`total`、`limit`、`offset`
+
+Item fields: `id`、`user_id`、`device_name`、`client_version`、`status`、`bound_at`、`last_seen_at`
+
+### GET `/api/v1/admin/devices/{device_id}`
+
+查询设备详情。
+
+Response `data`: `id`、`user_id`、`device_name`、`client_version`、`status`、`bound_at`、`last_seen_at`、`created_at`、`updated_at`
+
+### PATCH `/api/v1/admin/devices/{device_id}/status`
+
+修改设备状态（active / blocked / removed）。
+
+Request: `{ "status": "blocked" }`
+
+Response `data`: 同设备详情结构。

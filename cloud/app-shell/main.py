@@ -89,6 +89,27 @@ def create_app() -> FastAPI:
     from router import router as orders_recharge_router  # noqa: E402
     app.include_router(orders_recharge_router, prefix="/api/v1")
 
+    # 注册 admin-shell 后台基础入口模块路由
+    _admin_shell_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-shell")
+    if _admin_shell_dir not in sys.path:
+        sys.path.insert(0, _admin_shell_dir)
+    # 清理 admin 模块通用缓存名
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas") or _key.startswith(("router.", "service.", "schemas.")):
+            del sys.modules[_key]
+    from router import router as admin_shell_router  # noqa: E402
+    app.include_router(admin_shell_router, prefix="/api/v1")
+
+    # 注册 admin-users 后台用户和设备管理模块路由
+    _admin_users_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-users")
+    if _admin_users_dir not in sys.path:
+        sys.path.insert(0, _admin_users_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_users_router  # noqa: E402
+    app.include_router(admin_users_router, prefix="/api/v1")
+
     return app
 
 

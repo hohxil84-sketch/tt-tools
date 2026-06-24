@@ -1,0 +1,577 @@
+openapi: "3.1.0"
+
+info:
+  title: TT Tools Admin Users
+  description: 后台用户和设备管理。
+  version: "0.1.0"
+
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+    description: 本地开发服务器
+
+# 全局安全方案引用 common.yaml 的 BearerAuth
+security:
+  - BearerAuth: []
+
+paths:
+  # ============================================================
+  # 用户管理
+  # ============================================================
+
+  /admin/users:
+    get:
+      tags: [Admin Users]
+      summary: 查询用户列表
+      description: |
+        返回所有用户的列表，支持分页、状态筛选和账号搜索。
+        需要管理员权限。
+      operationId: listUsers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: 每页条数（默认 20，最大 100）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 偏移量（默认 0）
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: status
+          in: query
+          description: 按用户状态筛选
+          schema:
+            type: string
+            enum: [active, blocked, deleted]
+        - name: search
+          in: query
+          description: 按账号或展示名称模糊搜索
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 用户列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserListData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /admin/users/{user_id}:
+    get:
+      tags: [Admin Users]
+      summary: 查询用户详情
+      description: |
+        根据用户 ID 返回用户的详细信息，包括基本信息和套餐信息。
+        需要管理员权限。
+      operationId: getUserDetail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: 用户 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 用户详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /admin/users/{user_id}/status:
+    patch:
+      tags: [Admin Users]
+      summary: 修改用户状态
+      description: |
+        修改指定用户的状态（激活、封禁、删除）。需要管理员权限。
+      operationId: updateUserStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: 用户 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserStatusRequest"
+      responses:
+        "200":
+          description: 更新后的用户信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /admin/users/{user_id}/devices:
+    get:
+      tags: [Admin Users]
+      summary: 查询用户的设备列表
+      description: |
+        返回指定用户的所有绑定设备列表。需要管理员权限。
+      operationId: listUserDevices
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: 用户 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          description: 每页条数（默认 20，最大 100）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 偏移量（默认 0）
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: 用户的设备列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceListData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  # ============================================================
+  # 设备管理
+  # ============================================================
+
+  /admin/devices:
+    get:
+      tags: [Admin Users]
+      summary: 查询所有设备列表
+      description: |
+        返回系统中所有设备的列表，支持分页和状态筛选。
+        需要管理员权限。
+      operationId: listDevices
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: 每页条数（默认 20，最大 100）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 偏移量（默认 0）
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: status
+          in: query
+          description: 按设备状态筛选
+          schema:
+            type: string
+            enum: [active, blocked, removed]
+      responses:
+        "200":
+          description: 设备列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceListData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /admin/devices/{device_id}:
+    get:
+      tags: [Admin Users]
+      summary: 查询设备详情
+      description: |
+        根据设备 ID 返回设备的详细信息。需要管理员权限。
+      operationId: getDeviceDetail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          description: 设备 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 设备详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /admin/devices/{device_id}/status:
+    patch:
+      tags: [Admin Users]
+      summary: 修改设备状态
+      description: |
+        修改指定设备的状态（激活、封禁、移除）。需要管理员权限。
+      operationId: updateDeviceStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          description: 设备 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeviceStatusRequest"
+      responses:
+        "200":
+          description: 更新后的设备信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DeviceDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+components:
+  schemas:
+    # ============================================================
+    # 用户
+    # ============================================================
+
+    UserItem:
+      type: object
+      description: 用户列表项（摘要信息）
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 用户 ID
+        account:
+          type: string
+          description: 登录账号
+        display_name:
+          type: string
+          nullable: true
+          description: 展示名称
+        role:
+          type: string
+          description: 用户角色（user / admin）
+        status:
+          type: string
+          description: 用户状态（active / blocked / deleted）
+        plan_code:
+          type: string
+          description: 当前套餐编码
+        created_at:
+          type: string
+          format: date-time
+          description: 注册时间
+      required:
+        - id
+        - account
+        - role
+        - status
+        - plan_code
+        - created_at
+
+    UserDetail:
+      type: object
+      description: 用户详细信息
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 用户 ID
+        account:
+          type: string
+          description: 登录账号
+        display_name:
+          type: string
+          nullable: true
+          description: 展示名称
+        role:
+          type: string
+          description: 用户角色
+        status:
+          type: string
+          description: 用户状态
+        plan_code:
+          type: string
+          description: 当前套餐编码
+        created_at:
+          type: string
+          format: date-time
+          description: 注册时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 最近更新时间
+      required:
+        - id
+        - account
+        - role
+        - status
+        - plan_code
+        - created_at
+        - updated_at
+
+    UpdateUserStatusRequest:
+      type: object
+      description: 修改用户状态请求
+      properties:
+        status:
+          type: string
+          description: 目标状态
+          enum: [active, blocked, deleted]
+      required:
+        - status
+
+    UserListData:
+      type: object
+      description: 用户列表分页响应数据
+      properties:
+        items:
+          type: array
+          description: 用户列表
+          items:
+            $ref: "#/components/schemas/UserItem"
+        total:
+          type: integer
+          description: 总记录数
+        limit:
+          type: integer
+          description: 每页条数
+        offset:
+          type: integer
+          description: 当前偏移量
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    # ============================================================
+    # 设备
+    # ============================================================
+
+    DeviceItem:
+      type: object
+      description: 设备列表项（摘要信息）
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 设备 ID
+        user_id:
+          type: string
+          format: uuid
+          description: 所属用户 ID
+        device_name:
+          type: string
+          nullable: true
+          description: 设备名称
+        client_version:
+          type: string
+          nullable: true
+          description: 客户端版本
+        status:
+          type: string
+          description: 设备状态（active / blocked / removed）
+        bound_at:
+          type: string
+          format: date-time
+          description: 绑定时间
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最近活跃时间
+      required:
+        - id
+        - user_id
+        - status
+        - bound_at
+
+    DeviceDetail:
+      type: object
+      description: 设备详细信息
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 设备 ID
+        user_id:
+          type: string
+          format: uuid
+          description: 所属用户 ID
+        device_name:
+          type: string
+          nullable: true
+          description: 设备名称
+        client_version:
+          type: string
+          nullable: true
+          description: 客户端版本
+        status:
+          type: string
+          description: 设备状态
+        bound_at:
+          type: string
+          format: date-time
+          description: 绑定时间
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最近活跃时间
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 最近更新时间
+      required:
+        - id
+        - user_id
+        - status
+        - bound_at
+        - created_at
+        - updated_at
+
+    UpdateDeviceStatusRequest:
+      type: object
+      description: 修改设备状态请求
+      properties:
+        status:
+          type: string
+          description: 目标状态
+          enum: [active, blocked, removed]
+      required:
+        - status
+
+    DeviceListData:
+      type: object
+      description: 设备列表分页响应数据
+      properties:
+        items:
+          type: array
+          description: 设备列表
+          items:
+            $ref: "#/components/schemas/DeviceItem"
+        total:
+          type: integer
+          description: 总记录数
+        limit:
+          type: integer
+          description: 每页条数
+        offset:
+          type: integer
+          description: 当前偏移量
+      required:
+        - items
+        - total
+        - limit
+        - offset
