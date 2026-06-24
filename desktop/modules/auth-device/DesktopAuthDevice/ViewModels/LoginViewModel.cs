@@ -1,3 +1,4 @@
+using System.Windows.Controls;
 using System.Windows.Input;
 using TTShared.Auth;
 using TTShared.CloudApi;
@@ -94,7 +95,8 @@ public class LoginViewModel : BaseViewModel
             return;
         }
 
-        var password = passwordParameter?.ToString() ?? string.Empty;
+        // 命令参数为 PasswordBox 元素，从其 Password 属性获取真实密码
+        var password = (passwordParameter as PasswordBox)?.Password ?? string.Empty;
         if (string.IsNullOrEmpty(password))
         {
             ErrorMessage = "请输入密码";
