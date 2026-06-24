@@ -121,10 +121,10 @@ public class DeviceStatusViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 默认构造函数（设计时使用）
+    /// 默认构造函数，使用全局共享 AuthState
     /// </summary>
-    public DeviceStatusViewModel() : this(new AuthState(),
-        new CloudApiClient(AppSettings.Instance.ServerUrl, new AuthState()))
+    public DeviceStatusViewModel() : this(AuthState.Shared,
+        new CloudApiClient(AppSettings.Instance.ServerUrl, AuthState.Shared))
     {
     }
 

@@ -74,10 +74,11 @@ public class LoginViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 默认构造函数（用于设计时，生产环境应使用带参构造函数注入依赖）
+    /// 默认构造函数。
+    /// 使用全局共享 AuthState，确保登录状态在整个应用内可见。
     /// </summary>
-    public LoginViewModel() : this(new AuthState(),
-        new CloudApiClient(AppSettings.Instance.ServerUrl, new AuthState()))
+    public LoginViewModel() : this(AuthState.Shared,
+        new CloudApiClient(AppSettings.Instance.ServerUrl, AuthState.Shared))
     {
     }
 
