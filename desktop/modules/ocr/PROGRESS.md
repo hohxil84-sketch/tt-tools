@@ -36,7 +36,13 @@
 
 ## Bug 记录
 
-暂无。
+- 2026-06-24: **OCR 引擎未连接 + 选择图片无反应**
+  - 现象：导航到 OCR 模块后显示"OCR 引擎未连接"，"开始识别"按钮灰色不可用
+  - 根因：OcrViewModel 默认构造函数 `OcrViewModel()` → `OcrViewModel(null, new FileSystemService())`，`_ocrService` 为 null，`IsServiceAvailable` 始终为 false，且 `InitializeAsync()` 从未被调用
+  - 修复：默认构造函数自动检测 Python 环境和 router 脚本路径创建 OcrService；OcrView 加载时自动调用 InitializeAsync
+  - 修复分支：`fix/desktop-ocr-service-init`
+  - 修复提交：`d340d38`
+  - 测试结果：33/33 通过
 
 ## 提交记录
 
