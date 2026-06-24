@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>TTTools.AiCopyClient</RootNamespace>
+    <AssemblyName>TTTools.AiCopyClient</AssemblyName>
+    <Version>0.1.0</Version>
+    <Authors>TT Tools Team</Authors>
+    <Description>TT Tools - 桌面端云端文案生成入口，调用 /api/v1/ai/copy/generate 并展示扣费和结果</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <Using Include="System.Net.Http.Json" />
+    <Using Include="System.Text" />
+    <Using Include="System.Text.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\shared\DesktopShared\DesktopShared.csproj" />
+  </ItemGroup>
+
+</Project>
