@@ -1,0 +1,192 @@
+openapi: "3.1.0"
+
+info:
+  title: TT Tools Admin Shell
+  description: 后台基础入口、导航、权限框架和基础布局。
+  version: "0.1.0"
+
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+    description: 本地开发服务器
+
+# 全局安全方案引用 common.yaml 的 BearerAuth
+security:
+  - BearerAuth: []
+
+paths:
+  /admin/dashboard:
+    get:
+      tags: [Admin Shell]
+      summary: 管理后台仪表盘概览
+      description: |
+        返回后台首页仪表盘的核心统计指标，包括用户总数、今日订单数、
+        今日收入、活跃设备数和服务状态。需要管理员权限。
+      operationId: getAdminDashboard
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 仪表盘统计数据
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DashboardStats"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /admin/menu:
+    get:
+      tags: [Admin Shell]
+      summary: 管理后台导航菜单
+      description: |
+        返回后台左侧导航菜单的结构化数据，包括菜单项ID、标题、图标、
+        路径和子菜单。前端根据此数据渲染导航栏。需要管理员权限。
+      operationId: getAdminMenu
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 导航菜单结构
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/MenuData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /admin/status:
+    get:
+      tags: [Admin Shell]
+      summary: 管理后台服务状态检查
+      description: |
+        返回当前服务的健康状态、版本号和运行时长。
+        该接口需要管理员权限。
+      operationId: getAdminStatus
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 服务状态
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/StatusData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+components:
+  schemas:
+    # ============================================================
+    # 仪表盘统计
+    # ============================================================
+    DashboardStats:
+      type: object
+      description: 后台仪表盘核心统计指标
+      properties:
+        users_total:
+          type: integer
+          description: 系统总用户数
+        orders_today:
+          type: integer
+          description: 今日订单数
+        revenue_today_cents:
+          type: integer
+          description: 今日收入（单位：分）
+        active_devices:
+          type: integer
+          description: 当前活跃设备数
+        server_status:
+          type: string
+          description: 服务健康状态
+          enum: [healthy, degraded, down]
+      required:
+        - users_total
+        - orders_today
+        - revenue_today_cents
+        - active_devices
+        - server_status
+
+    # ============================================================
+    # 导航菜单
+    # ============================================================
+    MenuItem:
+      type: object
+      description: 后台导航菜单项
+      properties:
+        id:
+          type: string
+          description: 菜单项唯一标识
+        title:
+          type: string
+          description: 菜单项中文标题
+        icon:
+          type: string
+          description: 菜单项图标标识
+        path:
+          type: string
+          description: 菜单项对应页面路径
+        children:
+          type: array
+          description: 子菜单项列表
+          items:
+            $ref: "#/components/schemas/MenuItem"
+      required:
+        - id
+        - title
+        - icon
+        - path
+
+    MenuData:
+      type: object
+      description: 后台导航菜单数据
+      properties:
+        menu:
+          type: array
+          description: 顶级菜单项列表
+          items:
+            $ref: "#/components/schemas/MenuItem"
+      required:
+        - menu
+
+    # ============================================================
+    # 服务状态
+    # ============================================================
+    StatusData:
+      type: object
+      description: 服务运行状态
+      properties:
+        status:
+          type: string
+          description: 服务健康状态
+          enum: [healthy, degraded, down]
+        version:
+          type: string
+          description: 服务版本号
+        uptime_seconds:
+          type: number
+          description: 服务运行时长（秒）
+      required:
+        - status
+        - version
+        - uptime_seconds

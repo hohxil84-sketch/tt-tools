@@ -287,3 +287,92 @@ Response `data`: 同 OrderData，status 变为 `paid`。
 ## Admin
 
 后台接口统一使用 `/api/v1/admin/*` 前缀。后台模块开发前必须先补充对应契约，且必须经过管理员权限检查。
+
+所有后台接口要求 `Authorization: Bearer <admin_access_token>`，且 JWT 中 role 字段为 `admin`。
+
+### Admin Shell — 后台基础入口
+
+### GET `/api/v1/admin/dashboard`
+
+返回后台仪表盘核心统计指标。
+
+Response `data`:
+
+```json
+{
+  "users_total": 150,
+  "orders_today": 12,
+  "revenue_today_cents": 35000,
+  "active_devices": 89,
+  "server_status": "healthy"
+}
+```
+
+字段说明：
+- `users_total`：系统总用户数
+- `orders_today`：今日订单数
+- `revenue_today_cents`：今日收入（单位：分）
+- `active_devices`：当前活跃设备数
+- `server_status`：服务健康状态（healthy / degraded / down）
+
+### GET `/api/v1/admin/menu`
+
+返回后台左侧导航菜单结构。
+
+Response `data`:
+
+```json
+{
+  "menu": [
+    {
+      "id": "dashboard",
+      "title": "首页仪表盘",
+      "icon": "dashboard",
+      "path": "/admin/dashboard",
+      "children": null
+    },
+    {
+      "id": "users",
+      "title": "用户管理",
+      "icon": "users",
+      "path": "/admin/users",
+      "children": null
+    },
+    {
+      "id": "billing",
+      "title": "计费管理",
+      "icon": "billing",
+      "path": "/admin/billing",
+      "children": null
+    },
+    {
+      "id": "ops",
+      "title": "运维管理",
+      "icon": "ops",
+      "path": "/admin/ops",
+      "children": null
+    }
+  ]
+}
+```
+
+MenuItem 字段说明：
+- `id`：菜单项唯一标识
+- `title`：菜单项中文标题
+- `icon`：图标标识
+- `path`：对应页面路径
+- `children`：子菜单项列表（可选）
+
+### GET `/api/v1/admin/status`
+
+返回服务运行状态。
+
+Response `data`:
+
+```json
+{
+  "status": "healthy",
+  "version": "0.1.0",
+  "uptime_seconds": 3600.0
+}
+```
