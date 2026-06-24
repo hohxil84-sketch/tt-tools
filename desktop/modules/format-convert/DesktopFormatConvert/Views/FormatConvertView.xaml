@@ -1,0 +1,458 @@
+<UserControl x:Class="TTTools.FormatConvert.Views.FormatConvertView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:TTTools.FormatConvert.Views"
+             xmlns:vm="clr-namespace:TTTools.FormatConvert.ViewModels"
+             xmlns:models="clr-namespace:TTTools.FormatConvert.Models"
+             MinWidth="700" MinHeight="500"
+             AllowDrop="True"
+             DragEnter="FormatConvertView_DragEnter"
+             Drop="FormatConvertView_Drop">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ===== 第1行：工具栏 ===== -->
+        <Border Grid.Row="0" Padding="8,6" Margin="0,0,0,8"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 服务状态 -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,16,0" VerticalAlignment="Center">
+                    <Ellipse Width="10" Height="10" Margin="0,0,6,0">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Fill" Value="#4CAF50" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsServiceAvailable}" Value="False">
+                                        <Setter Property="Fill" Value="#9E9E9E" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <TextBlock Text="{Binding ServiceStatusText}" FontSize="13" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                </StackPanel>
+
+                <Button Grid.Column="1" Content="选择图片" Width="90" Height="30"
+                        Command="{Binding SelectFilesCommand}"
+                        IsEnabled="{Binding IsServiceAvailable}" Margin="0,0,8,0" />
+                <Button Grid.Column="2" Content="开始处理" Width="100" Height="30"
+                        Command="{Binding StartProcessingCommand}"
+                        IsEnabled="{Binding CanStart}" Margin="0,0,8,0">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="Background" Value="#3182CE" />
+                            <Setter Property="Foreground" Value="White" />
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="Cursor" Value="Hand" />
+                            <Style.Triggers>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Background" Value="#A0C4E8" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Grid.Column="3" Content="取消" Width="60" Height="30"
+                        Command="{Binding CancelCommand}"
+                        IsEnabled="{Binding CanCancel}" HorizontalAlignment="Left" />
+
+                <Button Grid.Column="4" Content="清除结果" Width="80" Height="30"
+                        Command="{Binding ClearResultsCommand}" />
+            </Grid>
+        </Border>
+
+        <!-- ===== 第2行：错误消息 ===== -->
+        <Border Grid.Row="1" Background="#FDE8E8" CornerRadius="4" Padding="10,6" Margin="0,0,0,8"
+                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="#C53030" FontSize="13" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- ===== 第3行：操作选择标签 + 参数配置 ===== -->
+        <Border Grid.Row="2" Padding="10,8" Margin="0,0,0,8"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6">
+            <StackPanel>
+                <!-- 操作类型选择标签 -->
+                <TextBlock Text="处理操作" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,8"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                    <RadioButton Content="压缩" GroupName="OperationGroup" Margin="0,0,12,0"
+                                 IsChecked="{Binding SelectedOperation, ConverterParameter=compress}"
+                                 Command="{Binding SelectOperationCommand}" CommandParameter="compress" />
+                    <RadioButton Content="格式转换" GroupName="OperationGroup" Margin="0,0,12,0"
+                                 Command="{Binding SelectOperationCommand}" CommandParameter="convert_format" />
+                    <RadioButton Content="裁剪" GroupName="OperationGroup" Margin="0,0,12,0"
+                                 Command="{Binding SelectOperationCommand}" CommandParameter="crop" />
+                    <RadioButton Content="旋转" GroupName="OperationGroup"
+                                 Command="{Binding SelectOperationCommand}" CommandParameter="rotate" />
+                </StackPanel>
+
+                <!-- ===== 格式转换参数 ===== -->
+                <Grid Visibility="{Binding ShowConvertParams, Converter={StaticResource BoolToVisibility}}">
+                    <WrapPanel>
+                        <!-- 目标格式 -->
+                        <StackPanel Margin="0,0,12,4" Width="200">
+                            <TextBlock Text="目标格式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                            <ComboBox ItemsSource="{x:Static vm:FormatConvertViewModel.FormatList}"
+                                      SelectedValue="{Binding SelectedTargetFormat}"
+                                      DisplayMemberPath="Display" SelectedValuePath="Value" Height="28" />
+                        </StackPanel>
+
+                        <!-- JPEG 质量 -->
+                        <StackPanel Margin="0,0,12,4" Width="180"
+                                    Visibility="{Binding ShowConvertJpegQuality, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="JPEG 质量 (1-100)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding ConvertQuality, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                        </StackPanel>
+
+                        <!-- PNG 压缩级别 -->
+                        <StackPanel Margin="0,0,12,4" Width="180"
+                                    Visibility="{Binding ShowConvertPngCompress, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="PNG 压缩级别 (0-9)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding PngCompress, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                        </StackPanel>
+
+                        <!-- WEBP 质量 -->
+                        <StackPanel Margin="0,0,12,4" Width="180"
+                                    Visibility="{Binding ShowConvertWebpQuality, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="WEBP 质量 (1-100)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding WebpQuality, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                        </StackPanel>
+
+                        <!-- 保留透明通道 -->
+                        <CheckBox Content="保留透明通道" IsChecked="{Binding PreserveAlpha}"
+                                  Margin="0,8,12,4" VerticalAlignment="Center" />
+                    </WrapPanel>
+                </Grid>
+
+                <!-- ===== 压缩参数 ===== -->
+                <Grid Visibility="{Binding ShowCompressParams, Converter={StaticResource BoolToVisibility}}">
+                    <WrapPanel>
+                        <!-- 压缩质量 -->
+                        <StackPanel Margin="0,0,12,4" Width="220">
+                            <TextBlock Text="压缩质量 (1-100，越小压缩率越高)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Text="{Binding CompressQuality, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                                <Slider Grid.Column="1" Width="100" Minimum="1" Maximum="100" Margin="8,0,0,0"
+                                        Value="{Binding CompressQuality}" TickFrequency="5" IsSnapToTickEnabled="True" />
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- 目标格式 -->
+                        <StackPanel Margin="0,0,12,4" Width="180">
+                            <TextBlock Text="输出格式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                            <ComboBox ItemsSource="{x:Static vm:FormatConvertViewModel.CompressFormatList}"
+                                      SelectedValue="{Binding CompressTargetFormat}"
+                                      DisplayMemberPath="Display" SelectedValuePath="Value" Height="28" />
+                        </StackPanel>
+
+                        <!-- PNG 压缩级别 -->
+                        <StackPanel Margin="0,0,12,4" Width="180">
+                            <TextBlock Text="PNG 压缩级别 (0-9)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                            <TextBox Text="{Binding CompressPngLevel, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                        </StackPanel>
+
+                        <!-- 最大文件大小开关 -->
+                        <StackPanel Margin="0,0,12,4" VerticalAlignment="Bottom">
+                            <CheckBox Content="限制最大文件大小" IsChecked="{Binding UseMaxSize}" Margin="0,0,0,4" />
+                            <StackPanel Visibility="{Binding ShowMaxSize, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="目标大小 (MB)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding MaxSizeMB, UpdateSourceTrigger=PropertyChanged}" Height="26" Width="100" />
+                            </StackPanel>
+                        </StackPanel>
+                    </WrapPanel>
+                    <TextBlock Text="提示: max_size_bytes 仅对 JPEG/WEBP 格式有效" FontSize="11"
+                               Foreground="{DynamicResource TextTertiaryBrush}" Margin="0,4,0,0" />
+                </Grid>
+
+                <!-- ===== 裁剪参数 ===== -->
+                <Grid Visibility="{Binding ShowCropParams, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <!-- 裁剪模式选择 -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <RadioButton Content="坐标裁剪" GroupName="CropMode" Margin="0,0,12,0"
+                                         IsChecked="{Binding UseAnchorMode, Converter={x:Static vm:FormatConvertViewModel.InvertBoolConverter}}" />
+                            <RadioButton Content="锚点裁剪" GroupName="CropMode"
+                                         IsChecked="{Binding UseAnchorMode}" />
+                        </StackPanel>
+
+                        <WrapPanel>
+                            <!-- 坐标模式参数 -->
+                            <StackPanel Margin="0,0,12,4" Width="110"
+                                        Visibility="{Binding ShowCoordinateCrop, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="左边界 (px)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding CropLeft, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,12,4" Width="110"
+                                        Visibility="{Binding ShowCoordinateCrop, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="上边界 (px)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding CropTop, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                            </StackPanel>
+
+                            <!-- 通用尺寸参数 -->
+                            <StackPanel Margin="0,0,12,4" Width="130">
+                                <TextBlock Text="裁剪宽度 (px)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding CropWidth, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,12,4" Width="130">
+                                <TextBlock Text="裁剪高度 (px)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding CropHeight, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                            </StackPanel>
+
+                            <!-- 锚点选择 -->
+                            <StackPanel Margin="0,0,12,4" Width="180"
+                                        Visibility="{Binding ShowAnchorCrop, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="对齐方式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                                <ComboBox ItemsSource="{x:Static vm:FormatConvertViewModel.AnchorList}"
+                                          SelectedValue="{Binding SelectedAnchor}"
+                                          DisplayMemberPath="Display" SelectedValuePath="Value" Height="28" />
+                            </StackPanel>
+                        </WrapPanel>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ===== 旋转参数 ===== -->
+                <Grid Visibility="{Binding ShowRotateParams, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <!-- 直角旋转快捷选择 -->
+                        <WrapPanel Margin="0,0,0,8">
+                            <TextBlock Text="快捷旋转：" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <RadioButton Content="90°" GroupName="QuickAngle" Margin="0,0,8,0"
+                                         Command="{Binding SelectQuickAngleCommand}" CommandParameter="90.0" />
+                            <RadioButton Content="180°" GroupName="QuickAngle" Margin="0,0,8,0"
+                                         Command="{Binding SelectQuickAngleCommand}" CommandParameter="180.0" />
+                            <RadioButton Content="270°" GroupName="QuickAngle" Margin="0,0,8,0"
+                                         Command="{Binding SelectQuickAngleCommand}" CommandParameter="270.0" />
+                            <RadioButton Content="自定义" GroupName="QuickAngle"
+                                         Command="{Binding SelectQuickAngleCommand}" />
+                        </WrapPanel>
+
+                        <WrapPanel>
+                            <!-- 自定义角度 -->
+                            <StackPanel Margin="0,0,12,4" Width="180"
+                                        Visibility="{Binding IsCustomAngle, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="旋转角度 (-360 ~ 360)" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                                <TextBox Text="{Binding RotateAngle, UpdateSourceTrigger=PropertyChanged}" Height="26" />
+                            </StackPanel>
+
+                            <!-- 扩展画布 -->
+                            <CheckBox Content="扩展画布以容纳完整图像" IsChecked="{Binding ExpandCanvas}"
+                                      Margin="0,8,12,4" VerticalAlignment="Center" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== 第4行：进度条 ===== -->
+        <Grid Grid.Row="3" Margin="0,0,0,6" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
+            <ProgressBar Value="{Binding ProgressValue}" Maximum="{Binding ProgressMax}" Height="8"
+                         Foreground="#3182CE" BorderThickness="0" />
+        </Grid>
+
+        <!-- ===== 第5行：主内容区（结果列表 + 详情预览） ===== -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左侧：结果列表 -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="处理结果" FontWeight="SemiBold" FontSize="13"
+                               Margin="10,8" Foreground="{DynamicResource TextPrimaryBrush}" />
+
+                    <ListBox Grid.Row="1" ItemsSource="{Binding Results}"
+                             SelectedItem="{Binding SelectedResult}" Margin="4,0,4,6"
+                             BorderThickness="0" Background="Transparent"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:FormatConvertResult}">
+                                <Border Padding="8,6" Margin="0,0,0,2" CornerRadius="4"
+                                        Background="Transparent">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <!-- 文件名 -->
+                                        <TextBlock Grid.Row="0" Text="{Binding InputFileName}" FontSize="12"
+                                                   FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"
+                                                   TextTrimming="CharacterEllipsis" />
+
+                                        <!-- 操作类型 + 尺寸变化 -->
+                                        <TextBlock Grid.Row="1" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis">
+                                            <Run Text="{Binding OperationType, Mode=OneWay}" />
+                                            <Run Text=" | " />
+                                            <Run Text="{Binding SizeSummary, Mode=OneWay}" />
+                                        </TextBlock>
+
+                                        <!-- 状态标签 -->
+                                        <StackPanel Grid.Row="2" Orientation="Horizontal">
+                                            <Border CornerRadius="2" Padding="4,1" Margin="0,3,0,0">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="#E6FFED" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                                <Setter Property="Background" Value="#FEE2E2" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock FontSize="10">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="成功" />
+                                                            <Setter Property="Foreground" Value="#1B873B" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                                    <Setter Property="Text" Value="失败" />
+                                                                    <Setter Property="Foreground" Value="#C53030" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Border>
+
+                                            <!-- 压缩比（仅压缩操作） -->
+                                            <Border CornerRadius="2" Padding="4,1" Margin="4,3,0,0"
+                                                    Background="#F0FFF4">
+                                                <TextBlock Text="{Binding CompressionRatioDisplay}" FontSize="10"
+                                                           Foreground="#276749" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- 分隔线 -->
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Background="Transparent" />
+
+            <!-- 右侧：详情预览 -->
+            <Border Grid.Column="2"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6"
+                    Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="详情预览" FontWeight="SemiBold" FontSize="14"
+                               Margin="0,0,0,12" Foreground="{DynamicResource TextPrimaryBrush}" />
+
+                    <!-- 结果详情 -->
+                    <Border Grid.Row="1" Padding="12" Background="{DynamicResource BackgroundBrush}" CornerRadius="4"
+                            Visibility="{Binding HasSelectedResult, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding SelectedPreviewText}" FontSize="13" FontFamily="Consolas"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+
+                            <!-- 警告信息 -->
+                            <ItemsControl ItemsSource="{Binding SelectedResult.Warnings}" Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Foreground="#D97706" FontSize="11" TextWrapping="Wrap">
+                                            <Run Text="⚠ " /><Run Text="{Binding}" />
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                                <ItemsControl.Visibility>
+                                    <Binding Path="SelectedResult.HasWarnings" Converter="{StaticResource BoolToVisibility}" />
+                                </ItemsControl.Visibility>
+                            </ItemsControl>
+
+                            <!-- 错误信息 -->
+                            <TextBlock Text="{Binding SelectedResult.ErrorMessage}" Foreground="#C53030"
+                                       FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                                       Visibility="{Binding SelectedResult.HasError, Converter={StaticResource BoolToVisibility}}" />
+
+                            <Button Content="打开文件所在位置" Width="160" Height="28" Margin="0,10,0,0"
+                                    Command="{Binding OpenOutputFileCommand}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 未选择结果时的提示 -->
+                    <TextBlock Grid.Row="2" Text="选择左侧处理结果查看详情，或拖拽图片文件到窗口开始处理"
+                               FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Visibility="{Binding HasSelectedResult, Converter={StaticResource BoolToVisibility}, FallbackValue=Visible}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSelectedResult}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ===== 第6行：状态栏 ===== -->
+        <Border Grid.Row="5" Padding="8,4" Margin="0,6,0,0"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="4">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding StatusMessage}" FontSize="12"
+                           Foreground="{DynamicResource TextSecondaryBrush}" />
+                <TextBlock Text=" | " Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12" />
+                <TextBlock FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}">
+                    <Run Text="共 " /><Run Text="{Binding ResultCount}" /><Run Text=" 条 (成功 " />
+                    <Run Text="{Binding SuccessCount}" /><Run Text=", 失败 " /><Run Text="{Binding FailedCount}" /><Run Text=")" />
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
