@@ -39,7 +39,11 @@
 
 ## 提交记录
 
-待提交。
+- `8c6f798` feat(admin-billing): complete module with 67 tests passing
+  - 日期：2026-06-24
+  - 分支：feature/admin-billing
+  - 测试结果：67 passed, 0 failed
+  - 说明：完成后台套餐管理（5 端点）、订单管理（2 端点）、额度管理（4 端点），共 11 个 API 端点
 
 ## 下一步
 
