@@ -43,7 +43,9 @@
 | 提交哈希 | 说明 |
 |----------|------|
 | 60be4a3 | feat(admin-ops): 完成后台运维管理模块 |
+| d101104 | feat(admin-ops): register admin-ops router and fix cache cleanup |
+| b20efb9 | merge(admin-ops): 合并 admin-ops 路由注册和缓存修复到 dev/full-product |
 
 ## 下一步
 
-等待用户确认后进行提交和推送。
+等待用户指定下一模块。
