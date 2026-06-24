@@ -36,7 +36,7 @@ public class OcrViewModel : BaseViewModel
     private bool _isRunning;
     private string _statusMessage = "就绪 - 选择图片文件开始 OCR 识别";
     private string? _errorMessage;
-    private double _textScore = 0.5;
+    private int _textScorePercent = 50;
     private int _progressValue;
     private int _progressMax = 100;
     private bool _isServiceAvailable;
@@ -128,12 +128,15 @@ public class OcrViewModel : BaseViewModel
     /// <summary>服务状态文本</summary>
     public string ServiceStatusText => _isServiceAvailable ? "OCR 引擎就绪" : "OCR 引擎未连接";
 
-    /// <summary>识别置信度阈值 (0.0 ~ 1.0)</summary>
-    public double TextScore
+    /// <summary>识别置信度阈值 (0 ~ 100，百分比)</summary>
+    public int TextScorePercent
     {
-        get => _textScore;
-        set => SetProperty(ref _textScore, Math.Clamp(value, 0.0, 1.0));
+        get => _textScorePercent;
+        set => SetProperty(ref _textScorePercent, Math.Clamp(value, 0, 100));
     }
+
+    /// <summary>内部使用的置信度阈值 (0.0 ~ 1.0)，由 TextScorePercent 自动换算</summary>
+    private double TextScore => _textScorePercent / 100.0;
 
     /// <summary>进度值 (0-100)</summary>
     public int ProgressValue

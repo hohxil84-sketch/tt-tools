@@ -100,9 +100,15 @@ def handle_recognize(data: Dict[str, Any], request_id: Optional[str]) -> None:
         result = engine.recognize(file_path)
         engine.close()
 
+        # 转为字典并修复 total_text：用换行符拼接，保留原始排版
+        result_dict = result.to_dict()
+        if result.text_lines:
+            result_dict["total_text"] = "\n".join(
+                line.text for line in result.text_lines
+            )
         send_response(
             success=True,
-            data=result.to_dict(),
+            data=result_dict,
             request_id=request_id,
         )
     except Exception as e:
@@ -147,6 +153,11 @@ def handle_recognize_batch(data: Dict[str, Any], request_id: Optional[str]) -> N
             try:
                 result = engine.recognize(fp)
                 result_dict = result.to_dict()
+                # 用换行符拼接，保留原始排版格式
+                if result.text_lines:
+                    result_dict["total_text"] = "\n".join(
+                        line.text for line in result.text_lines
+                    )
                 result_dict["success"] = True
                 result_dict["file_path"] = fp
                 results.append(result_dict)
