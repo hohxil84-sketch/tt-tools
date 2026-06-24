@@ -82,7 +82,7 @@ public class PdfImageConvertService : IDisposable
     /// </summary>
     public PdfImageConvertService()
     {
-        _authState = new AuthState();
+        _authState = AuthState.Shared;
         _cloudApiClient = new CloudApiClient(AppSettings.Instance.ServerUrl, _authState);
         _pythonPath = AppSettings.Instance.PythonPath
             ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";

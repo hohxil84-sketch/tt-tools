@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using TTShared.Auth;
 using TTShared.CloudApi;
+using TTShared.FileSystem;
 using TTShared.Settings;
 using TTShell.Views;
 using TTTools.FileWorkbench.Views;
@@ -92,13 +93,13 @@ public partial class MainWindow : Window
             "Preflight"       => new PreflightCheckView { DataContext = new TTTools.PreflightCheck.ViewModels.PreflightCheckViewModel() },
 
             // AI 工具
-            "AiCopy"          => new AiCopyView { DataContext = new TTTools.AiCopyClient.ViewModels.AiCopyViewModel() },
-            "AiRender"        => new AiRenderView { DataContext = new TTTools.AiRenderClient.ViewModels.AiRenderViewModel() },
+            "AiCopy"          => new AiCopyView { DataContext = new TTTools.AiCopyClient.ViewModels.AiCopyViewModel(_apiClient, _authState) },
+            "AiRender"        => new AiRenderView { DataContext = new TTTools.AiRenderClient.ViewModels.AiRenderViewModel(_apiClient, _authState) },
 
             // 图片处理
-            "ResizeImage"     => new ResizeImageView { DataContext = new TTTools.ResizeImage.ViewModels.ResizeImageViewModel() },
+            "ResizeImage"     => new ResizeImageView { DataContext = new TTTools.ResizeImage.ViewModels.ResizeImageViewModel(new TTTools.ResizeImage.Services.ResizeImageService(), _authState, new FileSystemService()) },
             "FormatConvert"   => new FormatConvertView { DataContext = new TTTools.FormatConvert.ViewModels.FormatConvertViewModel() },
-            "PdfImageConvert" => new PdfImageConvertView { DataContext = new TTTools.PdfImageConvert.ViewModels.PdfImageConvertViewModel() },
+            "PdfImageConvert" => new PdfImageConvertView { DataContext = new TTTools.PdfImageConvert.ViewModels.PdfImageConvertViewModel(new TTTools.PdfImageConvert.Services.PdfImageConvertService(), _authState, new FileSystemService()) },
             "IdPhoto"         => new IdPhotoView { DataContext = new TTTools.IdPhoto.ViewModels.IdPhotoViewModel() },
             "RemoveBg"        => new RemoveBgView { DataContext = new TTTools.RemoveBg.ViewModels.RemoveBgViewModel() },
 
