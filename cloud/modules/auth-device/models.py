@@ -38,6 +38,7 @@ class User(Base):
     """用户表，对齐 cloud/DATABASE_SCHEMA.md users 表定义。"""
 
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
 
     # 主键
     id = Column(String(36), primary_key=True, default=_new_uuid)
@@ -104,6 +105,7 @@ class Device(Base):
         UniqueConstraint("user_id", "device_fingerprint_hash", name="uq_user_device"),
         Index("idx_device_user_id", "user_id"),
         Index("idx_device_status", "status"),
+        {"extend_existing": True},
     )
 
     # 关联关系

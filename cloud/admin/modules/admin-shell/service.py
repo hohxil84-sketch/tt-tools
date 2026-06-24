@@ -7,6 +7,7 @@ admin-billing、admin-ops 模块完成后接入真实数据。
 """
 from __future__ import annotations
 
+import os
 import time
 from typing import Optional
 
@@ -108,3 +109,101 @@ def get_status() -> StatusData:
         version="0.1.0",
         uptime_seconds=round(uptime, 1),
     )
+
+
+# ============================================================
+# 认证登录（直接实现 JWT 验证，通过 importlib 加载 User 模型）
+# ============================================================
+
+import secrets  # noqa: E402
+from datetime import datetime, timezone, timedelta  # noqa: E402
+
+import bcrypt  # noqa: E402
+from jose import jwt  # noqa: E402
+from sqlalchemy import text  # noqa: E402 — 用原始 SQL 避免 ORM 类冲突
+
+from cloud.shared.config import shared_settings  # noqa: E402
+from cloud.shared import AppError, ErrorCode  # noqa: E402
+
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    """验证明文密码与 bcrypt 哈希。"""
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def _create_jwt(user_id: str, role: str, plan_code: str) -> str:
+    """创建 JWT access_token。"""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "plan_code": plan_code,
+        "iat": now,
+        "exp": now + timedelta(minutes=shared_settings.auth_access_token_expire_minutes),
+        "type": "access",
+    }
+    return jwt.encode(payload, shared_settings.auth_secret_key,
+                      algorithm=shared_settings.auth_algorithm)
+
+
+async def login_admin(db, account: str, password: str, device_fingerprint: str,
+                      device_name: str = None, client_version: str = None):
+    """管理员登录。
+
+    直接使用原始 SQL 查询 users 表，避免 ORM 类注册冲突。
+    """
+    # 原始 SQL 查询用户
+    result = await db.execute(
+        text("SELECT id, account, password_hash, display_name, role, status, plan_code "
+             "FROM users WHERE account = :account"),
+        {"account": account},
+    )
+    row = result.first()
+    if row is None:
+        raise AppError(code=ErrorCode.AUTH_INVALID_CREDENTIALS,
+                       message="账号或密码错误", status_code=401)
+    # row 是 tuple，按 SELECT 字段顺序
+    (user_id, user_account, password_hash, display_name,
+     role, status, plan_code) = row
+
+    if status == "blocked":
+        raise AppError(code=ErrorCode.AUTH_INVALID_CREDENTIALS,
+                       message="账号已被封禁", status_code=403)
+
+    if not _verify_password(password, password_hash):
+        raise AppError(code=ErrorCode.AUTH_INVALID_CREDENTIALS,
+                       message="账号或密码错误", status_code=401)
+
+    access_token = _create_jwt(user_id=user_id, role=role,
+                               plan_code=plan_code or "free")
+    refresh_token = secrets.token_urlsafe(64)
+    expires_in = shared_settings.auth_access_token_expire_minutes * 60
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": expires_in,
+        "user": {
+            "id": user_id,
+            "account": user_account,
+            "display_name": display_name,
+            "plan_code": plan_code or "free",
+        },
+        "device": {
+            "id": "",
+            "status": "active",
+            "is_new": True,
+        },
+    }
+
+
+async def refresh_admin(db, refresh_token: str):
+    """刷新令牌（暂未实现）。"""
+    raise AppError(code="NOT_IMPLEMENTED",
+                   message="令牌刷新功能暂未实现，请重新登录", status_code=501)
+
+
+async def logout_admin(db, refresh_token: str):
+    """退出登录（无服务端状态，客户端丢弃 token 即可）。"""
+    return {"success": True}

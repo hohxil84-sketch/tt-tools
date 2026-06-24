@@ -30,11 +30,31 @@ from middleware import setup_middleware
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """应用生命周期管理：启动时初始化资源，关闭时清理资源。"""
-    # 启动：预留数据库连接池、Redis 连接等初始化
-    # 后续 cloud/shared 模块接入后在此注册
+    from cloud.shared.database import init_db, close_db
+    await init_db()
     yield
-    # 关闭：预留连接释放等清理
-    # 后续 cloud/shared 模块接入后在此注册
+    # 关闭：释放数据库连接池
+    await close_db()
+
+
+def _preload_auth_device_models():
+    """预加载 auth-device ORM 模型，确保 init_db() 能创建 users/devices/auth_sessions 表。
+
+    使用 importlib 直接加载，避免与 admin-users 的 User/Device 类冲突。
+    """
+    import importlib.util
+    _auth_device_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "auth-device")
+    if _auth_device_dir not in sys.path:
+        sys.path.insert(0, _auth_device_dir)
+    _models_path = os.path.join(_auth_device_dir, "models.py")
+    if os.path.exists(_models_path) and "auth_device_models" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("auth_device_models", _models_path)
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["auth_device_models"] = mod
+            # 让 auth-device models 在 sys.modules 中作为 "models" 也可用
+            sys.modules.setdefault("models", mod)
+            spec.loader.exec_module(mod)
 
 
 def create_app() -> FastAPI:
@@ -73,7 +93,7 @@ def create_app() -> FastAPI:
     if _ai_image_tools_dir not in sys.path:
         sys.path.insert(0, _ai_image_tools_dir)
     for _key in list(sys.modules.keys()):
-        if _key in ("router", "service", "schemas") or _key.startswith(("router.", "service.", "schemas.")):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
             del sys.modules[_key]
     from router import router as ai_image_tools_router  # noqa: E402
     app.include_router(ai_image_tools_router, prefix="/api/v1")
@@ -83,7 +103,7 @@ def create_app() -> FastAPI:
     if _orders_recharge_dir not in sys.path:
         sys.path.insert(0, _orders_recharge_dir)
     for _key in list(sys.modules.keys()):
-        if _key in ("router", "service", "schemas") or _key.startswith(("router.", "service.", "schemas.")):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
             del sys.modules[_key]
     from router import router as orders_recharge_router  # noqa: E402
     app.include_router(orders_recharge_router, prefix="/api/v1")
@@ -94,7 +114,7 @@ def create_app() -> FastAPI:
         sys.path.insert(0, _admin_shell_dir)
     # 清理 admin 模块通用缓存名
     for _key in list(sys.modules.keys()):
-        if _key in ("router", "service", "schemas") or _key.startswith(("router.", "service.", "schemas.")):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
             del sys.modules[_key]
     from router import router as admin_shell_router  # noqa: E402
     app.include_router(admin_shell_router, prefix="/api/v1")

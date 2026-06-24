@@ -14,6 +14,7 @@ require_admin 依赖实现鉴权。
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 
 from cloud.shared import (
     TokenData,
@@ -24,7 +25,9 @@ from cloud.shared import (
     AppError,
 )
 
-from service import get_dashboard_stats, get_menu, get_status
+from service import get_dashboard_stats, get_menu, get_status, login_admin, refresh_admin, logout_admin
+from fastapi import Request as FastAPIRequest  # noqa: E402 — 用于认证端点的原始请求体
+from cloud.shared.database import get_db  # noqa: E402 — 认证端点需要数据库会话
 
 # 创建路由，prefix="/api/v1/admin" 在 app-shell 装配时指定
 router = APIRouter(tags=["Admin Shell"])
@@ -115,4 +118,84 @@ async def admin_status(
             request_id=request_id,
             status_code=e.status_code,
             details=e.details,
+        )
+
+
+# ============================================================
+# 认证端点（登录 / 刷新 / 退出，无需管理员权限）
+# ============================================================
+
+@router.post("/auth/login")
+async def auth_login(
+    request: FastAPIRequest,
+    request_id: str = Depends(get_request_id),
+    db=Depends(get_db),
+):
+    """管理员登录，返回 JWT access_token 和 refresh_token。"""
+    try:
+        body = await request.json()
+        data = await login_admin(
+            db,
+            account=body["account"],
+            password=body["password"],
+            device_fingerprint=body["device_fingerprint"],
+            device_name=body.get("device_name"),
+            client_version=body.get("client_version"),
+        )
+        return success_response(data, request_id)
+    except AppError as e:
+        return error_response(code=e.code, message=e.message,
+                              request_id=request_id, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "data": None,
+                     "error": {"code": "UNKNOWN_ERROR", "message": str(e)},
+                     "request_id": request_id},
+        )
+
+
+@router.post("/auth/refresh")
+async def auth_refresh(
+    request: FastAPIRequest,
+    request_id: str = Depends(get_request_id),
+    db=Depends(get_db),
+):
+    """刷新令牌，返回新的 token 对。"""
+    try:
+        body = await request.json()
+        data = await refresh_admin(db, refresh_token=body["refresh_token"])
+        return success_response(data, request_id)
+    except AppError as e:
+        return error_response(code=e.code, message=e.message,
+                              request_id=request_id, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "data": None,
+                     "error": {"code": "UNKNOWN_ERROR", "message": str(e)},
+                     "request_id": request_id},
+        )
+
+
+@router.post("/auth/logout")
+async def auth_logout(
+    request: FastAPIRequest,
+    request_id: str = Depends(get_request_id),
+    db=Depends(get_db),
+):
+    """退出登录，撤销 refresh_token。"""
+    try:
+        body = await request.json()
+        data = await logout_admin(db, refresh_token=body["refresh_token"])
+        return success_response(data, request_id)
+    except AppError as e:
+        return error_response(code=e.code, message=e.message,
+                              request_id=request_id, status_code=e.status_code)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "data": None,
+                     "error": {"code": "UNKNOWN_ERROR", "message": str(e)},
+                     "request_id": request_id},
         )

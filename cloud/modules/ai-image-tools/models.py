@@ -33,6 +33,7 @@ class AiTask(Base):
     """AI 任务表 ORM 模型，对齐 DATABASE_SCHEMA.md ai_tasks。"""
 
     __tablename__ = "ai_tasks"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=_new_uuid,
