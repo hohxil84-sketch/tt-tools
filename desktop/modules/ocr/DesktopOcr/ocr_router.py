@@ -23,15 +23,15 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# 强制 stdin/stdout 使用 UTF-8 编码，对齐 C# 端 LocalRuntimeClient 的编码设置。
+# 不加此行，Windows 上 Python 默认使用 GBK/cp936，会导致中文字符乱码。
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stdin.reconfigure(encoding="utf-8")
+
 # 将 local-worker 根目录添加到 Python 路径，确保可以导入核心模块
-_LOCAL_WORKER_ROOT = Path(__file__).resolve().parents[3] / "local-worker"
+_LOCAL_WORKER_ROOT = Path(r"D:\TT Tools\local-worker")
 if str(_LOCAL_WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(_LOCAL_WORKER_ROOT))
-
-# 将 local-worker 共享层也加入路径
-_LOCAL_WORKER_SHARED = _LOCAL_WORKER_ROOT / "shared"
-if str(_LOCAL_WORKER_SHARED) not in sys.path:
-    sys.path.insert(0, str(_LOCAL_WORKER_SHARED))
 
 from modules.ocr import OCREngine, recognize_image, OCRResult
 
