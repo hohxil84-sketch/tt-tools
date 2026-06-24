@@ -54,7 +54,10 @@
 
 ## 提交记录
 
-暂无。
+- `30a54d9` — feat(desktop-ai-copy-client): 完成云端文案生成桌面入口
+  - 分支：feature/desktop-ai-copy-client
+  - 测试结果：28 passed, 0 failed, 0 skipped
+  - 中文备注：模块核心功能完成，所有单元测试通过，已推送到 origin。
 
 ## 下一步
 
