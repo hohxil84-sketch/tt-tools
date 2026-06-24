@@ -7,6 +7,7 @@
 | cloud-app-shell | cloud/app-shell | feature/cloud-app-shell | DEVELOPMENT_COMPLETE | 23/23 通过 | 2026-06-20 已合并 |
 | cloud-shared | cloud/shared | feature/cloud-shared | DEVELOPMENT_COMPLETE | 47/47 通过 | 2026-06-20 已合并 |
 | cloud-auth-device | cloud/modules/auth-device | feature/cloud-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
+| desktop-ai-copy-client | desktop/modules/ai-copy-client | feature/desktop-ai-copy-client | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并 |
 | desktop-auth-device | desktop/modules/auth-device | feature/desktop-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-file-workbench | desktop/modules/file-workbench | feature/desktop-file-workbench | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-20 已合并 |
 | desktop-ocr | desktop/modules/ocr | feature/desktop-ocr | DEVELOPMENT_COMPLETE | 33/33 通过 | 2026-06-20 已合并 |
