@@ -27,6 +27,7 @@
 | cloud-admin-shell | cloud/admin/modules/admin-shell | feature/admin-shell | DEVELOPMENT_COMPLETE | 14/14 通过 | 2026-06-24 已合并 |
 | cloud-admin-users | cloud/admin/modules/admin-users | feature/admin-users | DEVELOPMENT_COMPLETE | 50/50 通过 | 2026-06-24 已合并 |
 | cloud-admin-billing | cloud/admin/modules/admin-billing | feature/admin-billing | DEVELOPMENT_COMPLETE | 67/67 通过 | 2026-06-24 已合并 |
+| cloud-admin-ops | cloud/admin/modules/admin-ops | feature/admin-ops | DEVELOPMENT_COMPLETE | 48/48 通过 | 2026-06-24 已合并 |
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
