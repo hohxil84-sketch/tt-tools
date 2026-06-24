@@ -37,8 +37,12 @@
 
 ## 提交记录
 
-暂无。
+- 提交哈希：d7b0690
+- 分支：feature/desktop-ai-render-client
+- 提交信息：feat(desktop-ai-render-client): 完成云端效果图生成桌面入口
+- 测试结果：31 项测试全部通过，0 失败，0 跳过
+- 推送状态：已推送到 origin/feature/desktop-ai-render-client
 
 ## 下一步
 
-等待用户确认后提交推送。
+等待用户指定下一模块。
