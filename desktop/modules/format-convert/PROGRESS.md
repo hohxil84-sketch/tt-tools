@@ -32,4 +32,7 @@
 
 ## 提交记录
 
-待提交。
+- `755a853` feat(desktop-format-convert): 完成图片格式转换、压缩、裁剪、旋转桌面端入口
+  - 13 files changed, 3136 insertions
+  - 测试：28 通过, 0 失败, 0 警告
+  - 分支已推送到 origin/feature/desktop-format-convert
