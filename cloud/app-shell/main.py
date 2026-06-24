@@ -181,8 +181,14 @@ def create_app() -> FastAPI:
     for _key in list(sys.modules.keys()):
         if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
             del sys.modules[_key]
+    # 将预加载的 ORM 模型别名为 models，避免 service.py 重复建表
+    if "credits_billing_models" in sys.modules:
+        sys.modules["models"] = sys.modules["credits_billing_models"]
     from router import router as credits_billing_router  # noqa: E402
     app.include_router(credits_billing_router, prefix="/api/v1")
+    # 清理别名，避免后续模块误用
+    if "models" in sys.modules and sys.modules.get("models") is sys.modules.get("credits_billing_models"):
+        del sys.modules["models"]
 
     return app
 
