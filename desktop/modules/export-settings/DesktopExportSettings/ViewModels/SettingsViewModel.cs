@@ -166,6 +166,11 @@ public class SettingsViewModel : BaseViewModel
     }
 
     /// <summary>
+    /// 默认构造函数（用于设计时和 XAML 实例化）
+    /// </summary>
+    public SettingsViewModel() : this(null) { }
+
+    /// <summary>
     /// 保存设置到文件
     /// </summary>
     public void Save()

@@ -116,6 +116,11 @@ public class LogViewerViewModel : BaseViewModel
     }
 
     /// <summary>
+    /// 默认构造函数（用于设计时和 XAML 实例化）
+    /// </summary>
+    public LogViewerViewModel() : this(null, null) { }
+
+    /// <summary>
     /// 刷新日志列表
     /// </summary>
     public async Task RefreshAsync()

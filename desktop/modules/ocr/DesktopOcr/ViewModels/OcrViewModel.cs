@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Reflection;
 using System.Windows.Input;
 using Microsoft.Win32;
 using TTShared.UI;
@@ -17,7 +18,17 @@ namespace TTTools.OCR.ViewModels;
 /// </summary>
 public class OcrViewModel : BaseViewModel
 {
-    private readonly OcrService? _ocrService;
+    /// <summary>OCR 引擎默认 Python 解释器路径</summary>
+    private static readonly string DefaultPythonPath =
+        @"D:\localPath\venvs\local-worker-ocr\Scripts\python.exe";
+
+    /// <summary>OCR 引擎默认 router 脚本路径（相对于本程序集目录）</summary>
+    private static string DefaultRouterPath =>
+        Path.Combine(
+            Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".",
+            "ocr_router.py");
+
+    private OcrService? _ocrService;
     private readonly FileSystemService _fileSystem;
     private readonly JobManager? _jobManager;
     private readonly AppLogger? _logger;
@@ -25,7 +36,7 @@ public class OcrViewModel : BaseViewModel
     private bool _isRunning;
     private string _statusMessage = "就绪 - 选择图片文件开始 OCR 识别";
     private string? _errorMessage;
-    private double _textScore = 0.5;
+    private int _textScorePercent = 50;
     private int _progressValue;
     private int _progressMax = 100;
     private bool _isServiceAvailable;
@@ -117,12 +128,15 @@ public class OcrViewModel : BaseViewModel
     /// <summary>服务状态文本</summary>
     public string ServiceStatusText => _isServiceAvailable ? "OCR 引擎就绪" : "OCR 引擎未连接";
 
-    /// <summary>识别置信度阈值 (0.0 ~ 1.0)</summary>
-    public double TextScore
+    /// <summary>识别置信度阈值 (0 ~ 100，百分比)</summary>
+    public int TextScorePercent
     {
-        get => _textScore;
-        set => SetProperty(ref _textScore, Math.Clamp(value, 0.0, 1.0));
+        get => _textScorePercent;
+        set => SetProperty(ref _textScorePercent, Math.Clamp(value, 0, 100));
     }
+
+    /// <summary>内部使用的置信度阈值 (0.0 ~ 1.0)，由 TextScorePercent 自动换算</summary>
+    private double TextScore => _textScorePercent / 100.0;
 
     /// <summary>进度值 (0-100)</summary>
     public int ProgressValue
@@ -187,9 +201,23 @@ public class OcrViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 默认构造函数（用于设计时）
+    /// 默认构造函数：自动检测 Python 环境和 router 脚本路径，
+    /// 使模块在无外部依赖注入时也可自给自足运行。
     /// </summary>
-    public OcrViewModel() : this(null, new FileSystemService()) { }
+    public OcrViewModel() : this(null, new FileSystemService())
+    {
+        // 尝试自动创建 OCR 服务（使用默认路径）
+        var routerPath = DefaultRouterPath;
+        if (File.Exists(DefaultPythonPath) && File.Exists(routerPath))
+        {
+            _ocrService = new OcrService(DefaultPythonPath, routerPath);
+        }
+        else
+        {
+            // Python 或 router 脚本不存在时，服务不可用，界面会显示"OCR 引擎未连接"
+            StatusMessage = "OCR 引擎未安装或配置不完整，请检查 local-worker-ocr 环境";
+        }
+    }
 
     /// <summary>
     /// 初始化 OCR 服务

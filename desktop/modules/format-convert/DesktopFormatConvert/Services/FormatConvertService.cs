@@ -3,6 +3,7 @@ using TTShared.FileSystem;
 using TTShared.JobSystem;
 using TTShared.LocalRuntime;
 using TTShared.Logging;
+using TTShared.Settings;
 using TTTools.FormatConvert.Models;
 
 namespace TTTools.FormatConvert.Services;
@@ -91,12 +92,15 @@ public class FormatConvertService : IDisposable
     }
 
     /// <summary>
-    /// 默认构造函数（仅用于设计时或单元测试，不使用 LocalRuntimeClient）。
+    /// 默认构造函数（自动检测 Python 路径和路由脚本）
     /// </summary>
     public FormatConvertService()
     {
-        _pythonPath = string.Empty;
-        _routerScriptPath = string.Empty;
+        _pythonPath = AppSettings.Instance.PythonPath
+            ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";
+        _routerScriptPath = Path.Combine(
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
+            "format_convert_router.py");
     }
 
     /// <summary>

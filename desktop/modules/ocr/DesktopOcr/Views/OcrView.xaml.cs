@@ -1,7 +1,9 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using TTTools.OCR.ViewModels;
 
 namespace TTTools.OCR.Views;
@@ -26,6 +28,23 @@ public partial class OcrView : UserControl
 
         // 数据上下文变更时更新 ViewModel 引用
         DataContextChanged += OnDataContextChanged;
+
+        // 视图加载时自动初始化 OCR 服务
+        Loaded += OnLoaded;
+    }
+
+    /// <summary>
+    /// 视图加载完成后自动启动 OCR 引擎。
+    /// 使用 Dispatcher.BeginInvoke 避免阻塞 UI 渲染。
+    /// </summary>
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded; // 只执行一次
+        if (_viewModel != null)
+        {
+            await System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeAsync(
+                async () => await _viewModel.InitializeAsync());
+        }
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -101,6 +120,53 @@ public class ScoreToBrushConverter : IValueConverter
             if (score < 0.5) return LowConfBrush;
         }
         return NormalBrush;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter,
+        System.Globalization.CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// 文件路径到缩略图的转换器
+/// 将图片文件路径转换为 64x64 缩略图 BitmapImage，缓存到内存避免重复加载。
+/// </summary>
+public class FilePathToThumbnailConverter : IValueConverter
+{
+    private static readonly Dictionary<string, BitmapImage?> ThumbnailCache = new();
+
+    public object? Convert(object value, Type targetType, object parameter,
+        System.Globalization.CultureInfo culture)
+    {
+        if (value is not string filePath || !File.Exists(filePath))
+            return null;
+
+        // 缓存命中
+        if (ThumbnailCache.TryGetValue(filePath, out var cached))
+            return cached;
+
+        try
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(filePath);
+            bitmap.DecodePixelWidth = 64;
+            bitmap.DecodePixelHeight = 64;
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.EndInit();
+            bitmap.Freeze(); // 允许跨线程访问
+
+            ThumbnailCache[filePath] = bitmap;
+            return bitmap;
+        }
+        catch
+        {
+            ThumbnailCache[filePath] = null;
+            return null;
+        }
     }
 
     public object ConvertBack(object value, Type targetType, object parameter,

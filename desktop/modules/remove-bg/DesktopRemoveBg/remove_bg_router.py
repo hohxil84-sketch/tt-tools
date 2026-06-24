@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 # 将 local-worker 根目录添加到 Python 路径，确保可以导入核心模块
 # 从当前文件向上 5 级到达项目根目录 (TT Tools)
-_LOCAL_WORKER_ROOT = Path(__file__).resolve().parents[4] / "local-worker"
+_LOCAL_WORKER_ROOT = Path(r"D:\TT Tools\local-worker")
 
 # remove-bg 目录包含连字符，不能直接通过 "import modules.remove-bg" 导入
 # 将其父目录加入路径后，可直接导入模块内的文件

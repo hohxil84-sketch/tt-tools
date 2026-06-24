@@ -36,7 +36,20 @@
 
 ## Bug 记录
 
-暂无。
+- 2026-06-24: **OCR 引擎未连接 + 选择图片无反应**
+  - 现象：导航到 OCR 模块后显示"OCR 引擎未连接"，"开始识别"按钮灰色不可用
+  - 根因：OcrViewModel 默认构造函数 `OcrViewModel()` → `OcrViewModel(null, new FileSystemService())`，`_ocrService` 为 null，`IsServiceAvailable` 始终为 false，且 `InitializeAsync()` 从未被调用
+  - 修复：默认构造函数自动检测 Python 环境和 router 脚本路径创建 OcrService；OcrView 加载时自动调用 InitializeAsync
+  - 修复分支：`fix/desktop-ocr-service-init`
+  - 修复提交：`d340d38`
+  - 测试结果：33/33 通过
+
+- 2026-06-24: **OCR 识别结果中文乱码**
+  - 现象：识别成功但结果中的中文字符全部显示为乱码
+  - 根因：Windows 上 Python 默认 stdout 编码为 GBK/cp936，而 C# LocalRuntimeClient 以 UTF-8 读取，导致中文编码不匹配
+  - 修复：`ocr_router.py` 启动时显式设置 `sys.stdout.reconfigure(encoding='utf-8')` 和 `sys.stdin.reconfigure(encoding='utf-8')`
+  - 修复提交：`0c74eb7`
+  - 测试结果：33/33 通过
 
 ## 提交记录
 

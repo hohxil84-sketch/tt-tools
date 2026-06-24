@@ -3,7 +3,18 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:TTShell"
         xmlns:views="clr-namespace:TTShell.Views"
+        xmlns:workbench="clr-namespace:TTTools.FileWorkbench.Views;assembly=TTTools.FileWorkbench"
+        xmlns:ocr="clr-namespace:TTTools.OCR.Views;assembly=TTTools.OCR"
+        xmlns:preflight="clr-namespace:TTTools.PreflightCheck.Views;assembly=TTTools.PreflightCheck"
+        xmlns:copy="clr-namespace:TTTools.AiCopyClient.Views;assembly=TTTools.AiCopyClient"
+        xmlns:render="clr-namespace:TTTools.AiRenderClient.Views;assembly=TTTools.AiRenderClient"
         xmlns:resize="clr-namespace:TTTools.ResizeImage.Views;assembly=TTTools.ResizeImage"
+        xmlns:format="clr-namespace:TTTools.FormatConvert.Views;assembly=TTTools.FormatConvert"
+        xmlns:pdfimg="clr-namespace:TTTools.PdfImageConvert.Views;assembly=TTTools.PdfImageConvert"
+        xmlns:idphoto="clr-namespace:TTTools.IdPhoto.Views;assembly=TTTools.IdPhoto"
+        xmlns:removebg="clr-namespace:TTTools.RemoveBg.Views;assembly=TTTools.RemoveBg"
+        xmlns:auth="clr-namespace:TTTools.AuthDevice.Views;assembly=TTTools.AuthDevice"
+        xmlns:expset="clr-namespace:TTTools.ExportSettings.Views;assembly=TTTools.ExportSettings"
         Title="TT Tools"
         MinHeight="680"
         MinWidth="1024"
@@ -15,11 +26,8 @@
     <!-- ========== 主窗口布局：标题栏 + 侧栏+内容区 + 状态栏 ========== -->
     <Grid>
         <Grid.RowDefinitions>
-            <!-- 标题栏 -->
             <RowDefinition Height="48" />
-            <!-- 主体区域 -->
             <RowDefinition Height="*" />
-            <!-- 状态栏 -->
             <RowDefinition Height="28" />
         </Grid.RowDefinitions>
 
@@ -37,7 +45,6 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- 应用名称 -->
                 <TextBlock Grid.Column="0"
                            Text="TT Tools"
                            FontSize="16"
@@ -45,46 +52,28 @@
                            Foreground="{DynamicResource TextPrimaryBrush}"
                            VerticalAlignment="Center" />
 
-                <!-- 主题切换按钮 -->
                 <Button Grid.Column="2"
                         x:Name="ThemeToggleButton"
                         Content="🌙"
-                        Width="36"
-                        Height="36"
+                        Width="36" Height="36"
                         FontSize="16"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        Click="OnThemeToggle"
+                        Background="Transparent" BorderThickness="0"
+                        Cursor="Hand" Click="OnThemeToggle"
                         ToolTip="切换浅色/深色主题" />
 
-                <!-- 窗口控制按钮 -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal">
-                    <Button Content="─"
-                            Width="36" Height="36"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Cursor="Hand"
-                            Foreground="{DynamicResource TextPrimaryBrush}"
-                            Click="OnMinimize"
-                            ToolTip="最小化" />
-                    <Button x:Name="MaxRestoreButton"
-                            Content="□"
-                            Width="36" Height="36"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Cursor="Hand"
-                            Foreground="{DynamicResource TextPrimaryBrush}"
-                            Click="OnMaximizeRestore"
-                            ToolTip="最大化/还原" />
-                    <Button Content="✕"
-                            Width="36" Height="36"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Cursor="Hand"
-                            Foreground="{DynamicResource TextPrimaryBrush}"
-                            Click="OnClose"
-                            ToolTip="关闭" />
+                    <Button Content="─" Width="36" Height="36"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Foreground="{DynamicResource TextPrimaryBrush}"
+                            Click="OnMinimize" ToolTip="最小化" />
+                    <Button x:Name="MaxRestoreButton" Content="□" Width="36" Height="36"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Foreground="{DynamicResource TextPrimaryBrush}"
+                            Click="OnMaximizeRestore" ToolTip="最大化/还原" />
+                    <Button Content="✕" Width="36" Height="36"
+                            Background="Transparent" BorderThickness="0"
+                            Cursor="Hand" Foreground="{DynamicResource TextPrimaryBrush}"
+                            Click="OnClose" ToolTip="关闭" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -92,68 +81,75 @@
         <!-- ==================== 主体区域 ==================== -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <!-- 导航侧栏 -->
                 <ColumnDefinition Width="200" />
-                <!-- 分隔线 -->
                 <ColumnDefinition Width="1" />
-                <!-- 主内容区 -->
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
             <!-- 导航侧栏 -->
-            <Border Grid.Column="0"
-                    Background="{DynamicResource SidebarBrush}">
+            <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,8,0,0">
                         <!-- 首页 -->
-                        <Button x:Name="NavHome"
-                                Style="{StaticResource NavButtonStyle}"
-                                Content="🏠  首页"
-                                Tag="Home"
-                                Click="OnNavigationClick" />
-                        <!-- 分隔线 -->
+                        <Button x:Name="NavHome" Style="{StaticResource NavButtonStyle}"
+                                Content="🏠  首页" Tag="Home" Click="OnNavigationClick" />
+
                         <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
-                        <!-- 功能模块入口（占位） -->
-                        <Button x:Name="NavFileWorkbench"
-                                Style="{StaticResource NavButtonStyle}"
-                                Content="📁  文件工作台"
-                                Tag="FileWorkbench"
-                                Click="OnNavigationClick" />
-                        <Button x:Name="NavAiTools"
-                                Style="{StaticResource NavButtonStyle}"
-                                Content="🤖  AI 工具"
-                                Tag="AiTools"
-                                Click="OnNavigationClick" />
-                        <Button x:Name="NavResizeImage"
-                                Style="{StaticResource NavButtonStyle}"
-                                Content="📐  图片改尺寸"
-                                Tag="ResizeImage"
-                                Click="OnNavigationClick" />
-                        <!-- 分隔线 -->
+
+                        <!-- 文件 / 印前 -->
+                        <Button x:Name="NavFileWorkbench" Style="{StaticResource NavButtonStyle}"
+                                Content="📁  文件工作台" Tag="FileWorkbench" Click="OnNavigationClick" />
+                        <Button x:Name="NavOcr" Style="{StaticResource NavButtonStyle}"
+                                Content="📝  OCR 文字识别" Tag="Ocr" Click="OnNavigationClick" />
+                        <Button x:Name="NavPreflight" Style="{StaticResource NavButtonStyle}"
+                                Content="🔍  印前检查" Tag="Preflight" Click="OnNavigationClick" />
+
                         <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
-                        <Button x:Name="NavExport"
-                                Style="{StaticResource NavButtonStyle}"
-                                Content="📤  导出"
-                                Tag="Export"
-                                Click="OnNavigationClick" />
-                        <Button x:Name="NavSettings"
-                                Style="{StaticResource NavButtonStyle}"
-                                Content="⚙️  设置"
-                                Tag="Settings"
-                                Click="OnNavigationClick" />
+
+                        <!-- AI 工具 -->
+                        <Button x:Name="NavAiCopy" Style="{StaticResource NavButtonStyle}"
+                                Content="🤖  AI 文案生成" Tag="AiCopy" Click="OnNavigationClick" />
+                        <Button x:Name="NavAiRender" Style="{StaticResource NavButtonStyle}"
+                                Content="🎨  效果图生成" Tag="AiRender" Click="OnNavigationClick" />
+
+                        <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
+
+                        <!-- 图片处理 -->
+                        <Button x:Name="NavResizeImage" Style="{StaticResource NavButtonStyle}"
+                                Content="📐  图片改尺寸" Tag="ResizeImage" Click="OnNavigationClick" />
+                        <Button x:Name="NavFormatConvert" Style="{StaticResource NavButtonStyle}"
+                                Content="🖼️  格式转换" Tag="FormatConvert" Click="OnNavigationClick" />
+                        <Button x:Name="NavPdfImageConvert" Style="{StaticResource NavButtonStyle}"
+                                Content="📄  PDF/图片互转" Tag="PdfImageConvert" Click="OnNavigationClick" />
+                        <Button x:Name="NavIdPhoto" Style="{StaticResource NavButtonStyle}"
+                                Content="📸  证件照换底色" Tag="IdPhoto" Click="OnNavigationClick" />
+                        <Button x:Name="NavRemoveBg" Style="{StaticResource NavButtonStyle}"
+                                Content="✂️  智能抠图" Tag="RemoveBg" Click="OnNavigationClick" />
+
+                        <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
+
+                        <!-- 系统 -->
+                        <Button x:Name="NavLogin" Style="{StaticResource NavButtonStyle}"
+                                Content="👤  登录管理" Tag="Login" Click="OnNavigationClick" />
+
+                        <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
+
+                        <Button x:Name="NavExport" Style="{StaticResource NavButtonStyle}"
+                                Content="📤  导出" Tag="Export" Click="OnNavigationClick" />
+                        <Button x:Name="NavLogViewer" Style="{StaticResource NavButtonStyle}"
+                                Content="📋  日志查看" Tag="LogViewer" Click="OnNavigationClick" />
+                        <Button x:Name="NavSettings" Style="{StaticResource NavButtonStyle}"
+                                Content="⚙️  设置" Tag="Settings" Click="OnNavigationClick" />
                     </StackPanel>
                 </ScrollViewer>
             </Border>
 
             <!-- 分隔线 -->
-            <Border Grid.Column="1"
-                    Background="{DynamicResource BorderBrush}" />
+            <Border Grid.Column="1" Background="{DynamicResource BorderBrush}" />
 
-            <!-- 主内容区（页面切换容器） -->
-            <ContentControl Grid.Column="2"
-                            x:Name="MainContent"
+            <!-- 主内容区 -->
+            <ContentControl Grid.Column="2" x:Name="MainContent"
                             Background="{DynamicResource BackgroundBrush}">
-                <!-- 默认显示首页 -->
                 <views:HomePage />
             </ContentControl>
         </Grid>

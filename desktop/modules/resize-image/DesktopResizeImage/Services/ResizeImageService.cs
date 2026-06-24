@@ -3,6 +3,7 @@ using TTShared.Auth;
 using TTShared.CloudApi;
 using TTShared.CloudApi.Dtos;
 using TTShared.FileSystem;
+using TTShared.Settings;
 using TTShared.JobSystem;
 using TTShared.LocalRuntime;
 using TTShared.Logging;
@@ -82,9 +83,12 @@ public class ResizeImageService : IDisposable
     public ResizeImageService()
     {
         _authState = new AuthState();
-        _cloudApiClient = new CloudApiClient("http://localhost:8000", _authState);
-        _pythonPath = string.Empty;
-        _routerScriptPath = string.Empty;
+        _cloudApiClient = new CloudApiClient(AppSettings.Instance.ServerUrl, _authState);
+        _pythonPath = AppSettings.Instance.PythonPath
+            ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";
+        _routerScriptPath = Path.Combine(
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
+            "resize_image_router.py");
     }
 
     /// <summary>

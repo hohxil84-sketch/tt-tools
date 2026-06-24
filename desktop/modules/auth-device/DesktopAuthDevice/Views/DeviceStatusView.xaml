@@ -5,6 +5,10 @@
              MinWidth="320" MaxWidth="480"
              HorizontalAlignment="Center" VerticalAlignment="Top">
 
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </UserControl.Resources>
+
     <!-- 设备绑定状态展示卡片 -->
     <Border Background="{DynamicResource SurfaceBrush}"
             BorderBrush="{DynamicResource BorderBrush}"

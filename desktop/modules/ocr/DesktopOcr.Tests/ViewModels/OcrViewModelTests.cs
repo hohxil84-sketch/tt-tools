@@ -29,28 +29,28 @@ public class OcrViewModelTests
         Assert.Equal(0, vm.ResultCount);
         Assert.Equal(0, vm.SuccessCount);
         Assert.Equal(0, vm.FailedCount);
-        Assert.Equal(0.5, vm.TextScore);
+        Assert.Equal(50, vm.TextScorePercent);
         Assert.Equal(0, vm.ProgressValue);
         Assert.Equal(100, vm.ProgressMax);
         Assert.NotNull(vm.StatusMessage);
         Assert.Contains("OCR 引擎未连接", vm.ServiceStatusText);
     }
 
-    /// <summary>TextScore 设置应在 0.0~1.0 之间自动限制</summary>
+    /// <summary>TextScorePercent 设置应在 0~100 之间自动限制</summary>
     [Fact]
-    public void TextScore_ShouldClampToValidRange()
+    public void TextScorePercent_ShouldClampToValidRange()
     {
         var fs = new FileSystemService();
         var vm = new OcrViewModel(null, fs);
 
-        vm.TextScore = 1.5;
-        Assert.Equal(1.0, vm.TextScore);
+        vm.TextScorePercent = 150;
+        Assert.Equal(100, vm.TextScorePercent);
 
-        vm.TextScore = -0.5;
-        Assert.Equal(0.0, vm.TextScore);
+        vm.TextScorePercent = -50;
+        Assert.Equal(0, vm.TextScorePercent);
 
-        vm.TextScore = 0.7;
-        Assert.Equal(0.7, vm.TextScore);
+        vm.TextScorePercent = 70;
+        Assert.Equal(70, vm.TextScorePercent);
     }
 
     /// <summary>选择结果后 HasSelectedResult 应为 true</summary>

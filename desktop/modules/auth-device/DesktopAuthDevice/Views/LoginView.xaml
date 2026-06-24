@@ -5,6 +5,12 @@
              MinWidth="360" MaxWidth="420"
              HorizontalAlignment="Center" VerticalAlignment="Center">
 
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <local:BoolToLoginTextConverter x:Key="BoolToLoginTextConverter" />
+        <local:BoolInvertConverter x:Key="BoolInvertConverter" />
+    </UserControl.Resources>
+
     <!-- 登录表单：账号、密码、登录按钮、错误提示 -->
     <Border Background="{DynamicResource SurfaceBrush}"
             BorderBrush="{DynamicResource BorderBrush}"

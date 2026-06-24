@@ -28,6 +28,25 @@ public class OcrTextLine
 }
 
 /// <summary>
+/// OCR 展示行模型
+/// 用于右侧详情面板的格式化展示：正常行显示原文，低置信度行显示红色 "XX" 占位。
+/// </summary>
+public class OcrDisplayLine
+{
+    /// <summary>展示文本（原文或 "XX"）</summary>
+    public string DisplayText { get; set; } = string.Empty;
+
+    /// <summary>是否为低置信度行</summary>
+    public bool IsLowConfidence { get; set; }
+
+    /// <summary>原始识别文本（调试/提示用）</summary>
+    public string OriginalText { get; set; } = string.Empty;
+
+    /// <summary>置信度</summary>
+    public double Score { get; set; }
+}
+
+/// <summary>
 /// OCR 识别结果模型
 /// 单张图片的完整 OCR 识别结果，包含所有文字行、耗时和引擎信息。
 /// 从 local-worker OCR 引擎返回的 JSON 反序列化得到。
@@ -84,6 +103,18 @@ public class OcrJobResult
 
     /// <summary>低置信度文字行数</summary>
     public int LowConfidenceCount => TextLines.Count(t => t.IsLowConfidence);
+
+    /// <summary>
+    /// 格式化展示行列表：低置信度行替换为 "XX"，高/正常置信度行保留原文。
+    /// 用于右侧详情面板展示，保持图片中文字的原始排版结构。
+    /// </summary>
+    public List<OcrDisplayLine> DisplayLines => TextLines.Select(tl => new OcrDisplayLine
+    {
+        DisplayText = tl.IsLowConfidence ? "XX" : tl.Text,
+        IsLowConfidence = tl.IsLowConfidence,
+        OriginalText = tl.Text,
+        Score = tl.Score,
+    }).ToList();
 
     /// <summary>耗时摘要（用于 UI 展示）</summary>
     public string ElapsedSummary =>

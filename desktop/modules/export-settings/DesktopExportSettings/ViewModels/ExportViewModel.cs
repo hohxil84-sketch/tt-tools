@@ -115,6 +115,11 @@ public class ExportViewModel : BaseViewModel
     }
 
     /// <summary>
+    /// 默认构造函数（用于设计时和 XAML 实例化）
+    /// </summary>
+    public ExportViewModel() : this(null, null) { }
+
+    /// <summary>
     /// 打开文件对话框添加文件
     /// 实际集成时需要 Microsoft.Win32.OpenFileDialog。
     /// 当前为可测试方法。

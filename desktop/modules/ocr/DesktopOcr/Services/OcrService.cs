@@ -5,6 +5,7 @@ using TTShared.LocalRuntime;
 using TTShared.Logging;
 using TTShared.FileSystem;
 using TTShared.JobSystem;
+using TTShared.Settings;
 using TTTools.OCR.Models;
 
 namespace TTTools.OCR.Services;
@@ -59,9 +60,16 @@ public class OcrService : IDisposable
     }
 
     /// <summary>
-    /// 默认构造函数（不使用 LocalRuntimeClient，仅用于测试或设计时）
+    /// 默认构造函数（自动检测 Python 路径和路由脚本）
     /// </summary>
-    public OcrService() { }
+    public OcrService()
+    {
+        _pythonPath = AppSettings.Instance.PythonPath
+            ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";
+        _routerScriptPath = Path.Combine(
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
+            "ocr_router.py");
+    }
 
     /// <summary>
     /// 启动 OCR worker 进程并检查可用性

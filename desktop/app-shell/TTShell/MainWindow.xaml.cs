@@ -2,30 +2,35 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using TTShell.Views;
+using TTTools.FileWorkbench.Views;
+using TTTools.OCR.Views;
+using TTTools.PreflightCheck.Views;
+using TTTools.AiCopyClient.Views;
+using TTTools.AiRenderClient.Views;
 using TTTools.ResizeImage.Views;
+using TTTools.FormatConvert.Views;
+using TTTools.PdfImageConvert.Views;
+using TTTools.IdPhoto.Views;
+using TTTools.RemoveBg.Views;
+using TTTools.AuthDevice.Views;
+using TTTools.ExportSettings.Views;
 
 namespace TTShell;
 
 /// <summary>
 /// TT Tools 主窗口。
 /// 负责导航切换、主题切换、窗口状态管理和模块入口装配。
+/// 全部模块使用 ViewModel 默认构造函数，后续统一 DI 机制就位后替换为带参构造函数。
 /// </summary>
 public partial class MainWindow : Window
 {
-    /// <summary>当前选中的导航按钮</summary>
     private Button? _currentNavButton;
-
-    /// <summary>当前主题：Light 或 Dark</summary>
     private string _currentTheme = "Light";
 
     public MainWindow()
     {
         InitializeComponent();
-
-        // 默认选中首页
         SetNavButtonSelected(NavHome);
-
-        // 初始化窗口控制按钮文字
         UpdateMaxRestoreButton();
         StateChanged += (_, _) => UpdateMaxRestoreButton();
     }
@@ -36,133 +41,91 @@ public partial class MainWindow : Window
     private void OnNavigationClick(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button) return;
-
         SetNavButtonSelected(button);
 
         var tag = button.Tag?.ToString();
-
-        // 根据导航标签切换页面内容
         MainContent.Content = tag switch
         {
-            "Home" => new HomePage(),
-            "FileWorkbench" => CreatePlaceholderPage("文件工作台", "模块开发中，即将上线"),
-            "AiTools" => CreatePlaceholderPage("AI 工具", "AI 功能模块开发中，即将上线"),
-            // 图片改尺寸模块已实现，壳层暂无 AuthState/CloudApiClient 注入机制，
-            // 使用 ViewModel 默认构造函数（IsServiceAvailable=false），显示"服务未配置"。
-            // 后续统一 DI 机制就位后替换为带参构造函数。
-            "ResizeImage" => new ResizeImageView
-            {
-                DataContext = new TTTools.ResizeImage.ViewModels.ResizeImageViewModel()
-            },
-            "Export" => CreatePlaceholderPage("导出", "导出功能模块开发中，即将上线"),
-            "Settings" => CreatePlaceholderPage("设置", "设置功能模块开发中，即将上线"),
-            _ => new HomePage()
+            "Home"            => new HomePage(),
+
+            // 文件 / 印前
+            "FileWorkbench"   => new WorkbenchView { DataContext = new TTTools.FileWorkbench.ViewModels.WorkbenchViewModel() },
+            "Ocr"             => new OcrView { DataContext = new TTTools.OCR.ViewModels.OcrViewModel() },
+            "Preflight"       => new PreflightCheckView { DataContext = new TTTools.PreflightCheck.ViewModels.PreflightCheckViewModel() },
+
+            // AI 工具
+            "AiCopy"          => new AiCopyView { DataContext = new TTTools.AiCopyClient.ViewModels.AiCopyViewModel() },
+            "AiRender"        => new AiRenderView { DataContext = new TTTools.AiRenderClient.ViewModels.AiRenderViewModel() },
+
+            // 图片处理
+            "ResizeImage"     => new ResizeImageView { DataContext = new TTTools.ResizeImage.ViewModels.ResizeImageViewModel() },
+            "FormatConvert"   => new FormatConvertView { DataContext = new TTTools.FormatConvert.ViewModels.FormatConvertViewModel() },
+            "PdfImageConvert" => new PdfImageConvertView { DataContext = new TTTools.PdfImageConvert.ViewModels.PdfImageConvertViewModel() },
+            "IdPhoto"         => new IdPhotoView { DataContext = new TTTools.IdPhoto.ViewModels.IdPhotoViewModel() },
+            "RemoveBg"        => new RemoveBgView { DataContext = new TTTools.RemoveBg.ViewModels.RemoveBgViewModel() },
+
+            // 系统
+            "Login"           => new LoginView { DataContext = new TTTools.AuthDevice.ViewModels.LoginViewModel() },
+
+            // 导出 / 设置
+            "Export"          => new ExportView(),
+            "LogViewer"       => new LogViewerView { DataContext = new TTTools.ExportSettings.ViewModels.LogViewerViewModel() },
+            "Settings"        => new SettingsView { DataContext = new TTTools.ExportSettings.ViewModels.SettingsViewModel() },
+
+            _                 => new HomePage()
         };
 
-        // 更新状态栏
-        var pageName = tag switch
-        {
-            "Home" => "首页",
-            "FileWorkbench" => "文件工作台",
-            "AiTools" => "AI 工具",
-            "ResizeImage" => "图片改尺寸",
-            "Export" => "导出",
-            "Settings" => "设置",
-            _ => "首页"
-        };
-        StatusText.Text = $"当前：{pageName}";
+        StatusText.Text = $"当前：{GetPageName(tag)}";
     }
 
     /// <summary>
-    /// 设置导航按钮选中状态（高亮当前按钮，取消上一个按钮高亮）。
+    /// 根据导航标签返回中文页面名。
     /// </summary>
+    private static string GetPageName(string? tag) => tag switch
+    {
+        "Home"            => "首页",
+        "FileWorkbench"   => "文件工作台",
+        "Ocr"             => "OCR 文字识别",
+        "Preflight"       => "印前检查",
+        "AiCopy"          => "AI 文案生成",
+        "AiRender"        => "效果图生成",
+        "ResizeImage"     => "图片改尺寸",
+        "FormatConvert"   => "格式转换",
+        "PdfImageConvert" => "PDF/图片互转",
+        "IdPhoto"         => "证件照换底色",
+        "RemoveBg"        => "智能抠图",
+        "Login"           => "登录管理",
+        "Export"          => "导出",
+        "LogViewer"       => "日志查看",
+        "Settings"        => "设置",
+        _                 => "首页"
+    };
+
     private void SetNavButtonSelected(Button button)
     {
-        // 取消上一个按钮的选中样式
         if (_currentNavButton != null)
-        {
             _currentNavButton.Style = (Style)FindResource("NavButtonStyle");
-        }
-
-        // 设置当前按钮的选中样式
         button.Style = (Style)FindResource("NavButtonSelectedStyle");
         _currentNavButton = button;
     }
 
-    /// <summary>
-    /// 创建模块占位页面（各模块开发完成前统一使用）。
-    /// </summary>
-    /// <param name="title">模块名称</param>
-    /// <param name="message">占位提示信息</param>
-    /// <returns>包含占位文字的页面</returns>
-    private static Page CreatePlaceholderPage(string title, string message)
-    {
-        var page = new Page();
-        var grid = new Grid();
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-        // 模块标题
-        var titleBlock = new TextBlock
-        {
-            Text = title,
-            Style = (Style)Application.Current.FindResource("TitleTextStyle"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-        Grid.SetRow(titleBlock, 0);
-        titleBlock.VerticalAlignment = VerticalAlignment.Bottom;
-        grid.Children.Add(titleBlock);
-
-        // 占位提示
-        var msgBlock = new TextBlock
-        {
-            Text = message,
-            Style = (Style)Application.Current.FindResource("PlaceholderTextStyle")
-        };
-        Grid.SetRow(msgBlock, 1);
-        grid.Children.Add(msgBlock);
-
-        page.Content = grid;
-        return page;
-    }
-
-    /// <summary>
-    /// 主题切换按钮点击 —— 在浅色和深色主题之间切换。
-    /// </summary>
     private void OnThemeToggle(object sender, RoutedEventArgs e)
     {
         _currentTheme = _currentTheme == "Light" ? "Dark" : "Light";
         App.ApplyTheme(_currentTheme);
-
-        // 更新按钮图标
         ThemeToggleButton.Content = _currentTheme == "Dark" ? "☀️" : "🌙";
     }
 
-    /// <summary>
-    /// 标题栏拖拽移动窗口（模拟无边框窗口的拖拽行为）。
-    /// </summary>
     private void OnTitleBarMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 2)
-        {
-            // 双击标题栏切换最大化
             OnMaximizeRestore(sender, e);
-        }
         else if (e.LeftButton == MouseButtonState.Pressed)
-        {
             DragMove();
-        }
     }
 
-    /// <summary>最小化窗口</summary>
-    private void OnMinimize(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState.Minimized;
-    }
+    private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
-    /// <summary>最大化/还原窗口</summary>
     private void OnMaximizeRestore(object sender, RoutedEventArgs e)
     {
         WindowState = WindowState == WindowState.Maximized
@@ -170,17 +133,10 @@ public partial class MainWindow : Window
             : WindowState.Maximized;
     }
 
-    /// <summary>更新最大化/还原按钮文字</summary>
     private void UpdateMaxRestoreButton()
     {
         MaxRestoreButton.Content = WindowState == WindowState.Maximized ? "❐" : "□";
     }
 
-    /// <summary>
-    /// 关闭窗口 —— 如果窗口处于最大化状态，先还原再询问确认。
-    /// </summary>
-    private void OnClose(object sender, RoutedEventArgs e)
-    {
-        Close();
-    }
+    private void OnClose(object sender, RoutedEventArgs e) => Close();
 }

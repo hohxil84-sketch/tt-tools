@@ -201,9 +201,9 @@
                            FontSize="12"
                            Foreground="{DynamicResource TextSecondaryBrush}">
                     <Run Text="显示 " />
-                    <Run Text="{Binding DisplayCount}" FontWeight="SemiBold" />
+                    <Run Text="{Binding DisplayCount, Mode=OneWay}" FontWeight="SemiBold" />
                     <Run Text=" 条 | 日志目录：" />
-                    <Run Text="{Binding TotalSizeText}" FontWeight="SemiBold" />
+                    <Run Text="{Binding TotalSizeText, Mode=OneWay}" FontWeight="SemiBold" />
                 </TextBlock>
 
                 <Button Grid.Column="2"

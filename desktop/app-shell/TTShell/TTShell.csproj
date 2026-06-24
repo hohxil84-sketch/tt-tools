@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -15,7 +15,23 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- 文件/基础工具 -->
+    <ProjectReference Include="..\..\modules\file-workbench\DesktopFileWorkbench\DesktopFileWorkbench.csproj" />
+    <ProjectReference Include="..\..\modules\ocr\DesktopOcr\DesktopOcr.csproj" />
+    <ProjectReference Include="..\..\modules\preflight-check\DesktopPreflightCheck\DesktopPreflightCheck.csproj" />
+    <!-- AI 工具 -->
+    <ProjectReference Include="..\..\modules\ai-copy-client\DesktopAiCopyClient\DesktopAiCopyClient.csproj" />
+    <ProjectReference Include="..\..\modules\ai-render-client\DesktopAiRenderClient\DesktopAiRenderClient.csproj" />
+    <!-- 图片处理 -->
     <ProjectReference Include="..\..\modules\resize-image\DesktopResizeImage\DesktopResizeImage.csproj" />
+    <ProjectReference Include="..\..\modules\format-convert\DesktopFormatConvert\DesktopFormatConvert.csproj" />
+    <ProjectReference Include="..\..\modules\pdf-image-convert\DesktopPdfImageConvert\DesktopPdfImageConvert.csproj" />
+    <ProjectReference Include="..\..\modules\id-photo\DesktopIdPhoto\DesktopIdPhoto.csproj" />
+    <ProjectReference Include="..\..\modules\remove-bg\DesktopRemoveBg\DesktopRemoveBg.csproj" />
+    <!-- 系统 -->
+    <ProjectReference Include="..\..\modules\auth-device\DesktopAuthDevice\DesktopAuthDevice.csproj" />
+    <ProjectReference Include="..\..\modules\job-system\DesktopJobSystem\DesktopJobSystem.csproj" />
+    <ProjectReference Include="..\..\modules\export-settings\DesktopExportSettings\DesktopExportSettings.csproj" />
   </ItemGroup>
 
 </Project>

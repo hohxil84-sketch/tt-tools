@@ -37,7 +37,7 @@ sys.stdout = sys.stderr    # 将所有 print/logging 输出重定向到 stderr
 
 # 将 local-worker 根目录添加到 Python 路径，确保可以导入核心模块
 # format_convert_router.py → DesktopFormatConvert → format-convert → modules → desktop → TT Tools
-_LOCAL_WORKER_ROOT = Path(__file__).resolve().parents[4] / "local-worker"
+_LOCAL_WORKER_ROOT = Path(r"D:\TT Tools\local-worker")
 
 # format-convert 目录包含连字符，不能直接通过 "import modules.format-convert" 导入
 # 将其父目录加入路径后，可直接导入模块内的文件

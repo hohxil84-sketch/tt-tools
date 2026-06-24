@@ -57,7 +57,7 @@
                         <Button x:Name="AddFilesButton"
                                 Content="📂  添加文件"
                                 Click="OnAddFilesClick"
-                                Style="{StaticResource PrimaryButtonStyle}"
+                                Style="{DynamicResource PrimaryButtonStyle}"
                                 Margin="0,0,8,0" />
                         <Button Content="🗑  清空"
                                 Command="{Binding ClearFilesCommand}"
@@ -215,7 +215,7 @@
                     <!-- 导出按钮 -->
                     <Button Content="🚀  开始导出"
                             Command="{Binding StartExportCommand}"
-                            Style="{StaticResource PrimaryButtonStyle}"
+                            Style="{DynamicResource PrimaryButtonStyle}"
                             Height="40"
                             FontSize="14" />
                     <Button Content="取消导出"

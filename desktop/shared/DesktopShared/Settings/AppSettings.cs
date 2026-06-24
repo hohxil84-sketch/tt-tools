@@ -20,7 +20,7 @@ public class AppSettings : INotifyPropertyChanged
     private static readonly Lazy<AppSettings> _instance = new(() => new AppSettings());
     public static AppSettings Instance => _instance.Value;
 
-    private string _serverUrl = "http://localhost:8000";
+    private string _serverUrl = "http://192.168.2.101:8000";
     private string _theme = "Light";
     private string _language = "zh-CN";
     private string? _pythonPath;
@@ -166,7 +166,7 @@ public class AppSettings : INotifyPropertyChanged
     /// </summary>
     public void Reset()
     {
-        _serverUrl = "http://localhost:8000";
+        _serverUrl = "http://192.168.2.101:8000";
         _theme = "Light";
         _language = "zh-CN";
         _pythonPath = null;

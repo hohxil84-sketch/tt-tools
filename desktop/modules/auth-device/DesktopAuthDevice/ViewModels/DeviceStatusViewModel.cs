@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using TTShared.Auth;
 using TTShared.CloudApi;
+using TTShared.Settings;
 using TTShared.UI;
 
 namespace TTTools.AuthDevice.ViewModels;
@@ -123,7 +124,7 @@ public class DeviceStatusViewModel : BaseViewModel
     /// 默认构造函数（设计时使用）
     /// </summary>
     public DeviceStatusViewModel() : this(new AuthState(),
-        new CloudApiClient("http://localhost:8000", new AuthState()))
+        new CloudApiClient(AppSettings.Instance.ServerUrl, new AuthState()))
     {
     }
 

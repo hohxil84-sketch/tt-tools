@@ -122,7 +122,17 @@ public class LocalRuntimeClient : IDisposable
         string? responseJson;
         try
         {
-            responseJson = await _process.StandardOutput.ReadLineAsync(timeoutCts.Token);
+            // 跳过日志等非 JSON 行，直到找到以 { 开头的 JSON 响应
+            do
+            {
+                responseJson = await _process.StandardOutput.ReadLineAsync(timeoutCts.Token);
+            }
+            while (responseJson != null && !responseJson.TrimStart().StartsWith('{'));
+
+            if (responseJson != null && responseJson.TrimStart().StartsWith('{'))
+            {
+                // 跳过闭合大括号后的尾部内容（如共享库的 flush() 操作可能产生的空行）
+            }
         }
         catch (OperationCanceledException)
         {
