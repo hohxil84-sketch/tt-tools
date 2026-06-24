@@ -38,7 +38,9 @@
 
 ## 提交记录
 
-暂无。
+| 提交哈希 | 分支 | 说明 |
+|---|---|---|
+| a43a4e1 | feature/local-format-convert | feat(local-worker-format-convert): 完成格式转换、压缩、裁剪、旋转本地实现，102 项测试全部通过 |
 
 ## 下一步
 
