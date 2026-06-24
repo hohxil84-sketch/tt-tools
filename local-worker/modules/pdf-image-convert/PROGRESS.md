@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-`IN_PROGRESS`
+`COMPLETED`
 
 ## 分支
 
@@ -18,11 +18,8 @@
 - 已完成 60 项单元测试，全部通过。
 - 已创建虚拟环境 D:\localPath\venvs\local-worker-pdf-image-convert。
 - 已安装 PyMuPDF 1.27.2.3、Pillow 12.2.0、pytest 9.1.1。
-
-## 未完成
-
-- 尚未提交和推送。
-- 尚未更新全局依赖台账。
+- 已更新全局依赖台账和安装历史。
+- 已提交并推送 feature 分支。
 
 ## 测试记录
 
@@ -49,8 +46,10 @@
 
 ## 提交记录
 
-暂无。
+| 提交哈希 | 日期 | 说明 |
+|----------|------|------|
+| `11e1c30` | 2026-06-24 | feat(local-worker-pdf-image-convert): 完成 PDF/图片互转本地实现 |
 
 ## 下一步
 
-- 更新全局依赖台账并提交推送。
+等待用户指定下一模块或合并到 dev/full-product。
