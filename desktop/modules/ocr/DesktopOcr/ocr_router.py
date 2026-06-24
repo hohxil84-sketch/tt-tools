@@ -96,8 +96,13 @@ def handle_recognize(data: Dict[str, Any], request_id: Optional[str]) -> None:
     use_dml = bool(data.get("use_dml", False))
 
     try:
+        # 用 Python open 读取文件字节，避免 OpenCV cv2.imread 不支持中文路径
+        with open(file_path, "rb") as f:
+            img_bytes = f.read()
+
         engine = OCREngine(text_score=text_score, use_dml=use_dml)
-        result = engine.recognize(file_path)
+        # 传 bytes + 文件名（仅用于日志），引擎内部会用 cv2.imdecode 解码
+        result = engine.recognize(img_bytes, image_name=Path(file_path).name)
         engine.close()
 
         # 转为字典并修复 total_text：用换行符拼接，保留原始排版
@@ -151,7 +156,10 @@ def handle_recognize_batch(data: Dict[str, Any], request_id: Optional[str]) -> N
                 continue
 
             try:
-                result = engine.recognize(fp)
+                # 用 Python open 读取文件字节，避免 OpenCV 不支持中文路径
+                with open(fp, "rb") as f:
+                    img_bytes = f.read()
+                result = engine.recognize(img_bytes, image_name=Path(fp).name)
                 result_dict = result.to_dict()
                 # 用换行符拼接，保留原始排版格式
                 if result.text_lines:

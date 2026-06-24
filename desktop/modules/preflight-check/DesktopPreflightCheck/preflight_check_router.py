@@ -33,6 +33,10 @@ _LOCAL_WORKER_MODULES = _LOCAL_WORKER_ROOT / "modules" / "preflight-check"
 if str(_LOCAL_WORKER_MODULES) not in sys.path:
     sys.path.insert(0, str(_LOCAL_WORKER_MODULES))
 
+# 强制 stdin/stdout 使用 UTF-8 编码，避免 Windows pipe 模式下中文乱码
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stdin.reconfigure(encoding="utf-8")
+
 from checker import PreflightChecker
 
 

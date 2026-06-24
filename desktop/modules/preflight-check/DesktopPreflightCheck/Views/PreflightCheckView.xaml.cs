@@ -27,6 +27,22 @@ public partial class PreflightCheckView : UserControl
 
         // 数据上下文变更时更新 ViewModel 引用
         DataContextChanged += OnDataContextChanged;
+
+        // 视图加载时自动初始化印前检查服务
+        Loaded += OnLoaded;
+    }
+
+    /// <summary>
+    /// 视图加载完成后自动启动印前检查引擎
+    /// </summary>
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+        if (_viewModel != null)
+        {
+            await System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeAsync(
+                async () => await _viewModel.InitializeAsync());
+        }
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)

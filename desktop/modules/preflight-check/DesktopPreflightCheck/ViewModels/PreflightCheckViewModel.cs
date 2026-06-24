@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Reflection;
 using System.Windows.Input;
 using Microsoft.Win32;
 using TTShared.UI;
@@ -17,7 +19,16 @@ namespace TTTools.PreflightCheck.ViewModels;
 /// </summary>
 public class PreflightCheckViewModel : BaseViewModel
 {
-    private readonly PreflightCheckService? _checkService;
+    /// <summary>印前检查引擎默认 Python 解释器路径</summary>
+    private static readonly string DefaultPythonPath =
+        @"D:\localPath\venvs\local-worker-preflight-check\Scripts\python.exe";
+
+    /// <summary>印前检查引擎默认 router 脚本路径（相对于本程序集目录）</summary>
+    private static string DefaultRouterPath =>
+        Path.Combine(
+            Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".",
+            "preflight_check_router.py");
+    private PreflightCheckService? _checkService;
     private readonly FileSystemService _fileSystem;
     private readonly JobManager? _jobManager;
     private readonly AppLogger? _logger;
@@ -192,9 +203,23 @@ public class PreflightCheckViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 默认构造函数（用于设计时）
+    /// 默认构造函数（用于设计时和 MainWindow 导航）
+    /// 自动检测 Python 路径和 router 脚本，创建印前检查服务。
     /// </summary>
-    public PreflightCheckViewModel() : this(null, new FileSystemService()) { }
+    public PreflightCheckViewModel() : this(null, new FileSystemService())
+    {
+        // 尝试自动创建印前检查服务（使用默认路径）
+        var routerPath = DefaultRouterPath;
+        if (File.Exists(DefaultPythonPath) && File.Exists(routerPath))
+        {
+            _checkService = new PreflightCheckService(DefaultPythonPath, routerPath);
+        }
+        else
+        {
+            // Python 或 router 脚本不存在时，服务不可用，界面会显示"印前检查引擎未连接"
+            StatusMessage = "印前检查引擎未安装或配置不完整，请检查 local-worker-preflight-check 环境";
+        }
+    }
 
     /// <summary>
     /// 初始化印前检查服务

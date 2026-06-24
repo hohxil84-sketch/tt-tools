@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 
 namespace TTTools.OCR.Models;
 
@@ -25,11 +26,17 @@ public class OcrTextLine
 
     /// <summary>低置信度（< 0.5）</summary>
     public bool IsLowConfidence => Score < 0.5;
+
+    /// <summary>左边界 x 坐标（四点中最小 x），用于计算文字缩进</summary>
+    public double LeftX => Box.Count > 0
+        ? Box.Select(p => p[0]).Min()
+        : 0.0;
 }
 
 /// <summary>
 /// OCR 展示行模型
 /// 用于右侧详情面板的格式化展示：正常行显示原文，低置信度行显示红色 "XX" 占位。
+/// LeftMargin 基于原图坐标计算，还原图片中文字的真实排版。
 /// </summary>
 public class OcrDisplayLine
 {
@@ -44,6 +51,12 @@ public class OcrDisplayLine
 
     /// <summary>置信度</summary>
     public double Score { get; set; }
+
+    /// <summary>左侧缩进距离（像素），基于原图坐标换算</summary>
+    public double LeftMargin { get; set; }
+
+    /// <summary>WPF Padding 用的 Thickness（仅左侧缩进）</summary>
+    public Thickness IndentThickness => new(LeftMargin, 0, 0, 0);
 }
 
 /// <summary>
@@ -106,15 +119,33 @@ public class OcrJobResult
 
     /// <summary>
     /// 格式化展示行列表：低置信度行替换为 "XX"，高/正常置信度行保留原文。
-    /// 用于右侧详情面板展示，保持图片中文字的原始排版结构。
+    /// 根据 OCR 坐标计算缩进距离，还原图片中文字的排版（左对齐/居中/缩进）。
     /// </summary>
-    public List<OcrDisplayLine> DisplayLines => TextLines.Select(tl => new OcrDisplayLine
+    public List<OcrDisplayLine> DisplayLines
     {
-        DisplayText = tl.IsLowConfidence ? "XX" : tl.Text,
-        IsLowConfidence = tl.IsLowConfidence,
-        OriginalText = tl.Text,
-        Score = tl.Score,
-    }).ToList();
+        get
+        {
+            // 以所有行中最靠左的 x 坐标为基准 0 点
+            var baseX = TextLines.Count > 0
+                ? TextLines.Min(tl => tl.LeftX) : 0.0;
+
+            // 按图片宽度比例将像素偏移换算为 UI 缩进
+            var scale = ImageWidth > 0 ? 400.0 / ImageWidth.Value : 1.0;
+
+            return TextLines.Select(tl =>
+            {
+                var offsetX = Math.Max(0, tl.LeftX - baseX);
+                return new OcrDisplayLine
+                {
+                    DisplayText = tl.IsLowConfidence ? "XX" : tl.Text,
+                    IsLowConfidence = tl.IsLowConfidence,
+                    OriginalText = tl.Text,
+                    Score = tl.Score,
+                    LeftMargin = Math.Round(offsetX * scale, 0),
+                };
+            }).ToList();
+        }
+    }
 
     /// <summary>耗时摘要（用于 UI 展示）</summary>
     public string ElapsedSummary =>

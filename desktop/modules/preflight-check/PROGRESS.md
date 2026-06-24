@@ -55,6 +55,8 @@
 ## Bug 记录
 
 - FromRouterResponse 测试中 PassCount 期望值错误（5→6）→ 已修复
+- 引擎未连接 + 选择文件后无法使用 → 根因：PreflightCheckView.xaml.cs 缺少 Loaded 事件处理器导致 InitializeAsync 从未被调用；PreflightCheckViewModel 默认构造函数未自动创建 PreflightCheckService。修复后编译 0 错误，21 项测试全通过。
+- 中文乱码 → 根因：preflight_check_router.py 缺少 sys.stdout/sys.stdin.reconfigure(encoding="utf-8")，Windows pipe 模式下 Python 使用 GBK/cp936 编码输出中文，.NET 以 UTF-8 读取导致乱码。参照 ocr_router.py 添加 reconfigure 修复。修复后桌面 21 + local-worker 29 项测试全通过。
 
 ## 提交记录
 
