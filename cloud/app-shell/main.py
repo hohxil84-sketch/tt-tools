@@ -110,6 +110,16 @@ def create_app() -> FastAPI:
     from router import router as admin_users_router  # noqa: E402
     app.include_router(admin_users_router, prefix="/api/v1")
 
+    # 注册 admin-billing 后台套餐、订单、额度管理模块路由
+    _admin_billing_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-billing")
+    if _admin_billing_dir not in sys.path:
+        sys.path.insert(0, _admin_billing_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_billing_router  # noqa: E402
+    app.include_router(admin_billing_router, prefix="/api/v1")
+
     return app
 
 

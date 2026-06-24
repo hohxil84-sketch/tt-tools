@@ -1,0 +1,1035 @@
+openapi: "3.1.0"
+
+info:
+  title: TT Tools Admin Billing
+  description: 后台套餐、订单、额度管理。
+  version: "0.1.0"
+
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+    description: 本地开发服务器
+
+# 全局安全方案引用 common.yaml 的 BearerAuth
+security:
+  - BearerAuth: []
+
+paths:
+  # ============================================================
+  # 套餐管理
+  # ============================================================
+
+  /admin/plans:
+    get:
+      tags: [Admin Billing]
+      summary: 查询套餐列表
+      description: |
+        返回所有套餐的列表，包括套餐编码、名称、月赠额度、功能开关和状态。
+        需要管理员权限。
+      operationId: listPlans
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 套餐列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlanListData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+    post:
+      tags: [Admin Billing]
+      summary: 创建新套餐
+      description: |
+        创建一个新的套餐配置，包括编码、名称、月赠额度和功能开关。
+        套餐编码必须唯一。需要管理员权限。
+      operationId: createPlan
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlanRequest"
+      responses:
+        "200":
+          description: 创建成功的套餐信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlanDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          description: 套餐编码已存在
+
+  /admin/plans/{plan_id}:
+    get:
+      tags: [Admin Billing]
+      summary: 查询套餐详情
+      description: |
+        根据套餐 ID 返回套餐的完整配置信息。需要管理员权限。
+      operationId: getPlanDetail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: plan_id
+          in: path
+          required: true
+          description: 套餐 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 套餐详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlanDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+    patch:
+      tags: [Admin Billing]
+      summary: 更新套餐配置
+      description: |
+        更新指定套餐的名称、月赠额度或功能开关配置。
+        套餐编码不可修改。需要管理员权限。
+      operationId: updatePlan
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: plan_id
+          in: path
+          required: true
+          description: 套餐 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlanRequest"
+      responses:
+        "200":
+          description: 更新后的套餐信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlanDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /admin/plans/{plan_id}/status:
+    patch:
+      tags: [Admin Billing]
+      summary: 启用/停用套餐
+      description: |
+        修改指定套餐的状态（active / disabled）。停用后新用户无法选择该套餐。
+        需要管理员权限。
+      operationId: updatePlanStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: plan_id
+          in: path
+          required: true
+          description: 套餐 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlanStatusRequest"
+      responses:
+        "200":
+          description: 更新后的套餐信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlanDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  # ============================================================
+  # 订单管理
+  # ============================================================
+
+  /admin/orders:
+    get:
+      tags: [Admin Billing]
+      summary: 查询全部订单列表
+      description: |
+        返回系统中所有用户的订单列表，支持分页和多种筛选条件。
+        与普通用户 /orders 接口的区别：管理员可查看所有用户订单，支持按 user_id 筛选。
+        需要管理员权限。
+      operationId: listAllOrders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: 每页条数（默认 20，最大 100）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 偏移量（默认 0）
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: user_id
+          in: query
+          description: 按用户 ID 筛选
+          schema:
+            type: string
+            format: uuid
+        - name: order_type
+          in: query
+          description: 按订单类型筛选
+          schema:
+            type: string
+            enum: [plan, credits]
+        - name: status
+          in: query
+          description: 按订单状态筛选
+          schema:
+            type: string
+            enum: [pending, paid, closed, refunded]
+      responses:
+        "200":
+          description: 订单列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminOrderListData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /admin/orders/{order_id}:
+    get:
+      tags: [Admin Billing]
+      summary: 查询订单详情
+      description: |
+        根据订单 ID 返回订单的详细信息（管理员可查看任意用户订单）。
+        需要管理员权限。
+      operationId: getAdminOrderDetail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          description: 订单 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 订单详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminOrderDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  # ============================================================
+  # 额度管理
+  # ============================================================
+
+  /admin/credits/accounts:
+    get:
+      tags: [Admin Billing]
+      summary: 查询额度账户列表
+      description: |
+        返回系统中所有用户的额度账户列表，支持分页和状态筛选。
+        需要管理员权限。
+      operationId: listCreditAccounts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: 每页条数（默认 20，最大 100）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 偏移量（默认 0）
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: status
+          in: query
+          description: 按账户状态筛选
+          schema:
+            type: string
+            enum: [active, frozen]
+        - name: plan_code
+          in: query
+          description: 按套餐编码筛选
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 额度账户列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminCreditAccountListData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /admin/credits/accounts/{account_id}:
+    get:
+      tags: [Admin Billing]
+      summary: 查询额度账户详情
+      description: |
+        根据账户 ID 返回额度账户的详细信息，包含关联的用户信息。
+        需要管理员权限。
+      operationId: getCreditAccountDetail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: account_id
+          in: path
+          required: true
+          description: 额度账户 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 额度账户详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminCreditAccountDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /admin/credits/ledger:
+    get:
+      tags: [Admin Billing]
+      summary: 查询全部额度流水
+      description: |
+        返回系统中所有用户的额度流水记录，支持分页和多条件筛选。
+        与普通用户 /credits/ledger 接口的区别：管理员可查看所有用户流水，支持按 user_id 筛选。
+        需要管理员权限。
+      operationId: listAllCreditLedger
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: 每页条数（默认 20，最大 100）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: 偏移量（默认 0）
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: user_id
+          in: query
+          description: 按用户 ID 筛选
+          schema:
+            type: string
+            format: uuid
+        - name: change_type
+          in: query
+          description: 按变化类型筛选
+          schema:
+            type: string
+            enum: [grant, consume, recharge, refund, adjust]
+        - name: source_type
+          in: query
+          description: 按来源类型筛选
+          schema:
+            type: string
+            enum: [provider_call, order, system, admin]
+      responses:
+        "200":
+          description: 额度流水列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminCreditLedgerListData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /admin/credits/adjust:
+    post:
+      tags: [Admin Billing]
+      summary: 手动调整额度
+      description: |
+        管理员手动为用户赠送或扣除 AI 额度。
+        赠送时 amount 为正数，扣除时 amount 为负数（内部自动处理）。
+        操作写入 credit_ledger，source_type 为 admin。
+        需要管理员权限。
+      operationId: adjustCredits
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustCreditsRequest"
+      responses:
+        "200":
+          description: 调整后的额度账户信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AdminCreditAccountDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          description: 用户不存在
+        "422":
+          description: 参数校验失败
+
+components:
+  schemas:
+    # ============================================================
+    # 套餐相关 DTO
+    # ============================================================
+
+    PlanItem:
+      type: object
+      description: 套餐列表项（摘要信息）
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 套餐 ID
+        code:
+          type: string
+          description: 套餐编码（free / standard / pro）
+        name:
+          type: string
+          description: 套餐名称（中文）
+        monthly_grant:
+          type: integer
+          description: 每周期赠送 AI 额度
+        status:
+          type: string
+          description: 套餐状态（active / disabled）
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+      required:
+        - id
+        - code
+        - name
+        - monthly_grant
+        - status
+        - created_at
+
+    PlanDetail:
+      type: object
+      description: 套餐详细信息
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 套餐 ID
+        code:
+          type: string
+          description: 套餐编码
+        name:
+          type: string
+          description: 套餐名称
+        monthly_grant:
+          type: integer
+          description: 每周期赠送 AI 额度
+        enabled_features_json:
+          type: object
+          description: 功能开关配置（JSON 对象，key 为功能码，value 为 bool 或配置对象）
+        status:
+          type: string
+          description: 套餐状态（active / disabled）
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 最近更新时间
+      required:
+        - id
+        - code
+        - name
+        - monthly_grant
+        - enabled_features_json
+        - status
+        - created_at
+        - updated_at
+
+    PlanListData:
+      type: object
+      description: 套餐列表响应数据
+      properties:
+        items:
+          type: array
+          description: 套餐列表
+          items:
+            $ref: "#/components/schemas/PlanItem"
+      required:
+        - items
+
+    CreatePlanRequest:
+      type: object
+      description: 创建套餐请求
+      properties:
+        code:
+          type: string
+          description: 套餐编码（唯一，如 basic / enterprise）
+        name:
+          type: string
+          description: 套餐名称（中文）
+        monthly_grant:
+          type: integer
+          description: 每周期赠送 AI 额度
+          default: 0
+          minimum: 0
+        enabled_features_json:
+          type: object
+          description: 功能开关配置
+          default: {}
+      required:
+        - code
+        - name
+
+    UpdatePlanRequest:
+      type: object
+      description: 更新套餐配置请求
+      properties:
+        name:
+          type: string
+          description: 套餐名称
+        monthly_grant:
+          type: integer
+          description: 每周期赠送 AI 额度
+          minimum: 0
+        enabled_features_json:
+          type: object
+          description: 功能开关配置
+
+    UpdatePlanStatusRequest:
+      type: object
+      description: 修改套餐状态请求
+      properties:
+        status:
+          type: string
+          description: 目标状态
+          enum: [active, disabled]
+      required:
+        - status
+
+    # ============================================================
+    # 订单相关 DTO（管理员视图）
+    # ============================================================
+
+    AdminOrderItem:
+      type: object
+      description: 管理员订单列表项（含用户信息）
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 订单 ID
+        order_no:
+          type: string
+          description: 订单号
+        order_type:
+          type: string
+          description: 订单类型（plan / credits）
+        product_code:
+          type: string
+          description: 产品编码
+        amount_cents:
+          type: integer
+          description: 订单金额（单位：分）
+        credit_amount:
+          type: integer
+          nullable: true
+          description: 充值额度数量（仅 credits 类型）
+        currency:
+          type: string
+          description: 币种
+        status:
+          type: string
+          description: 订单状态
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付时间
+        user_id:
+          type: string
+          format: uuid
+          description: 下单用户 ID
+        user_account:
+          type: string
+          nullable: true
+          description: 下单用户账号
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+      required:
+        - id
+        - order_no
+        - order_type
+        - product_code
+        - amount_cents
+        - currency
+        - status
+        - user_id
+        - created_at
+        - updated_at
+
+    AdminOrderDetail:
+      type: object
+      description: 管理员订单详情（含用户信息）
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 订单 ID
+        order_no:
+          type: string
+          description: 订单号
+        order_type:
+          type: string
+          description: 订单类型
+        product_code:
+          type: string
+          description: 产品编码
+        amount_cents:
+          type: integer
+          description: 订单金额（单位：分）
+        credit_amount:
+          type: integer
+          nullable: true
+          description: 充值额度数量
+        currency:
+          type: string
+          description: 币种
+        status:
+          type: string
+          description: 订单状态
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付时间
+        user_id:
+          type: string
+          format: uuid
+          description: 下单用户 ID
+        user_account:
+          type: string
+          nullable: true
+          description: 下单用户账号
+        user_display_name:
+          type: string
+          nullable: true
+          description: 下单用户展示名称
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+      required:
+        - id
+        - order_no
+        - order_type
+        - product_code
+        - amount_cents
+        - currency
+        - status
+        - user_id
+        - created_at
+        - updated_at
+
+    AdminOrderListData:
+      type: object
+      description: 管理员订单列表分页响应数据
+      properties:
+        items:
+          type: array
+          description: 订单列表
+          items:
+            $ref: "#/components/schemas/AdminOrderItem"
+        total:
+          type: integer
+          description: 总记录数
+        limit:
+          type: integer
+          description: 每页条数
+        offset:
+          type: integer
+          description: 当前偏移量
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    # ============================================================
+    # 额度管理 DTO（管理员视图）
+    # ============================================================
+
+    AdminCreditAccountItem:
+      type: object
+      description: 管理员额度账户列表项
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 额度账户 ID
+        user_id:
+          type: string
+          format: uuid
+          description: 用户 ID
+        user_account:
+          type: string
+          nullable: true
+          description: 用户账号
+        plan_code:
+          type: string
+          description: 当前套餐编码
+        balance:
+          type: integer
+          description: 当前 AI 额度余额
+        monthly_grant:
+          type: integer
+          description: 每周期赠送额度
+        status:
+          type: string
+          description: 账户状态（active / frozen）
+        period_start:
+          type: string
+          format: date-time
+          nullable: true
+          description: 计费周期开始
+        period_end:
+          type: string
+          format: date-time
+          nullable: true
+          description: 计费周期结束
+        updated_at:
+          type: string
+          format: date-time
+          description: 最后更新时间
+      required:
+        - id
+        - user_id
+        - plan_code
+        - balance
+        - monthly_grant
+        - status
+        - updated_at
+
+    AdminCreditAccountDetail:
+      type: object
+      description: 管理员额度账户详情（含用户信息）
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 额度账户 ID
+        user_id:
+          type: string
+          format: uuid
+          description: 用户 ID
+        user_account:
+          type: string
+          nullable: true
+          description: 用户账号
+        user_display_name:
+          type: string
+          nullable: true
+          description: 用户展示名称
+        plan_code:
+          type: string
+          description: 当前套餐编码
+        balance:
+          type: integer
+          description: 当前 AI 额度余额
+        monthly_grant:
+          type: integer
+          description: 每周期赠送额度
+        status:
+          type: string
+          description: 账户状态
+        period_start:
+          type: string
+          format: date-time
+          nullable: true
+          description: 计费周期开始
+        period_end:
+          type: string
+          format: date-time
+          nullable: true
+          description: 计费周期结束
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 最后更新时间
+      required:
+        - id
+        - user_id
+        - plan_code
+        - balance
+        - monthly_grant
+        - status
+        - created_at
+        - updated_at
+
+    AdminCreditAccountListData:
+      type: object
+      description: 管理员额度账户列表分页响应数据
+      properties:
+        items:
+          type: array
+          description: 额度账户列表
+          items:
+            $ref: "#/components/schemas/AdminCreditAccountItem"
+        total:
+          type: integer
+          description: 总记录数
+        limit:
+          type: integer
+          description: 每页条数
+        offset:
+          type: integer
+          description: 当前偏移量
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    AdminCreditLedgerItem:
+      type: object
+      description: 管理员额度流水明细
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 流水 ID
+        user_id:
+          type: string
+          format: uuid
+          description: 用户 ID
+        user_account:
+          type: string
+          nullable: true
+          description: 用户账号
+        account_id:
+          type: string
+          format: uuid
+          description: 额度账户 ID
+        change_type:
+          type: string
+          description: 变化类型（grant / consume / recharge / refund / adjust）
+        amount:
+          type: integer
+          description: 变化值（扣费为负数）
+        balance_after:
+          type: integer
+          description: 变化后余额
+        source_type:
+          type: string
+          description: 来源类型
+        source_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 来源 ID
+        description:
+          type: string
+          nullable: true
+          description: 中文说明
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+      required:
+        - id
+        - user_id
+        - account_id
+        - change_type
+        - amount
+        - balance_after
+        - source_type
+        - created_at
+
+    AdminCreditLedgerListData:
+      type: object
+      description: 管理员额度流水列表分页响应数据
+      properties:
+        items:
+          type: array
+          description: 流水列表
+          items:
+            $ref: "#/components/schemas/AdminCreditLedgerItem"
+        total:
+          type: integer
+          description: 总记录数
+        limit:
+          type: integer
+          description: 每页条数
+        offset:
+          type: integer
+          description: 当前偏移量
+      required:
+        - items
+        - total
+        - limit
+        - offset
+
+    AdjustCreditsRequest:
+      type: object
+      description: 手动调整额度请求
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: 目标用户 ID
+        amount:
+          type: integer
+          description: 调整额度（正数为赠送，负数为扣除，不允许为 0）
+        description:
+          type: string
+          description: 调整原因说明（中文）
+      required:
+        - user_id
+        - amount
+      default: {}
