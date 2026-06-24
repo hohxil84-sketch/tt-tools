@@ -33,7 +33,19 @@
 
 ## Bug 记录
 
-暂无。
+### 2026-06-25: credits-billing 路由未注册导致 entitlements/check 返回 404
+
+- **现象**：桌面端调用 `POST /api/v1/entitlements/check` 返回 404，`GET /credits/balance` 和 `GET /credits/ledger` 同样 404。
+- **根因**：`cloud-credits-billing` 模块已实现并合并到 dev/full-product，但 `main.py` 的 `create_app()` 中从未调用 `app.include_router()` 注册其路由。
+- **修复点**：
+  1. 新增 `_preload_credits_billing_models()` 函数，预加载 Plan/CreditAccount/CreditLedger/UsageEvent 等 ORM 模型
+  2. `create_app()` 开头调用 `_preload_auth_device_models()` 和 `_preload_credits_billing_models()`
+  3. 注册 credits-billing router，清理 sys.modules 缓存避免交叉污染
+- **测试命令**：`pytest cloud/modules/credits-billing/tests/ -v`
+- **测试结果**：30 passed, 0 failed
+- **分支**：`fix/cloud-app-shell-credits-billing-router-not-registered`
+- **提交**：`549715a`
+- **中文备注**：修复后需在 192.168.2.101:8000 上重新部署验证。
 
 ## 提交记录
 
