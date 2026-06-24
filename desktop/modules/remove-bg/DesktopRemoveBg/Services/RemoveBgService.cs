@@ -3,6 +3,7 @@ using TTShared.LocalRuntime;
 using TTShared.Logging;
 using TTShared.FileSystem;
 using TTShared.JobSystem;
+using TTShared.Settings;
 using TTTools.RemoveBg.Models;
 
 namespace TTTools.RemoveBg.Services;
@@ -64,9 +65,16 @@ public class RemoveBgService : IDisposable
     }
 
     /// <summary>
-    /// 默认构造函数（不使用 LocalRuntimeClient，仅用于测试或设计时）
+    /// 默认构造函数（自动检测 Python 路径和路由脚本）
     /// </summary>
-    public RemoveBgService() { }
+    public RemoveBgService()
+    {
+        _pythonPath = AppSettings.Instance.PythonPath
+            ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";
+        _routerScriptPath = Path.Combine(
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
+            "remove_bg_router.py");
+    }
 
     /// <summary>
     /// 启动抠图 worker 进程并检查可用性，同时预加载模型列表

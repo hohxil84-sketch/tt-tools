@@ -219,19 +219,19 @@
                                 Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}">
                             <WrapPanel>
                                 <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,12,0">
-                                    <Run Text="Provider: " /><Run Text="{Binding Provider}" FontWeight="SemiBold" />
+                                    <Run Text="Provider: " /><Run Text="{Binding Provider, Mode=OneWay}" FontWeight="SemiBold" />
                                 </TextBlock>
                                 <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,12,0">
-                                    <Run Text="模型: " /><Run Text="{Binding Model}" FontWeight="SemiBold" />
+                                    <Run Text="模型: " /><Run Text="{Binding Model, Mode=OneWay}" FontWeight="SemiBold" />
                                 </TextBlock>
                                 <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,12,0">
                                     <Run Text="扣费: " />
-                                    <Run Text="{Binding CreditsCharged}" FontWeight="SemiBold" Foreground="#E53E3E" />
+                                    <Run Text="{Binding CreditsCharged, Mode=OneWay}" FontWeight="SemiBold" Foreground="#E53E3E" />
                                     <Run Text=" 额度" />
                                 </TextBlock>
                                 <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}">
                                     <Run Text="估算成本: $" />
-                                    <Run Text="{Binding EstimatedCost, StringFormat=F4}" />
+                                    <Run Text="{Binding EstimatedCost, StringFormat=F4, Mode=OneWay}" />
                                 </TextBlock>
                             </WrapPanel>
                         </Border>
@@ -301,7 +301,7 @@
 
                         <TextBlock Grid.Row="0" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6"
                                    Foreground="{DynamicResource TextPrimaryBrush}">
-                            <Run Text="历史记录 (" /><Run Text="{Binding HistoryCount}" /><Run Text=")" />
+                            <Run Text="历史记录 (" /><Run Text="{Binding HistoryCount, Mode=OneWay}" /><Run Text=")" />
                         </TextBlock>
 
                         <ListBox Grid.Row="1" ItemsSource="{Binding HistoryItems}"
@@ -367,7 +367,7 @@
                            Foreground="{DynamicResource TextTertiaryBrush}"
                            Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}">
                     <Run Text="Provider Call ID: " />
-                    <Run Text="{Binding ProviderCallId}" />
+                    <Run Text="{Binding ProviderCallId, Mode=OneWay}" />
                 </TextBlock>
             </Grid>
         </Border>

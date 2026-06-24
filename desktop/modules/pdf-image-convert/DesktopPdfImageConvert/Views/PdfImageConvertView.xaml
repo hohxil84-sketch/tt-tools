@@ -4,11 +4,19 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:TTTools.PdfImageConvert.ViewModels"
+             xmlns:local="clr-namespace:TTTools.PdfImageConvert.Views"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:PdfImageConvertViewModel}"
              AllowDrop="True"
              Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
              MinWidth="500" MinHeight="400">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <local:BoolToColorConverter x:Key="BoolToColorConverter" />
+        <local:BoolToSuccessTextConverter x:Key="BoolToSuccessTextConverter" />
+        <local:BoolToSuccessColorConverter x:Key="BoolToSuccessColorConverter" />
+    </UserControl.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>

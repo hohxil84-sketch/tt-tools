@@ -175,11 +175,11 @@
                                 <!-- 任务 ID 和状态 -->
                                 <WrapPanel Margin="0,0,0,4">
                                     <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,12,0">
-                                        <Run Text="任务 ID: " /><Run Text="{Binding CurrentTaskId}" FontWeight="SemiBold" />
+                                        <Run Text="任务 ID: " /><Run Text="{Binding CurrentTaskId, Mode=OneWay}" FontWeight="SemiBold" />
                                     </TextBlock>
                                     <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}">
                                         <Run Text="状态: " />
-                                        <Run Text="{Binding TaskStatusDisplay}" FontWeight="SemiBold" />
+                                        <Run Text="{Binding TaskStatusDisplay, Mode=OneWay}" FontWeight="SemiBold" />
                                     </TextBlock>
                                 </WrapPanel>
 
@@ -197,19 +197,19 @@
                                 <WrapPanel Margin="0,4,0,0"
                                            Visibility="{Binding IsTaskCompleted, Converter={StaticResource BoolToVisibility}}">
                                     <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,12,0">
-                                        <Run Text="Provider: " /><Run Text="{Binding Provider}" FontWeight="SemiBold" />
+                                        <Run Text="Provider: " /><Run Text="{Binding Provider, Mode=OneWay}" FontWeight="SemiBold" />
                                     </TextBlock>
                                     <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,12,0">
-                                        <Run Text="模型: " /><Run Text="{Binding Model}" FontWeight="SemiBold" />
+                                        <Run Text="模型: " /><Run Text="{Binding Model, Mode=OneWay}" FontWeight="SemiBold" />
                                     </TextBlock>
                                     <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,12,0">
                                         <Run Text="扣费: " />
-                                        <Run Text="{Binding CreditsCharged}" FontWeight="SemiBold" Foreground="#E53E3E" />
+                                        <Run Text="{Binding CreditsCharged, Mode=OneWay}" FontWeight="SemiBold" Foreground="#E53E3E" />
                                         <Run Text=" 额度" />
                                     </TextBlock>
                                     <TextBlock FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}">
                                         <Run Text="估算成本: $" />
-                                        <Run Text="{Binding EstimatedCost, StringFormat=F4}" />
+                                        <Run Text="{Binding EstimatedCost, StringFormat=F4, Mode=OneWay}" />
                                     </TextBlock>
                                 </WrapPanel>
                             </StackPanel>
@@ -246,8 +246,8 @@
                                                                    Text="{Binding FileId, StringFormat='文件: {0}'}"
                                                                    TextTrimming="CharacterEllipsis" />
                                                         <TextBlock FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}">
-                                                            <Run Text="{Binding Width, StringFormat='{}{0}×'}" />
-                                                            <Run Text="{Binding Height}" />
+                                                            <Run Text="{Binding Width, Mode=OneWay, StringFormat='{}{0}×'}" />
+                                                            <Run Text="{Binding Height, Mode=OneWay}" />
                                                         </TextBlock>
                                                     </StackPanel>
 
@@ -291,7 +291,7 @@
 
                         <TextBlock Grid.Row="0" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,6"
                                    Foreground="{DynamicResource TextPrimaryBrush}">
-                            <Run Text="任务历史 (" /><Run Text="{Binding HistoryCount}" /><Run Text=")" />
+                            <Run Text="任务历史 (" /><Run Text="{Binding HistoryCount, Mode=OneWay}" /><Run Text=")" />
                         </TextBlock>
 
                         <ListBox Grid.Row="1" ItemsSource="{Binding HistoryItems}"
@@ -362,7 +362,7 @@
                            Foreground="{DynamicResource TextTertiaryBrush}"
                            Visibility="{Binding HasTaskResult, Converter={StaticResource BoolToVisibility}}">
                     <Run Text="Provider Call ID: " />
-                    <Run Text="{Binding ProviderCallId}" />
+                    <Run Text="{Binding ProviderCallId, Mode=OneWay}" />
                 </TextBlock>
             </Grid>
         </Border>

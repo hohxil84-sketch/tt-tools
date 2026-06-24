@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using TTShared.Auth;
 using TTShared.CloudApi;
+using TTShared.Settings;
 using TTShared.UI;
 
 namespace TTTools.AuthDevice.ViewModels;
@@ -75,7 +76,7 @@ public class LoginViewModel : BaseViewModel
     /// 默认构造函数（用于设计时，生产环境应使用带参构造函数注入依赖）
     /// </summary>
     public LoginViewModel() : this(new AuthState(),
-        new CloudApiClient("http://localhost:8000", new AuthState()))
+        new CloudApiClient(AppSettings.Instance.ServerUrl, new AuthState()))
     {
     }
 

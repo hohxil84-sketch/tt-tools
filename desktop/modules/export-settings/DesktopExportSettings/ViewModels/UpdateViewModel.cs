@@ -68,6 +68,11 @@ public class UpdateViewModel : BaseViewModel
     }
 
     /// <summary>
+    /// 默认构造函数（用于设计时和 XAML 实例化）
+    /// </summary>
+    public UpdateViewModel() : this(null, null) { }
+
+    /// <summary>
     /// 异步检查更新
     /// </summary>
     public async Task CheckUpdateAsync()

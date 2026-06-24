@@ -4,6 +4,7 @@ using TTShared.LocalRuntime;
 using TTShared.Logging;
 using TTShared.FileSystem;
 using TTShared.JobSystem;
+using TTShared.Settings;
 using TTTools.PreflightCheck.Models;
 
 namespace TTTools.PreflightCheck.Services;
@@ -60,9 +61,16 @@ public class PreflightCheckService : IDisposable
     }
 
     /// <summary>
-    /// 默认构造函数（不使用 LocalRuntimeClient，仅用于测试或设计时）
+    /// 默认构造函数（自动检测 Python 路径和路由脚本）
     /// </summary>
-    public PreflightCheckService() { }
+    public PreflightCheckService()
+    {
+        _pythonPath = AppSettings.Instance.PythonPath
+            ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";
+        _routerScriptPath = Path.Combine(
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
+            "preflight_check_router.py");
+    }
 
     /// <summary>
     /// 启动印前检查 worker 进程并检查可用性

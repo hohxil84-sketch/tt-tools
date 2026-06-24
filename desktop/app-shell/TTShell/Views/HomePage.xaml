@@ -1,7 +1,6 @@
-<Page x:Class="TTShell.Views.HomePage"
+<UserControl x:Class="TTShell.Views.HomePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Title="首页"
       Background="{DynamicResource BackgroundBrush}">
     <Grid>
         <Grid.RowDefinitions>
@@ -68,4 +67,4 @@
             </Border>
         </StackPanel>
     </Grid>
-</Page>
+</UserControl>

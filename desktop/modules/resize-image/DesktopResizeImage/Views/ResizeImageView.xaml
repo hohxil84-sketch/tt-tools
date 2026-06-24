@@ -400,8 +400,8 @@
                            Foreground="{DynamicResource TextSecondaryBrush}" />
                 <TextBlock Text=" | " Foreground="{DynamicResource TextTertiaryBrush}" FontSize="12" />
                 <TextBlock FontSize="12" Foreground="{DynamicResource TextTertiaryBrush}">
-                    <Run Text="共 " /><Run Text="{Binding ResultCount}" /><Run Text=" 条 (成功 " />
-                    <Run Text="{Binding SuccessCount}" /><Run Text=", 失败 " /><Run Text="{Binding FailedCount}" /><Run Text=")" />
+                    <Run Text="共 " /><Run Text="{Binding ResultCount, Mode=OneWay}" /><Run Text=" 条 (成功 " />
+                    <Run Text="{Binding SuccessCount, Mode=OneWay}" /><Run Text=", 失败 " /><Run Text="{Binding FailedCount, Mode=OneWay}" /><Run Text=")" />
                 </TextBlock>
             </StackPanel>
         </Border>

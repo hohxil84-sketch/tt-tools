@@ -24,14 +24,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # 将 local-worker 根目录添加到 Python 路径，确保可以导入核心模块
-_LOCAL_WORKER_ROOT = Path(__file__).resolve().parents[3] / "local-worker"
+_LOCAL_WORKER_ROOT = Path(r"D:\TT Tools\local-worker")
 if str(_LOCAL_WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(_LOCAL_WORKER_ROOT))
-
-# 将 local-worker 共享层也加入路径
-_LOCAL_WORKER_SHARED = _LOCAL_WORKER_ROOT / "shared"
-if str(_LOCAL_WORKER_SHARED) not in sys.path:
-    sys.path.insert(0, str(_LOCAL_WORKER_SHARED))
 
 # 将 local-worker 模块目录加入路径（用于直接导入 preflight-check 模块）
 _LOCAL_WORKER_MODULES = _LOCAL_WORKER_ROOT / "modules" / "preflight-check"

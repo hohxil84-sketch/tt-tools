@@ -3,6 +3,7 @@ using TTShared.LocalRuntime;
 using TTShared.Logging;
 using TTShared.FileSystem;
 using TTShared.JobSystem;
+using TTShared.Settings;
 using TTTools.IdPhoto.Models;
 
 namespace TTTools.IdPhoto.Services;
@@ -64,9 +65,16 @@ public class IdPhotoService : IDisposable
     }
 
     /// <summary>
-    /// 默认构造函数（不使用 LocalRuntimeClient，仅用于测试或设计时）
+    /// 默认构造函数（自动检测 Python 路径和路由脚本）
     /// </summary>
-    public IdPhotoService() { }
+    public IdPhotoService()
+    {
+        _pythonPath = AppSettings.Instance.PythonPath
+            ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";
+        _routerScriptPath = Path.Combine(
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
+            "id_photo_router.py");
+    }
 
     /// <summary>
     /// 启动证件照 worker 进程并检查可用性，同时预加载规格和底色列表

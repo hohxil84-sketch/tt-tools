@@ -81,7 +81,7 @@
                 <Grid>
                     <!-- 有文件时显示列表 -->
                     <ListBox ItemsSource="{Binding Files}"
-                             Style="{StaticResource FileItemStyle}"
+                             ItemContainerStyle="{StaticResource FileItemStyle}"
                              SelectedItem="{Binding PreviewFilePath, Mode=OneWay}"
                              BorderThickness="0"
                              Background="Transparent"
@@ -133,8 +133,8 @@
 
             <!-- 文件统计 -->
             <TextBlock Grid.Row="3" Margin="0,4,0,4" FontSize="12" Foreground="#666666">
-                <Run Text="共 " /><Run Text="{Binding FileCount}" FontWeight="Bold" />
-                <Run Text=" 个文件，已选 " /><Run Text="{Binding SelectedCount}" FontWeight="Bold" /><Run Text=" 个" />
+                <Run Text="共 " /><Run Text="{Binding FileCount, Mode=OneWay}" FontWeight="Bold" />
+                <Run Text=" 个文件，已选 " /><Run Text="{Binding SelectedCount, Mode=OneWay}" FontWeight="Bold" /><Run Text=" 个" />
             </TextBlock>
 
             <!-- 最近文件区域标题 -->
@@ -147,7 +147,7 @@
 
             <!-- 最近文件列表 -->
             <ListBox Grid.Row="5" ItemsSource="{Binding RecentFiles}"
-                     Style="{StaticResource RecentFileItemStyle}"
+                     ItemContainerStyle="{StaticResource RecentFileItemStyle}"
                      BorderThickness="1" BorderBrush="#DDDDDD"
                      Background="White"
                      MinHeight="80" MaxHeight="200"

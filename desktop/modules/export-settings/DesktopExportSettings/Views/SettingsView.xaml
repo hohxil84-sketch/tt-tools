@@ -221,7 +221,7 @@
                         Height="36"
                         MinWidth="120"
                         FontSize="14"
-                        Style="{StaticResource PrimaryButtonStyle}" />
+                        Style="{DynamicResource PrimaryButtonStyle}" />
             </Grid>
         </Border>
     </Grid>

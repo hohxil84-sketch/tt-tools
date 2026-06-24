@@ -468,7 +468,7 @@
                 <Border Grid.Row="1" Padding="8,6,8,4" Margin="0,8,0,0">
                     <TextBlock FontSize="14" FontWeight="SemiBold">
                         <Run Text="处理历史 "/>
-                        <Run Text="{Binding ResultCount, StringFormat=({0})}" FontSize="12" Foreground="Gray"/>
+                        <Run Text="{Binding ResultCount, Mode=OneWay, StringFormat=({0})}" FontSize="12" Foreground="Gray"/>
                     </TextBlock>
                 </Border>
 

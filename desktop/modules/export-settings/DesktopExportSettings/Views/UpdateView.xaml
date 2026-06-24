@@ -84,7 +84,7 @@
                             Height="40"
                             Width="200"
                             FontSize="14"
-                            Style="{StaticResource PrimaryButtonStyle}"
+                            Style="{DynamicResource PrimaryButtonStyle}"
                             IsEnabled="{Binding IsNotChecking}" />
 
                     <!-- 检查中提示 -->
@@ -105,7 +105,7 @@
                         Height="40"
                         Width="200"
                         FontSize="14"
-                        Style="{StaticResource PrimaryButtonStyle}"
+                        Style="{DynamicResource PrimaryButtonStyle}"
                         Margin="0,0,0,8" />
 
                 <Button Content="📋  查看发布说明"
