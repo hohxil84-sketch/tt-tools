@@ -46,7 +46,8 @@
 
 ## 提交记录
 
-待提交。
+- 2026-06-24：`1b1cc71` feat(admin-users): complete admin users and devices management module（13 files changed, 2557 insertions）
+- 推送状态：待网络恢复后推送（GitHub connection timeout）
 
 ## 下一步
 
