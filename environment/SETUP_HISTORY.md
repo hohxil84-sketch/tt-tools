@@ -87,3 +87,11 @@
 - 技术选型：Pillow（HPND 许可证），纯本地图像处理，不依赖 GPU/ML 模型。
 - 图片改尺寸模块 3 个源文件创建完毕（__init__.py、specifications.py、processor.py）、测试文件（__init__.py、test_resize_image.py）。
 - 110 项单元测试全部通过，0 失败 0 警告（含模块导入/常量校验/参数校验/7种缩放模式/6种重采样滤镜/格式转换/预设尺寸/输入方式/文件输出/DPI处理/边缘情况/性能/便捷方法）。
+
+2026-06-24（local-worker-pdf-image-convert）：
+- 使用系统 Python 3.12.10 创建虚拟环境 D:\localPath\venvs\local-worker-pdf-image-convert。
+- 安装 pip 依赖：PyMuPDF 1.27.2.3、Pillow 12.2.0、pytest 9.1.1。
+- 首次引入模块：local-worker/modules/pdf-image-convert。
+- 技术选型：PyMuPDF (fitz)（AGPL 3.0 许可证），纯 Python，无需外部系统依赖，支持 PDF↔图片双向转换；Pillow（HPND 许可证）作为辅助，用于图像编码和色彩空间处理。
+- PDF/图片互转模块 3 个源文件创建完毕（__init__.py、specifications.py、processor.py）、测试文件（__init__.py、test_pdf_image_convert.py）。
+- 60 项单元测试全部通过，0 失败 0 警告（含模块导入/常量校验/参数校验/PDF转图片/图片转PDF/主入口路由/查询方法/边界情况/结果结构/初始化）。
