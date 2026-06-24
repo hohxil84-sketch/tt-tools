@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>TTTools.PdfImageConvert</RootNamespace>
+    <AssemblyName>TTTools.PdfImageConvert</AssemblyName>
+    <Version>0.1.0</Version>
+    <Authors>TT Tools Team</Authors>
+    <Description>TT Tools - 桌面端 PDF/图片互转入口，包含参数配置、套餐权限校验、调用 local-worker pdf-image-convert 引擎</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+    <Using Include="System.Net.Http.Json" />
+    <Using Include="System.Text" />
+    <Using Include="System.Text.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\shared\DesktopShared\DesktopShared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="pdf_image_convert_router.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
