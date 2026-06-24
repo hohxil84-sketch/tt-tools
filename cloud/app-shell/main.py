@@ -57,12 +57,34 @@ def _preload_auth_device_models():
             spec.loader.exec_module(mod)
 
 
+def _preload_credits_billing_models():
+    """预加载 credits-billing ORM 模型，确保 init_db() 能创建计划/额度/流水/使用事件表。
+
+    使用 importlib 直接加载，与 auth-device 模型加载方式一致。
+    """
+    import importlib.util
+    _cb_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "credits-billing")
+    if _cb_dir not in sys.path:
+        sys.path.insert(0, _cb_dir)
+    _models_path = os.path.join(_cb_dir, "models.py")
+    if os.path.exists(_models_path) and "credits_billing_models" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("credits_billing_models", _models_path)
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules["credits_billing_models"] = mod
+            spec.loader.exec_module(mod)
+
+
 def create_app() -> FastAPI:
     """创建并配置 FastAPI 应用实例。
 
     Returns:
         已装配中间件和路由的 FastAPI 实例。
     """
+    # 预加载 ORM 模型，确保 init_db() 能创建所有表
+    _preload_auth_device_models()
+    _preload_credits_billing_models()
+
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
@@ -148,6 +170,18 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as admin_ops_router  # noqa: E402
     app.include_router(admin_ops_router, prefix="/api/v1")
+
+    # 注册 credits-billing 额度计费和权限检查模块路由
+    # （提供 GET /credits/balance、GET /credits/ledger、POST /entitlements/check）
+    # 必须放在 lifespan 中 preload 模型之后注册
+    _credits_billing_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "credits-billing")
+    if _credits_billing_dir not in sys.path:
+        sys.path.insert(0, _credits_billing_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as credits_billing_router  # noqa: E402
+    app.include_router(credits_billing_router, prefix="/api/v1")
 
     return app
 
