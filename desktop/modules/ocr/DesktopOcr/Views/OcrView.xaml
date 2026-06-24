@@ -153,7 +153,7 @@
                             Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}">
                         <TextBlock FontSize="14" FontWeight="SemiBold">
                             <Run Text="识别结果 "/>
-                            <Run Text="{Binding ResultCount, StringFormat=({0})}" FontSize="12" Foreground="Gray"/>
+                            <Run Text="{Binding ResultCount, StringFormat=({0}), Mode=OneWay}" FontSize="12" Foreground="Gray"/>
                         </TextBlock>
                     </Border>
 

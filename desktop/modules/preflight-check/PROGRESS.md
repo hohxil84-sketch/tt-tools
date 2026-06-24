@@ -55,6 +55,7 @@
 ## Bug 记录
 
 - FromRouterResponse 测试中 PassCount 期望值错误（5→6）→ 已修复
+- 引擎未连接 + 选择文件后无法使用 → 根因：PreflightCheckView.xaml.cs 缺少 Loaded 事件处理器导致 InitializeAsync 从未被调用；PreflightCheckViewModel 默认构造函数未自动创建 PreflightCheckService。修复后编译 0 错误，21 项测试全通过。
 
 ## 提交记录
 
