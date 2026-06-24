@@ -10,7 +10,7 @@ namespace TTTools.OCR.Views;
 
 /// <summary>
 /// OCR 视图代码后置
-/// 处理拖拽事件，将文件拖入操作转发给 ViewModel。
+/// 处理拖拽事件、缩略图点击、服务自动初始化。
 /// </summary>
 public partial class OcrView : UserControl
 {
@@ -34,12 +34,11 @@ public partial class OcrView : UserControl
     }
 
     /// <summary>
-    /// 视图加载完成后自动启动 OCR 引擎。
-    /// 使用 Dispatcher.BeginInvoke 避免阻塞 UI 渲染。
+    /// 视图加载完成后自动启动 OCR 引擎
     /// </summary>
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        Loaded -= OnLoaded; // 只执行一次
+        Loaded -= OnLoaded;
         if (_viewModel != null)
         {
             await System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeAsync(
@@ -53,49 +52,53 @@ public partial class OcrView : UserControl
     }
 
     /// <summary>
-    /// 拖拽进入时检查数据格式
+    /// 缩略图点击：用系统默认图片查看器打开原图
     /// </summary>
+    private void OnThumbnailClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is Border border && border.Tag is string filePath && File.Exists(filePath))
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = filePath,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"无法打开图片: {ex.Message}",
+                    "打开失败",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+    }
+
+    /// <summary>拖拽进入时检查数据格式</summary>
     private void OnDragEnter(object sender, DragEventArgs e)
     {
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
-        {
-            e.Effects = DragDropEffects.Copy;
-        }
-        else
-        {
-            e.Effects = DragDropEffects.None;
-        }
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
-    /// <summary>
-    /// 拖拽悬停时保持 Copy 效果
-    /// </summary>
+    /// <summary>拖拽悬停</summary>
     private void OnDragOver(object sender, DragEventArgs e)
     {
-        if (e.Data.GetDataPresent(DataFormats.FileDrop))
-        {
-            e.Effects = DragDropEffects.Copy;
-        }
-        else
-        {
-            e.Effects = DragDropEffects.None;
-        }
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
-    /// <summary>
-    /// 放下文件时通知 ViewModel 处理
-    /// </summary>
+    /// <summary>放下文件时通知 ViewModel</summary>
     private void OnDrop(object sender, DragEventArgs e)
     {
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
             var filePaths = e.Data.GetData(DataFormats.FileDrop) as string[];
             if (filePaths != null && filePaths.Length > 0)
-            {
                 _viewModel?.RecognizeDroppedFiles(filePaths);
-            }
         }
         e.Handled = true;
     }
@@ -103,7 +106,6 @@ public partial class OcrView : UserControl
 
 /// <summary>
 /// 置信度到颜色转换器
-/// 高置信度 (>0.9) 显示绿色，低置信度 (<0.5) 显示橙色，正常显示黑色。
 /// </summary>
 public class ScoreToBrushConverter : IValueConverter
 {
@@ -130,8 +132,7 @@ public class ScoreToBrushConverter : IValueConverter
 }
 
 /// <summary>
-/// 文件路径到缩略图的转换器
-/// 将图片文件路径转换为 64x64 缩略图 BitmapImage，缓存到内存避免重复加载。
+/// 文件路径到缩略图的转换器（带缓存）
 /// </summary>
 public class FilePathToThumbnailConverter : IValueConverter
 {
@@ -143,7 +144,6 @@ public class FilePathToThumbnailConverter : IValueConverter
         if (value is not string filePath || !File.Exists(filePath))
             return null;
 
-        // 缓存命中
         if (ThumbnailCache.TryGetValue(filePath, out var cached))
             return cached;
 
@@ -157,7 +157,7 @@ public class FilePathToThumbnailConverter : IValueConverter
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
             bitmap.EndInit();
-            bitmap.Freeze(); // 允许跨线程访问
+            bitmap.Freeze();
 
             ThumbnailCache[filePath] = bitmap;
             return bitmap;

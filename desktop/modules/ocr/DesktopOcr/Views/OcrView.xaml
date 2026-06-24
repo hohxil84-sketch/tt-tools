@@ -171,15 +171,17 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <!-- 缩略图 -->
+                                    <!-- 缩略图（点击查看原图） -->
                                     <Border Grid.Column="0" Width="56" Height="56"
                                             BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
                                             BorderThickness="1" CornerRadius="2"
                                             Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
-                                            VerticalAlignment="Top" Margin="0,0,8,0">
+                                            VerticalAlignment="Top" Margin="0,0,8,0"
+                                            Cursor="Hand" Tag="{Binding FilePath}"
+                                            MouseLeftButtonDown="OnThumbnailClick"
+                                            ToolTip="点击查看原图">
                                         <Image Source="{Binding FilePath, Converter={StaticResource ThumbnailConverter}}"
-                                               Stretch="Uniform" Width="52" Height="52"
-                                               ToolTip="点击查看大图"/>
+                                               Stretch="Uniform" Width="52" Height="52"/>
                                     </Border>
 
                                     <!-- 文件信息 -->
@@ -321,9 +323,10 @@
                             <ItemsControl ItemsSource="{Binding SelectedResult.DisplayLines}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <!-- 每行：正常文字用黑字，低置信度用红色 XX -->
+                                        <!-- 每行：根据原图坐标缩进，低置信度显示红色 XX -->
                                         <TextBlock FontSize="15" FontFamily="Microsoft YaHei"
                                                    LineHeight="24" TextWrapping="Wrap"
+                                                   Padding="{Binding IndentThickness}"
                                                    ToolTip="{Binding OriginalText}">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
