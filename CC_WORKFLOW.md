@@ -32,6 +32,21 @@ CC 必须执行：
 
 如果模块需要新增接口、字段、DTO、数据库表或模块调用关系，必须先更新对应权威规格文档，再写代码。涉及接口联调时，必须先让 mock API 和桌面端 API client 对齐 OpenAPI。
 
+## Bug 修复工作流
+
+后续出现的 bug 修复必须按模块归属处理，不得直接在 `dev/full-product` 或 `main` 上修改。
+
+1. 先确认 bug 归属模块，例如 `desktop/modules/auth-device`、`cloud/app-shell`、`cloud/modules/ai-copy` 或 `shared-contract/openapi/...`。
+2. 从最新 `dev/full-product` 创建修复分支，分支命名使用 `fix/<模块名>-<问题简述>`，例如 `fix/cloud-app-shell-router-registration` 或 `fix/desktop-settings-server-url`。
+3. 只修改修复该 bug 必需的文件；不得把无关重构、新功能或其他模块改动混入同一修复分支。
+4. 如果修复涉及接口字段、OpenAPI、DTO、数据库结构或模块调用关系，必须先更新对应权威规格文档，再修改实现代码。
+5. 修复前应尽量复现问题并定位根因；修复后必须重新运行失败用例、受影响模块完整测试，涉及接口时还要运行相关契约或客户端测试。
+6. 更新对应模块 `PROGRESS.md` 的 Bug 记录或测试记录，写明 bug 现象、根因、修复点、测试命令、测试结果、分支名和提交哈希。
+7. 提交信息必须使用中文，并使用 `fix(<模块名>): <修复说明>` 格式。
+8. 修复分支必须推送到 origin；是否合并到 `dev/full-product` 由用户确认。
+
+影响当前联调、当前可运行版本、主流程或已合并模块稳定性的 bug，用户确认后应合并到 `dev/full-product`。实验性修复、未验收修复或范围不清的修复，先只推送修复分支，等待用户确认。
+
 ## 提交和推送前规则
 
 - 提交前必须确认当前分支是当前模块 feature 分支，不是 main，也不是 `dev/full-product`。
