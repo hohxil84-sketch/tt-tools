@@ -129,6 +129,12 @@ public class AuthState : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    /// <summary>
+    /// 全局共享的 AuthState 单例。
+    /// 桌面端各模块通过此实例共享登录状态，避免各自创建独立实例。
+    /// </summary>
+    public static AuthState Shared { get; } = new AuthState();
+
     public AuthState() : this(new TokenStorage()) { }
 
     public AuthState(TokenStorage tokenStorage)

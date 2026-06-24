@@ -1,3 +1,4 @@
+using System.Windows.Controls;
 using System.Windows.Input;
 using TTShared.Auth;
 using TTShared.CloudApi;
@@ -73,10 +74,11 @@ public class LoginViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 默认构造函数（用于设计时，生产环境应使用带参构造函数注入依赖）
+    /// 默认构造函数。
+    /// 使用全局共享 AuthState，确保登录状态在整个应用内可见。
     /// </summary>
-    public LoginViewModel() : this(new AuthState(),
-        new CloudApiClient(AppSettings.Instance.ServerUrl, new AuthState()))
+    public LoginViewModel() : this(AuthState.Shared,
+        new CloudApiClient(AppSettings.Instance.ServerUrl, AuthState.Shared))
     {
     }
 
@@ -94,7 +96,8 @@ public class LoginViewModel : BaseViewModel
             return;
         }
 
-        var password = passwordParameter?.ToString() ?? string.Empty;
+        // 命令参数为 PasswordBox 元素，从其 Password 属性获取真实密码
+        var password = (passwordParameter as PasswordBox)?.Password ?? string.Empty;
         if (string.IsNullOrEmpty(password))
         {
             ErrorMessage = "请输入密码";

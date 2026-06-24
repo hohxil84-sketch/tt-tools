@@ -1,6 +1,9 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using TTShared.Auth;
+using TTShared.CloudApi;
+using TTShared.Settings;
 using TTShell.Views;
 using TTTools.FileWorkbench.Views;
 using TTTools.OCR.Views;
@@ -13,6 +16,7 @@ using TTTools.PdfImageConvert.Views;
 using TTTools.IdPhoto.Views;
 using TTTools.RemoveBg.Views;
 using TTTools.AuthDevice.Views;
+using TTTools.AuthDevice.ViewModels;
 using TTTools.ExportSettings.Views;
 
 namespace TTShell;
@@ -27,12 +31,46 @@ public partial class MainWindow : Window
     private Button? _currentNavButton;
     private string _currentTheme = "Light";
 
+    /// <summary>共享的认证状态，所有模块通过此实例感知登录/登出</summary>
+    private readonly AuthState _authState = AuthState.Shared;
+    /// <summary>共享的云端 API 客户端</summary>
+    private readonly CloudApiClient _apiClient;
+
     public MainWindow()
     {
         InitializeComponent();
+
+        // 使用共享 AuthState 初始化 API 客户端（后续各模块共用）
+        _apiClient = new CloudApiClient(AppSettings.Instance.ServerUrl, _authState);
+
+        // 订阅认证状态变化，更新状态栏用户名
+        _authState.LoggedIn += OnUserLoggedIn;
+        _authState.LoggedOut += OnUserLoggedOut;
+
         SetNavButtonSelected(NavHome);
         UpdateMaxRestoreButton();
         StateChanged += (_, _) => UpdateMaxRestoreButton();
+    }
+
+    /// <summary>登录成功后自动跳转到首页并更新状态栏</summary>
+    private void OnUserLoggedIn(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            StatusText.Text = $"当前：首页 | 用户：{_authState.User.DisplayName ?? _authState.User.Account}";
+            // 登录成功后自动跳转到首页
+            MainContent.Content = new HomePage();
+            SetNavButtonSelected(NavHome);
+        });
+    }
+
+    /// <summary>登出后清除状态栏用户信息</summary>
+    private void OnUserLoggedOut(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            StatusText.Text = "就绪（未登录）";
+        });
     }
 
     /// <summary>
@@ -65,7 +103,7 @@ public partial class MainWindow : Window
             "RemoveBg"        => new RemoveBgView { DataContext = new TTTools.RemoveBg.ViewModels.RemoveBgViewModel() },
 
             // 系统
-            "Login"           => new LoginView { DataContext = new TTTools.AuthDevice.ViewModels.LoginViewModel() },
+            "Login"           => new LoginView { DataContext = new LoginViewModel(_authState, _apiClient) },
 
             // 导出 / 设置
             "Export"          => new ExportView(),
