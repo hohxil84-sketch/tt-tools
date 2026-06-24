@@ -95,3 +95,11 @@
 - 技术选型：PyMuPDF (fitz)（AGPL 3.0 许可证），纯 Python，无需外部系统依赖，支持 PDF↔图片双向转换；Pillow（HPND 许可证）作为辅助，用于图像编码和色彩空间处理。
 - PDF/图片互转模块 3 个源文件创建完毕（__init__.py、specifications.py、processor.py）、测试文件（__init__.py、test_pdf_image_convert.py）。
 - 60 项单元测试全部通过，0 失败 0 警告（含模块导入/常量校验/参数校验/PDF转图片/图片转PDF/主入口路由/查询方法/边界情况/结果结构/初始化）。
+
+2026-06-24（local-worker-format-convert）：
+- 使用系统 Python 3.12.10 创建虚拟环境 D:\localPath\venvs\local-worker-format-convert。
+- 安装 pip 依赖：Pillow 12.2.0、pytest 9.1.1。
+- 首次引入模块：local-worker/modules/format-convert。
+- 技术选型：Pillow（HPND 许可证），纯本地图像处理，不依赖 GPU/ML 模型。
+- 格式转换模块 3 个源文件创建完毕（__init__.py、specifications.py、processor.py）、测试文件（__init__.py、test_format_convert.py）。
+- 102 项单元测试全部通过，0 失败 0 警告（含模块导入/常量校验/参数校验/格式转换/压缩/裁剪/旋转/文件输出/错误处理/边缘情况/查询方法/结果结构）。
