@@ -173,10 +173,11 @@ def create_app() -> FastAPI:
 
     # 注册 credits-billing 额度计费和权限检查模块路由
     # （提供 GET /credits/balance、GET /credits/ledger、POST /entitlements/check）
-    # 必须放在 lifespan 中 preload 模型之后注册
     _credits_billing_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "credits-billing")
-    if _credits_billing_dir not in sys.path:
-        sys.path.insert(0, _credits_billing_dir)
+    # preload 可能已添加此目录到 sys.path，先移除再插入确保排在最前
+    while _credits_billing_dir in sys.path:
+        sys.path.remove(_credits_billing_dir)
+    sys.path.insert(0, _credits_billing_dir)
     for _key in list(sys.modules.keys()):
         if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
             del sys.modules[_key]
