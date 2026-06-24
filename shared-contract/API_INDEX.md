@@ -536,3 +536,78 @@ Item fields: `id`、`user_id`、`user_account`、`account_id`、`change_type`、
 Request: `user_id`、`amount`（正数赠送，负数扣除）、`description`（可选）
 
 Response `data`: 同额度账户详情结构。
+
+## Admin Ops — 后台运维管理
+
+所有后台接口要求 `Authorization: Bearer <admin_access_token>`，且 JWT 中 role 字段为 `admin`。
+
+### Provider 调用日志
+
+### GET `/api/v1/admin/provider-call-logs`
+
+查询全部 Provider 调用日志（管理员视角，跨用户）。
+
+Query: `limit`、`offset`、`user_id`、`feature`、`provider`、`status`
+
+Response `data`: `items`、`total`、`limit`、`offset`
+
+Item fields: `id`、`request_id`、`user_id`、`user_account`、`feature`、`provider`、`model`、`status`、`error_code`、`input_tokens`、`output_tokens`、`total_tokens`、`estimated_cost`、`credits_charged`、`latency_ms`、`created_at`
+
+不返回 `raw_usage_json`、`raw_meta_json`、完整 prompt、API Key、Token。
+
+### GET `/api/v1/admin/provider-call-logs/{log_id}`
+
+查询单条调用日志详情（含用户账号和展示名称）。
+
+Response `data`: 同列表项字段 + `user_display_name`
+
+### 成本统计
+
+### GET `/api/v1/admin/cost-stats`
+
+返回 Provider 调用的聚合统计数据。
+
+Response `data`:
+- `total_calls`：总调用次数
+- `total_tokens`：总 token 用量
+- `total_cost`：总估算成本（人民币）
+- `total_credits_charged`：总扣除 AI 额度
+- `by_feature`：按功能码细分 `[{key, calls, total_tokens, total_cost, total_credits}]`
+- `by_provider`：按 Provider 细分 `[{key, calls, total_tokens, total_cost, total_credits}]`
+
+### 风控日志
+
+### GET `/api/v1/admin/risk-logs`
+
+查询风控日志列表。
+
+Query: `limit`、`offset`、`user_id`、`risk_type`、`severity`
+
+Response `data`: `items`、`total`、`limit`、`offset`
+
+Item fields: `id`、`user_id`、`user_account`、`device_id`、`risk_type`、`severity`、`created_at`
+
+### GET `/api/v1/admin/risk-logs/{log_id}`
+
+查询风控日志详情（含脱敏详情 `details_json` 和用户展示名称）。
+
+Response `data`: 同列表项字段 + `user_display_name` + `details_json`
+
+### 功能开关
+
+### GET `/api/v1/admin/feature-flags`
+
+查询各套餐的功能开关配置。
+
+Query: `plan_code`（可选，不传返回所有套餐）
+
+Response `data`: `items`
+- Item fields: `plan_id`、`plan_code`、`plan_name`、`enabled_features_json`、`plan_status`
+
+### PATCH `/api/v1/admin/plans/{plan_id}/features`
+
+更新指定套餐的功能开关配置（合并更新）。
+
+Request: `{ "enabled_features_json": { "feature_code": true | {...} } }`
+
+Response `data`: 同 PlanFeatureFlagsItem。
