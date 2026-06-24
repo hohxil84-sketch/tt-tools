@@ -44,4 +44,5 @@
 | desktop-resize-image | desktop/modules/resize-image | feature/desktop-resize-image | DEVELOPMENT_COMPLETE | 54/54 C# + 4/4 Python smoke 通过 | 2026-06-21 已合并 |
 | desktop-pdf-image-convert | desktop/modules/pdf-image-convert | feature/desktop-pdf-image-convert | DEVELOPMENT_COMPLETE | 25/25 通过 | 2026-06-24 已合并 |
 | desktop-format-convert | desktop/modules/format-convert | feature/desktop-format-convert | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并 |
+| desktop-ai-render-client | desktop/modules/ai-render-client | feature/desktop-ai-render-client | DEVELOPMENT_COMPLETE | 31/31 通过 | 2026-06-24 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
