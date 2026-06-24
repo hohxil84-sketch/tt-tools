@@ -26,6 +26,23 @@ public partial class OcrView : UserControl
 
         // 数据上下文变更时更新 ViewModel 引用
         DataContextChanged += OnDataContextChanged;
+
+        // 视图加载时自动初始化 OCR 服务
+        Loaded += OnLoaded;
+    }
+
+    /// <summary>
+    /// 视图加载完成后自动启动 OCR 引擎。
+    /// 使用 Dispatcher.BeginInvoke 避免阻塞 UI 渲染。
+    /// </summary>
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded; // 只执行一次
+        if (_viewModel != null)
+        {
+            await System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeAsync(
+                async () => await _viewModel.InitializeAsync());
+        }
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)

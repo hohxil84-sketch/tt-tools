@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Reflection;
 using System.Windows.Input;
 using Microsoft.Win32;
 using TTShared.UI;
@@ -17,7 +18,17 @@ namespace TTTools.OCR.ViewModels;
 /// </summary>
 public class OcrViewModel : BaseViewModel
 {
-    private readonly OcrService? _ocrService;
+    /// <summary>OCR 引擎默认 Python 解释器路径</summary>
+    private static readonly string DefaultPythonPath =
+        @"D:\localPath\venvs\local-worker-ocr\Scripts\python.exe";
+
+    /// <summary>OCR 引擎默认 router 脚本路径（相对于本程序集目录）</summary>
+    private static string DefaultRouterPath =>
+        Path.Combine(
+            Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".",
+            "ocr_router.py");
+
+    private OcrService? _ocrService;
     private readonly FileSystemService _fileSystem;
     private readonly JobManager? _jobManager;
     private readonly AppLogger? _logger;
@@ -187,9 +198,23 @@ public class OcrViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 默认构造函数（用于设计时）
+    /// 默认构造函数：自动检测 Python 环境和 router 脚本路径，
+    /// 使模块在无外部依赖注入时也可自给自足运行。
     /// </summary>
-    public OcrViewModel() : this(null, new FileSystemService()) { }
+    public OcrViewModel() : this(null, new FileSystemService())
+    {
+        // 尝试自动创建 OCR 服务（使用默认路径）
+        var routerPath = DefaultRouterPath;
+        if (File.Exists(DefaultPythonPath) && File.Exists(routerPath))
+        {
+            _ocrService = new OcrService(DefaultPythonPath, routerPath);
+        }
+        else
+        {
+            // Python 或 router 脚本不存在时，服务不可用，界面会显示"OCR 引擎未连接"
+            StatusMessage = "OCR 引擎未安装或配置不完整，请检查 local-worker-ocr 环境";
+        }
+    }
 
     /// <summary>
     /// 初始化 OCR 服务
