@@ -33,6 +33,7 @@ class User(Base):
     """用户表模型，对齐 DATABASE_SCHEMA.md users 表。"""
 
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
 
     # 主键
     id: Mapped[str] = mapped_column(
@@ -77,6 +78,7 @@ class Device(Base):
     """设备表模型，对齐 DATABASE_SCHEMA.md devices 表。"""
 
     __tablename__ = "devices"
+    __table_args__ = {"extend_existing": True}
 
     # 主键
     id: Mapped[str] = mapped_column(
