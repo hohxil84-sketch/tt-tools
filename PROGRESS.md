@@ -19,7 +19,7 @@
 | contract-local-paid-tools | shared-contract/modules/local-paid-tools | feature/contract-local-paid-tools | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-20 已合并 |
 | cloud-credits-billing | cloud/modules/credits-billing | feature/cloud-credits-billing | DEVELOPMENT_COMPLETE | 30/30 通过 | 2026-06-20 已合并 |
 | contract-provider-log | shared-contract/modules/provider-log | feature/contract-provider-log | DEVELOPMENT_COMPLETE | Spectral 0 errors, DTO 28/28 通过 | 2026-06-20 已合并 |
-| cloud-provider-runtime | cloud/modules/provider-runtime | feature/cloud-provider-runtime | DEVELOPMENT_COMPLETE | 103/103 通过 | 2026-06-20 已合并 |
+| cloud-provider-runtime | cloud/modules/provider-runtime | feature/cloud-provider-runtime-multimodel | DEVELOPMENT_COMPLETE | 107/107 provider-runtime + 16/16 ai-copy + 36/36 ai-image-tools 通过 | 2026-06-26 已合并 |
 | cloud-provider-log | cloud/modules/provider-log | feature/cloud-provider-log | DEVELOPMENT_COMPLETE | 26/26 通过 | 2026-06-20 已合并 |
 | cloud-ai-copy | cloud/modules/ai-copy | feature/cloud-ai-copy | DEVELOPMENT_COMPLETE | 16/16 通过 | 2026-06-21 已合并 |
 | cloud-ai-render | cloud/modules/ai-render | feature/cloud-ai-render | DEVELOPMENT_COMPLETE | 22/22 通过 | 2026-06-21 已合并 |
