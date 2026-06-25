@@ -46,13 +46,13 @@
 | desktop-format-convert | desktop/modules/format-convert | feature/desktop-format-convert | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并 |
 | desktop-ai-render-client | desktop/modules/ai-render-client | feature/desktop-ai-render-client | DEVELOPMENT_COMPLETE | 31/31 通过 | 2026-06-24 已合并 |
 | desktop-ai-image-tools-client | desktop/modules/ai-image-tools-client | feature/desktop-ai-image-tools-client | DEVELOPMENT_COMPLETE | 39/39 通过 | 2026-06-26 已合并 |
-| integration-test-ai-image-tools | 全项目 | dev/full-product | INTEGRATION_COMPLETE | 576 通过 (189 cloud + 289 contract + 98 desktop) | 2026-06-26 联调完成，未提交（在 dev/full-product 上直接测试） |
+| integration-test-ai-image-tools | 全项目 | fix/integration-ai-image-tools | INTEGRATION_COMPLETE | 576 通过 | 2026-06-26 已推送，待合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
 
 ## 云端 AI 图片工具全量联调记录 (2026-06-26)
 
-**分支**: dev/full-product
-**提交**: 未提交改动（在 dev/full-product 上直接测试，改动待用户确认后提交）
+**分支**: fix/integration-ai-image-tools
+**提交**: 2faf954
 
 ### 联调范围
 桌面端 5 个云端 AI 图片工具功能 + 云端 API + Mock Provider 全链路测试。
