@@ -209,37 +209,37 @@ public class ResizeImageViewModel : BaseViewModel
     public ObservableCollection<PresetInfo> AvailablePresets { get; } = new();
 
     /// <summary>可用的缩放模式列表（中文名称）</summary>
-    public static List<(string Value, string Display)> ModeList { get; } = new()
+    public List<SelectOption> ModeList { get; } = new()
     {
-        ("fit", "等比适配 - 不超出边界保持比例"),
-        ("exact", "精确尺寸 - 拉伸到指定宽高"),
-        ("fill", "等比填充 - 填满边界居中裁剪"),
-        ("scale", "百分比缩放 - 按比例放大缩小"),
-        ("short_side", "短边约束 - 短边对齐长边自适应"),
-        ("long_side", "长边约束 - 长边对齐短边自适应"),
-        ("custom_dpi", "按 DPI 缩放 - 根据目标 DPI 计算"),
+        new("fit", "等比适配 - 不超出边界保持比例"),
+        new("exact", "精确尺寸 - 拉伸到指定宽高"),
+        new("fill", "等比填充 - 填满边界居中裁剪"),
+        new("scale", "百分比缩放 - 按比例放大缩小"),
+        new("short_side", "短边约束 - 短边对齐长边自适应"),
+        new("long_side", "长边约束 - 长边对齐短边自适应"),
+        new("custom_dpi", "按 DPI 缩放 - 根据目标 DPI 计算"),
     };
 
     /// <summary>可用的重采样滤镜列表（中文名称）</summary>
-    public static List<(string Value, string Display)> ResampleList { get; } = new()
+    public List<SelectOption> ResampleList { get; } = new()
     {
-        ("lanczos", "Lanczos (推荐，最佳质量)"),
-        ("bilinear", "Bilinear (较快，适合缩小)"),
-        ("bicubic", "Bicubic (较慢，适合放大)"),
-        ("nearest", "Nearest (最快，像素风格)"),
-        ("box", "Box (区域平均)"),
-        ("hamming", "Hamming (Sinc 插值)"),
+        new("lanczos", "Lanczos (推荐，最佳质量)"),
+        new("bilinear", "Bilinear (较快，适合缩小)"),
+        new("bicubic", "Bicubic (较慢，适合放大)"),
+        new("nearest", "Nearest (最快，像素风格)"),
+        new("box", "Box (区域平均)"),
+        new("hamming", "Hamming (Sinc 插值)"),
     };
 
     /// <summary>可用的输出格式列表（中文名称）</summary>
-    public static List<(string Value, string Display)> FormatList { get; } = new()
+    public List<SelectOption> FormatList { get; } = new()
     {
-        ("original", "保持原格式"),
-        ("png", "PNG - 无损，支持透明"),
-        ("jpeg", "JPEG - 有损，文件小"),
-        ("bmp", "BMP - 无压缩，Windows 标准"),
-        ("tiff", "TIFF - 印刷标准，LZW 压缩"),
-        ("webp", "WEBP - Web 优化格式"),
+        new("original", "保持原格式"),
+        new("png", "PNG - 无损，支持透明"),
+        new("jpeg", "JPEG - 有损，文件小"),
+        new("bmp", "BMP - 无压缩，Windows 标准"),
+        new("tiff", "TIFF - 印刷标准，LZW 压缩"),
+        new("webp", "WEBP - Web 优化格式"),
     };
 
     /// <summary>进度值 (0-100)</summary>
@@ -305,9 +305,13 @@ public class ResizeImageViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 默认构造函数（用于设计时）
+    /// 默认构造函数（壳层无 DI 时使用，自动创建 ResizeImageService 并尝试连接 worker）
     /// </summary>
-    public ResizeImageViewModel() : this(null, null, new FileSystemService()) { }
+    public ResizeImageViewModel() : this(new ResizeImageService(), null, new FileSystemService())
+    {
+        // 从 Service 获取 AuthState（默认构造的 Service 和 VM 不共享 AuthState 引用）
+        // 壳层统一 DI 就位后，AuthState 应由 DI 容器统一注入
+    }
 
     /// <summary>
     /// 初始化改尺寸服务。
@@ -413,7 +417,9 @@ public class ResizeImageViewModel : BaseViewModel
         if (_resizeService == null || filePaths.Count == 0) return;
 
         // 检查登录状态（C1: 未登录直接提示，不发起处理）
-        if (_authState != null && !_authState.IsLoggedIn)
+        // 优先用 VM 注入的 AuthState，否则用 Service 的 AuthState
+        var effectiveAuth = _authState ?? _resizeService.AuthState;
+        if (!effectiveAuth.IsLoggedIn)
         {
             ErrorMessage = "请先登录后再使用图片改尺寸功能";
             StatusMessage = "未登录 - 请先登录";
@@ -444,18 +450,28 @@ public class ResizeImageViewModel : BaseViewModel
 
                     // 将结果添加到列表（UI 线程）
                     System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                        Results.Insert(0, result));
+                    {
+                        Results.Insert(0, result);
+                        // 权限拒绝或处理失败时，把原因显示到错误横幅
+                        if (!result.IsSuccess && !string.IsNullOrEmpty(result.ErrorMessage))
+                            ErrorMessage = result.ErrorMessage;
+                        else if (!result.EntitlementAllowed)
+                            ErrorMessage = result.EntitlementReason ?? "套餐权限不足";
+                    });
                 }
                 catch (Exception ex)
                 {
                     // 单张处理失败不影响其余文件
                     System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    {
                         Results.Insert(0, new ResizeImageResult
                         {
                             IsSuccess = false,
                             ErrorMessage = ex.Message,
                             InputPath = filePath
-                        }));
+                        });
+                        ErrorMessage = ex.Message;
+                    });
                     _logger?.Error(
                         $"第 {i + 1}/{filePaths.Count} 张改尺寸处理失败: {ex.Message}",
                         ex, "desktop-resize-image");
@@ -612,5 +628,21 @@ public class ResizeImageViewModel : BaseViewModel
         (CancelCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (ClearResultsCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (OpenOutputFileCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
+}
+
+/// <summary>
+/// 下拉选择项（Value/Display 对），用于 ComboBox 的 ItemsSource。
+/// 必须使用类而非命名元组，否则 WPF 反射无法识别 DisplayMemberPath/SelectedValuePath。
+/// </summary>
+public class SelectOption
+{
+    public string Value { get; }
+    public string Display { get; }
+
+    public SelectOption(string value, string display)
+    {
+        Value = value;
+        Display = display;
     }
 }

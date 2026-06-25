@@ -295,20 +295,23 @@ public class ResizeImageViewModelTests
     [Fact]
     public void ModeList_ShouldHaveSevenItems()
     {
-        Assert.Equal(7, ResizeImageViewModel.ModeList.Count);
+        var vm = new ResizeImageViewModel();
+        Assert.Equal(7, vm.ModeList.Count);
     }
 
     /// <summary>重采样列表包含 6 个选项</summary>
     [Fact]
     public void ResampleList_ShouldHaveSixItems()
     {
-        Assert.Equal(6, ResizeImageViewModel.ResampleList.Count);
+        var vm = new ResizeImageViewModel();
+        Assert.Equal(6, vm.ResampleList.Count);
     }
 
     /// <summary>格式列表包含 6 个选项</summary>
     [Fact]
     public void FormatList_ShouldHaveSixItems()
     {
-        Assert.Equal(6, ResizeImageViewModel.FormatList.Count);
+        var vm = new ResizeImageViewModel();
+        Assert.Equal(6, vm.FormatList.Count);
     }
 }

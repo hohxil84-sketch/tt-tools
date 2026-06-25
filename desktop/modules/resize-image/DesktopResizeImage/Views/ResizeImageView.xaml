@@ -53,8 +53,7 @@
                 </StackPanel>
 
                 <Button Grid.Column="1" Content="选择图片" Width="90" Height="30"
-                        Command="{Binding SelectFilesCommand}"
-                        IsEnabled="{Binding IsServiceAvailable}" Margin="0,0,8,0" />
+                        Command="{Binding SelectFilesCommand}" Margin="0,0,8,0" />
                 <Button Grid.Column="2" Content="开始改尺寸" Width="100" Height="30"
                         Command="{Binding StartProcessingCommand}"
                         IsEnabled="{Binding CanStart}" Margin="0,0,8,0">
@@ -99,9 +98,15 @@
                     <!-- 模式选择 -->
                     <StackPanel Margin="0,0,12,4" Width="280">
                         <TextBlock Text="缩放模式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
-                        <ComboBox ItemsSource="{x:Static vm:ResizeImageViewModel.ModeList}"
-                                  SelectedValue="{Binding SelectedMode}"
-                                  DisplayMemberPath="Display" SelectedValuePath="Value" Height="28" />
+                        <ComboBox SelectedValue="{Binding SelectedMode}" SelectedValuePath="Tag" Height="28">
+                            <ComboBoxItem Content="等比适配 - 不超出边界保持比例" Tag="fit" />
+                            <ComboBoxItem Content="精确尺寸 - 拉伸到指定宽高" Tag="exact" />
+                            <ComboBoxItem Content="等比填充 - 填满边界居中裁剪" Tag="fill" />
+                            <ComboBoxItem Content="百分比缩放 - 按比例放大缩小" Tag="scale" />
+                            <ComboBoxItem Content="短边约束 - 短边对齐长边自适应" Tag="short_side" />
+                            <ComboBoxItem Content="长边约束 - 长边对齐短边自适应" Tag="long_side" />
+                            <ComboBoxItem Content="按 DPI 缩放 - 根据目标 DPI 计算" Tag="custom_dpi" />
+                        </ComboBox>
                     </StackPanel>
 
                     <!-- 预设选择 -->
@@ -115,9 +120,14 @@
                     <!-- 重采样 -->
                     <StackPanel Margin="0,0,12,4" Width="280">
                         <TextBlock Text="重采样滤镜" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
-                        <ComboBox ItemsSource="{x:Static vm:ResizeImageViewModel.ResampleList}"
-                                  SelectedValue="{Binding SelectedResample}"
-                                  DisplayMemberPath="Display" SelectedValuePath="Value" Height="28" />
+                        <ComboBox SelectedValue="{Binding SelectedResample}" SelectedValuePath="Tag" Height="28">
+                            <ComboBoxItem Content="Lanczos (推荐，最佳质量)" Tag="lanczos" />
+                            <ComboBoxItem Content="Bilinear (较快，适合缩小)" Tag="bilinear" />
+                            <ComboBoxItem Content="Bicubic (较慢，适合放大)" Tag="bicubic" />
+                            <ComboBoxItem Content="Nearest (最快，像素风格)" Tag="nearest" />
+                            <ComboBoxItem Content="Box (区域平均)" Tag="box" />
+                            <ComboBoxItem Content="Hamming (Sinc 插值)" Tag="hamming" />
+                        </ComboBox>
                     </StackPanel>
                 </WrapPanel>
 
@@ -171,9 +181,14 @@
                 <WrapPanel Margin="0,4,0,0">
                     <StackPanel Margin="0,0,12,4" Width="200">
                         <TextBlock Text="输出格式" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
-                        <ComboBox ItemsSource="{x:Static vm:ResizeImageViewModel.FormatList}"
-                                  SelectedValue="{Binding SelectedOutputFormat}"
-                                  DisplayMemberPath="Display" SelectedValuePath="Value" Height="28" />
+                        <ComboBox SelectedValue="{Binding SelectedOutputFormat}" SelectedValuePath="Tag" Height="28">
+                            <ComboBoxItem Content="保持原格式" Tag="original" />
+                            <ComboBoxItem Content="PNG - 无损，支持透明" Tag="png" />
+                            <ComboBoxItem Content="JPEG - 有损，文件小" Tag="jpeg" />
+                            <ComboBoxItem Content="BMP - 无压缩，Windows 标准" Tag="bmp" />
+                            <ComboBoxItem Content="TIFF - 印刷标准，LZW 压缩" Tag="tiff" />
+                            <ComboBoxItem Content="WEBP - Web 优化格式" Tag="webp" />
+                        </ComboBox>
                     </StackPanel>
 
                     <!-- JPEG 质量 -->

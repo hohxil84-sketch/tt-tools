@@ -8,6 +8,7 @@ namespace TTTools.ResizeImage.Views;
 /// <summary>
 /// 图片改尺寸视图
 /// 支持文件拖拽导入，DataContext 绑定到 ResizeImageViewModel。
+/// Loaded 事件自动触发 ViewModel 初始化（启动 Python worker）。
 /// </summary>
 public partial class ResizeImageView : UserControl
 {
@@ -22,6 +23,9 @@ public partial class ResizeImageView : UserControl
 
         // 通过 DataContextChanged 获取 ViewModel 引用
         DataContextChanged += OnDataContextChanged;
+
+        // 视图加载完成后自动初始化 ViewModel（启动 worker + 加载预设）
+        Loaded += OnViewLoaded;
     }
 
     /// <summary>
@@ -30,6 +34,16 @@ public partial class ResizeImageView : UserControl
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         _viewModel = e.NewValue as ResizeImageViewModel;
+    }
+
+    /// <summary>
+    /// 视图加载完成后初始化 ViewModel。
+    /// 异步启动 Python worker 并进行健康检查。
+    /// </summary>
+    private async void OnViewLoaded(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel != null)
+            await _viewModel.InitializeAsync();
     }
 
     /// <summary>
