@@ -114,7 +114,7 @@ def _load_module_models():
 
     # 加载用户模型
     if "admin_users_models" in sys.modules:
-        _User = sys.modules["admin_users_models"].User
+        _User = sys.modules["admin_users_models"].UserAdmin
 
 
 def _import_model_file(module_dir_name: str, module_file: str, alias: str):

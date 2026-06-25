@@ -127,7 +127,7 @@ for _key in list(sys.modules.keys()):
 # 获取模型类的引用（用于种子数据）
 ProviderCallLog = _pl_mod.ProviderCallLog
 Plan = _cb_mod.Plan
-User = _au_mod.User
+User = _au_mod.UserAdmin
 
 # 导入 admin-ops 路由和 RiskLog 模型
 from models import RiskLog  # noqa: E402

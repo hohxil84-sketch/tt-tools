@@ -161,7 +161,7 @@ Plan = _cb_mod.Plan
 CreditAccount = _cb_mod.CreditAccount
 CreditLedger = _cb_mod.CreditLedger
 Order = _or_mod.Order
-User = _au_mod.User
+User = _au_mod.UserAdmin
 
 # 导入 admin-billing 路由
 from router import router as admin_billing_router  # noqa: E402

@@ -161,7 +161,7 @@ def _load_module_models():
 
     # 加载 User（admin-users 模型）
     if "admin_users_models" in sys.modules:
-        _User = sys.modules["admin_users_models"].User
+        _User = sys.modules["admin_users_models"].UserAdmin
 
 
 # ============================================================

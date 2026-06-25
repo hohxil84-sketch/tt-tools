@@ -53,7 +53,7 @@ from cloud.shared import (
 
 # 在注册 models 中的 ORM 模型后才创建表
 # models 的导入必须在 Base.metadata.create_all 之前完成
-from models import User, Device  # noqa: E402
+from models import UserAdmin, DeviceAdmin  # noqa: E402
 
 # 直接从 admin-users 模块目录导入路由
 from router import router as admin_users_router  # noqa: E402
@@ -150,7 +150,7 @@ async def _seed_test_data(session_factory) -> None:
 
     async with session_factory() as session:
         # 用户 1：正常活跃用户
-        user1 = User(
+        user1 = UserAdmin(
             id="user-001",
             account="alice@example.com",
             password_hash="hash1",
@@ -162,7 +162,7 @@ async def _seed_test_data(session_factory) -> None:
             updated_at=_now(),
         )
         # 用户 2：被封禁用户
-        user2 = User(
+        user2 = UserAdmin(
             id="user-002",
             account="bob@example.com",
             password_hash="hash2",
@@ -174,7 +174,7 @@ async def _seed_test_data(session_factory) -> None:
             updated_at=_now(),
         )
         # 用户 3：管理员
-        user3 = User(
+        user3 = UserAdmin(
             id="admin-001",
             account="admin@tt-tools.com",
             password_hash="hash3",
@@ -188,7 +188,7 @@ async def _seed_test_data(session_factory) -> None:
         session.add_all([user1, user2, user3])
 
         # 设备数据
-        device1 = Device(
+        device1 = DeviceAdmin(
             id="device-001",
             user_id="user-001",
             device_fingerprint_hash="fp_hash_1",
@@ -200,7 +200,7 @@ async def _seed_test_data(session_factory) -> None:
             created_at=_now(),
             updated_at=_now(),
         )
-        device2 = Device(
+        device2 = DeviceAdmin(
             id="device-002",
             user_id="user-001",
             device_fingerprint_hash="fp_hash_2",
@@ -212,7 +212,7 @@ async def _seed_test_data(session_factory) -> None:
             created_at=_now(),
             updated_at=_now(),
         )
-        device3 = Device(
+        device3 = DeviceAdmin(
             id="device-003",
             user_id="user-002",
             device_fingerprint_hash="fp_hash_3",
