@@ -26,7 +26,7 @@ public class PdfImageConvertViewModel : BaseViewModel
     private readonly AppLogger? _logger;
 
     private bool _isRunning;
-    private string _statusMessage = "就绪 - 选择文件开始转换";
+    private string _statusMessage = "请选择文件";
     private string? _errorMessage;
     private int _progressValue;
     private int _progressMax = 100;
@@ -45,6 +45,12 @@ public class PdfImageConvertViewModel : BaseViewModel
 
     /// <summary>已处理的转换结果列表</summary>
     public ObservableCollection<PdfImageConvertResult> Results { get; } = new();
+
+    /// <summary>待处理文件路径列表</summary>
+    public ObservableCollection<string> PendingFiles { get; } = new();
+
+    /// <summary>是否有待处理的文件</summary>
+    public bool HasPendingFiles => PendingFiles.Count > 0;
 
     /// <summary>当前选中的结果（显示在预览区）</summary>
     public PdfImageConvertResult? SelectedResult
@@ -109,8 +115,8 @@ public class PdfImageConvertViewModel : BaseViewModel
         }
     }
 
-    /// <summary>是否可以开始处理</summary>
-    public bool CanStart => !IsRunning && _isServiceAvailable;
+    /// <summary>是否可以开始处理：服务可用 + 未运行 + 有待处理文件</summary>
+    public bool CanStart => !IsRunning && _isServiceAvailable && PendingFiles.Count > 0;
 
     /// <summary>是否可以取消</summary>
     public bool CanCancel => IsRunning;
@@ -263,12 +269,18 @@ public class PdfImageConvertViewModel : BaseViewModel
         SelectFilesCommand = new RelayCommand(SelectFiles);
         StartProcessingCommand = new RelayCommand(StartProcessingAsync, () => CanStart);
         CancelCommand = new RelayCommand(CancelProcessing, () => CanCancel);
-        ClearResultsCommand = new RelayCommand(ClearResults, () => Results.Count > 0);
+        ClearResultsCommand = new RelayCommand(ClearResults, () => Results.Count > 0 || PendingFiles.Count > 0);
         OpenOutputFileCommand = new RelayCommand(OpenOutputFile, () => HasSelectedResult);
         SelectResultCommand = new RelayCommand<PdfImageConvertResult?>(r => SelectedResult = r);
 
         // 监听结果列表变更以更新命令状态
         Results.CollectionChanged += (_, _) => RefreshCommandStates();
+        PendingFiles.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasPendingFiles));
+            OnPropertyChanged(nameof(CanStart));
+            RefreshCommandStates();
+        };
     }
 
     /// <summary>
@@ -295,25 +307,24 @@ public class PdfImageConvertViewModel : BaseViewModel
             IsServiceAvailable = await _convertService.StartAsync();
             if (IsServiceAvailable)
             {
-                StatusMessage = "转换引擎就绪 - 选择文件开始转换";
+                StatusMessage = "请选择文件";
             }
             else
             {
-                StatusMessage = $"转换引擎启动失败: {_convertService.AvailabilityError}";
+                StatusMessage = "处理服务不可用，请检查本地环境";
             }
         }
         catch (Exception ex)
         {
             IsServiceAvailable = false;
-            StatusMessage = $"转换引擎启动失败: {ex.Message}";
+            StatusMessage = "处理服务不可用，请检查本地环境";
             _logger?.Error($"PDF/图片互转服务初始化失败: {ex.Message}", ex, "desktop-pdf-image-convert");
         }
     }
 
     /// <summary>
-    /// 打开文件选择对话框。
-    /// PDF→图片：选择 PDF 文件。
-    /// 图片→PDF：选择多张图片文件。
+    /// 打开文件选择对话框，将选中的文件加入待处理列表。
+    /// 不会自动开始处理。
     /// </summary>
     private void SelectFiles()
     {
@@ -331,12 +342,12 @@ public class PdfImageConvertViewModel : BaseViewModel
 
         if (dialog.ShowDialog() == true && dialog.FileNames.Length > 0)
         {
-            _ = StartProcessingForFilesAsync(dialog.FileNames.ToList());
+            AddFilesToPending(dialog.FileNames);
         }
     }
 
     /// <summary>
-    /// 开始处理（通过拖拽文件触发）- 在 View 层由拖拽事件调用。
+    /// 拖拽文件到窗口时调用 —— 只加入待处理列表，不自动处理。
     /// </summary>
     /// <param name="filePaths">拖入的文件路径列表</param>
     public void ProcessDroppedFiles(IEnumerable<string> filePaths)
@@ -361,22 +372,40 @@ public class PdfImageConvertViewModel : BaseViewModel
             {
                 SelectedDirection = "pdf_to_images";
             }
-            else
-            {
-                // 单张图片也可以转 PDF，但更合理的可能是 PDF→图片
-                // 这里保持用户当前选择，仅自动判断单 PDF 的情况
-            }
         }
 
-        _ = StartProcessingForFilesAsync(validFiles);
+        AddFilesToPending(validFiles);
     }
 
     /// <summary>
-    /// 开始处理命令处理（视图命令绑定）。
+    /// 开始处理命令 —— 对待处理列表中的所有文件执行转换。
     /// </summary>
-    private void StartProcessingAsync()
+    private async void StartProcessingAsync()
     {
-        SelectFiles();
+        if (PendingFiles.Count == 0) return;
+        var files = PendingFiles.ToList();
+        await StartProcessingForFilesAsync(files);
+    }
+
+    /// <summary>
+    /// 将文件路径加入待处理列表（去重）。
+    /// </summary>
+    private void AddFilesToPending(IEnumerable<string> filePaths)
+    {
+        foreach (var path in filePaths)
+        {
+            if (string.IsNullOrWhiteSpace(path)) continue;
+            if (!File.Exists(path)) continue;
+            var normalized = Path.GetFullPath(path);
+            if (PendingFiles.Any(f => f.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            PendingFiles.Add(normalized);
+        }
+
+        ProgressValue = 0;
+        ProgressMax = PendingFiles.Count;
+        StatusMessage = $"已选择 {PendingFiles.Count} 个文件，点击开始转换";
+        ErrorMessage = null;
     }
 
     /// <summary>
@@ -402,7 +431,7 @@ public class PdfImageConvertViewModel : BaseViewModel
 
         _currentCts = new CancellationTokenSource();
 
-        StatusMessage = $"正在处理 {filePaths.Count} 个文件...";
+        StatusMessage = $"正在处理 0/{filePaths.Count}...";
 
         try
         {
@@ -443,7 +472,7 @@ public class PdfImageConvertViewModel : BaseViewModel
                     System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                     {
                         ProgressValue = current;
-                        StatusMessage = $"正在处理... {current}/{filePaths.Count}";
+                        StatusMessage = $"正在处理 {current}/{filePaths.Count}：{Path.GetFileName(filePath)}";
                     });
                 }
             }
@@ -484,7 +513,6 @@ public class PdfImageConvertViewModel : BaseViewModel
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
                     ProgressValue = filePaths.Count;
-                    StatusMessage = $"处理完成";
                 });
             }
 
@@ -498,10 +526,10 @@ public class PdfImageConvertViewModel : BaseViewModel
             var successCount = Results.Count(r => r.IsSuccess);
             var failCount = Results.Count - successCount;
 
-            if (failCount > 0)
-                StatusMessage = $"处理完成: {successCount} 成功, {failCount} 失败";
-            else
-                StatusMessage = $"处理完成: {successCount} 个任务全部成功";
+            StatusMessage = $"处理完成：成功 {successCount}，失败 {failCount}";
+
+            // 处理完成后清空待处理列表
+            PendingFiles.Clear();
 
             _logger?.Info(
                 $"PDF/图片互转处理完成: {successCount} 成功, {failCount} 失败",
@@ -509,7 +537,8 @@ public class PdfImageConvertViewModel : BaseViewModel
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "处理已取消";
+            StatusMessage = "已取消";
+            ProgressValue = 0;
             _logger?.Info("PDF/图片互转处理已取消", "desktop-pdf-image-convert");
         }
         catch (Exception ex)
@@ -570,10 +599,12 @@ public class PdfImageConvertViewModel : BaseViewModel
     private void ClearResults()
     {
         Results.Clear();
+        PendingFiles.Clear();
         SelectedResult = null;
         ErrorMessage = null;
         ProgressValue = 0;
-        StatusMessage = "结果已清除 - 选择文件开始转换";
+        ProgressMax = 100;
+        StatusMessage = "请选择文件";
         RefreshCommandStates();
     }
 

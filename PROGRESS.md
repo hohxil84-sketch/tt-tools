@@ -9,7 +9,7 @@
 | cloud-auth-device | cloud/modules/auth-device | feature/cloud-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-ai-copy-client | desktop/modules/ai-copy-client | feature/desktop-ai-copy-client | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并 |
 | desktop-auth-device | desktop/modules/auth-device | feature/desktop-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
-| desktop-file-workbench | desktop/modules/file-workbench | feature/desktop-file-workbench | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-20 已合并 |
+| desktop-file-workbench | desktop/modules/file-workbench | fix/file-workbench-导入文件按钮无响应 | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-26 已合并 |
 | desktop-ocr | desktop/modules/ocr | feature/ocr-low-confidence-placeholder | DEVELOPMENT_COMPLETE | 45/45 C# + 37/37 Python | 2026-06-25 已合并 |
 | desktop-job-system | desktop/modules/job-system | feature/desktop-job-system | DEVELOPMENT_COMPLETE | 71/71 通过 | 2026-06-20 已合并 |
 | desktop-export-settings | desktop/modules/export-settings | feature/desktop-export-settings | DEVELOPMENT_COMPLETE | 85/85 通过 | 2026-06-20 已合并 |
