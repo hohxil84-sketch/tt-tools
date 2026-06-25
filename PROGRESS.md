@@ -10,7 +10,7 @@
 | desktop-ai-copy-client | desktop/modules/ai-copy-client | feature/desktop-ai-copy-client | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并 |
 | desktop-auth-device | desktop/modules/auth-device | feature/desktop-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-file-workbench | desktop/modules/file-workbench | feature/desktop-file-workbench | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-20 已合并 |
-| desktop-ocr | desktop/modules/ocr | feature/desktop-ocr | DEVELOPMENT_COMPLETE | 33/33 通过 | 2026-06-20 已合并 |
+| desktop-ocr | desktop/modules/ocr | feature/ocr-low-confidence-placeholder | DEVELOPMENT_COMPLETE | 45/45 C# + 37/37 Python | 2026-06-25 已合并 |
 | desktop-job-system | desktop/modules/job-system | feature/desktop-job-system | DEVELOPMENT_COMPLETE | 71/71 通过 | 2026-06-20 已合并 |
 | desktop-export-settings | desktop/modules/export-settings | feature/desktop-export-settings | DEVELOPMENT_COMPLETE | 85/85 通过 | 2026-06-20 已合并 |
 | contract-base-rules | shared-contract/modules/base-rules | feature/contract-base-rules | DEVELOPMENT_COMPLETE | 0 errors | 2026-06-03 已合并 |
@@ -28,7 +28,7 @@
 | cloud-admin-users | cloud/admin/modules/admin-users | feature/admin-users | DEVELOPMENT_COMPLETE | 50/50 通过 | 2026-06-24 已合并 |
 | cloud-admin-billing | cloud/admin/modules/admin-billing | feature/admin-billing | DEVELOPMENT_COMPLETE | 67/67 通过 | 2026-06-24 已合并 |
 | cloud-admin-ops | cloud/admin/modules/admin-ops | feature/admin-ops | DEVELOPMENT_COMPLETE | 48/48 通过 | 2026-06-24 已合并 |
-| local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
+| local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 37/37 通过 | 2026-06-25 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
 | local-worker-remove-bg | local-worker/modules/remove-bg | feature/local-remove-bg | DEVELOPMENT_COMPLETE | 32/32 通过 | 2026-06-21 已合并 |
