@@ -89,19 +89,35 @@ export async function apiRequest<T = unknown>(
     throw new ApiError('需要管理员权限', 'PERMISSION_DENIED', 403);
   }
 
-  const json = await response.json();
-
-  if (!response.ok) {
-    const errMsg = json?.error?.message || json?.detail?.message || '请求失败';
-    const errCode = json?.error?.code || json?.detail?.code || 'UNKNOWN';
-    throw new ApiError(errMsg, errCode, response.status);
+  let json: any;
+  try {
+    const text = await response.text();
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new ApiError(`服务器返回非 JSON (HTTP ${response.status}): ${text.slice(0, 200)}`, 'PARSE_ERROR', response.status);
+    }
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(`无法读取服务器响应 (HTTP ${response.status})`, 'READ_ERROR', response.status);
   }
 
-  // 检查业务层 success 字段（后端 error_response 可能返回 HTTP 200 + success=false）
-  if (json.success === false) {
-    const errMsg = json?.error?.message || '请求失败';
-    const errCode = json?.error?.code || 'UNKNOWN';
-    throw new ApiError(errMsg, errCode, response.status);
+  // 先检查业务层 success 字段
+  const isSuccess = json?.success;
+  if (isSuccess === false) {
+    const msg = json?.error?.message || json?.detail?.message || `业务错误: ${JSON.stringify(json)}`;
+    throw new ApiError(msg, json?.error?.code || json?.detail?.code || 'UNKNOWN', response.status);
+  }
+
+  // HTTP 错误
+  if (!response.ok) {
+    const msg = json?.error?.message || json?.detail?.message || `HTTP ${response.status}`;
+    throw new ApiError(msg, json?.error?.code || json?.detail?.code || 'UNKNOWN', response.status);
+  }
+
+  // 成功但无 data 字段
+  if (json?.data === undefined) {
+    throw new ApiError(`响应缺少 data 字段: ${JSON.stringify(json).slice(0, 200)}`, 'NO_DATA', response.status);
   }
 
   return json.data as T;

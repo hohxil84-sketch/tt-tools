@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (account: string, password: string) => {
     // 使用现有 auth-device 登录接口
+    // 管理后台使用 admin-shell 的管理员登录接口
     const data = await apiRequest<{
       access_token: string;
       refresh_token: string;

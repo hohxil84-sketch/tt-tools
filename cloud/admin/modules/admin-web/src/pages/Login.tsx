@@ -16,7 +16,10 @@ export default function Login() {
       await login(account, password);
       navigate('/dashboard');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '登录失败');
+      const msg = (err && typeof err === 'object' && 'message' in (err as object))
+        ? String((err as { message: unknown }).message)
+        : '登录失败';
+      setError(msg);
     } finally { setLoading(false); }
   };
 
@@ -62,7 +65,7 @@ export default function Login() {
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>账号</label>
             <input type="text" value={account} onChange={e => setAccount(e.target.value)}
-              placeholder="admin@tt-tools.com" required autoFocus
+              placeholder="admin@tttools.com" required autoFocus
               style={inputStyle} />
           </div>
           <div style={{ marginBottom: 24 }}>
@@ -83,7 +86,7 @@ export default function Login() {
         </form>
 
         <p style={{ marginTop: 20, textAlign: 'center', fontSize: 11, color: 'var(--gray-400)' }}>
-          admin@tt-tools.com / admin123
+          admin@tttools.com / admin
         </p>
       </div>
     </div>
