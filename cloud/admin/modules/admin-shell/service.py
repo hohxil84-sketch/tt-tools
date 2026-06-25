@@ -2,15 +2,16 @@
 admin-shell 业务逻辑层。
 
 提供仪表盘统计、导航菜单生成和服务状态查询。
-当前阶段为骨架实现：仪表盘统计返回占位值，后续 admin-users、
-admin-billing、admin-ops 模块完成后接入真实数据。
+仪表盘统计从数据库实时查询 users、devices、orders 表聚合数据。
 """
 from __future__ import annotations
 
 import os
 import time
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas import DashboardStats, MenuItem, MenuData, StatusData
@@ -21,30 +22,61 @@ _SERVER_START_TIME: float = time.time()
 
 
 # ============================================================
-# 仪表盘统计
+# 仪表盘统计（从数据库实时查询）
 # ============================================================
 
 async def get_dashboard_stats(db: Optional[AsyncSession] = None) -> DashboardStats:
     """获取后台仪表盘核心统计指标。
 
-    当前为骨架实现：返回占位值 0。
-    后续由 admin-users、admin-billing、admin-ops 模块接入真实数据库查询。
+    从数据库实时查询用户总数、今日订单数、今日收入、活跃设备数。
+    如果 db 为 None（无数据库连接），返回占位值 0。
 
     Args:
-        db: 数据库异步会话（预留，当前未使用）
+        db: 数据库异步会话
 
     Returns:
         DashboardStats 统计指标
     """
-    # 骨架实现：占位值，后续由对应后台模块注入真实查询
-    # 预留 db 参数用于后续从 users、devices、orders 等表聚合统计
-    _ = db  # 预留参数位
+    if db is None:
+        return DashboardStats(
+            users_total=0,
+            orders_today=0,
+            revenue_today_cents=0,
+            active_devices=0,
+            server_status="healthy",
+        )
+
+    # 查询用户总数
+    users_result = await db.execute(text("SELECT COUNT(*) FROM users"))
+    users_total = users_result.scalar_one()
+
+    # 查询今日订单数和收入（UTC 今日 00:00:00 起）
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).strftime("%Y-%m-%d %H:%M:%S")
+
+    orders_result = await db.execute(
+        text(
+            "SELECT COUNT(*), COALESCE(SUM(amount_cents), 0) "
+            "FROM orders WHERE created_at >= :today_start"
+        ),
+        {"today_start": today_start},
+    )
+    orders_row = orders_result.one()
+    orders_today = orders_row[0]
+    revenue_today_cents = orders_row[1]
+
+    # 查询活跃设备数
+    devices_result = await db.execute(
+        text("SELECT COUNT(*) FROM devices WHERE status = 'active'")
+    )
+    active_devices = devices_result.scalar_one()
 
     return DashboardStats(
-        users_total=0,
-        orders_today=0,
-        revenue_today_cents=0,
-        active_devices=0,
+        users_total=users_total,
+        orders_today=orders_today,
+        revenue_today_cents=revenue_today_cents,
+        active_devices=active_devices,
         server_status="healthy",
     )
 
@@ -56,8 +88,9 @@ async def get_dashboard_stats(db: Optional[AsyncSession] = None) -> DashboardSta
 def get_menu() -> MenuData:
     """获取后台导航菜单结构。
 
-    定义后台左侧导航栏的菜单项，前端根据此数据渲染导航。
-    后续后台模块完成后，可在此追加新菜单项。
+    定义后台左侧导航栏的详细菜单项，前端根据此数据渲染导航。
+    包含仪表盘、用户管理、设备管理、套餐管理、订单管理、额度管理、
+    AI 调用日志、成本统计、风控日志、功能开关等所有后台功能入口。
 
     Returns:
         MenuData 菜单结构数据
@@ -65,7 +98,7 @@ def get_menu() -> MenuData:
     menu_items = [
         MenuItem(
             id="dashboard",
-            title="首页仪表盘",
+            title="仪表盘",
             icon="dashboard",
             path="/admin/dashboard",
         ),
@@ -74,18 +107,84 @@ def get_menu() -> MenuData:
             title="用户管理",
             icon="users",
             path="/admin/users",
+            children=[
+                MenuItem(
+                    id="users-list",
+                    title="用户列表",
+                    icon="list",
+                    path="/admin/users",
+                ),
+                MenuItem(
+                    id="devices-list",
+                    title="设备管理",
+                    icon="devices",
+                    path="/admin/devices",
+                ),
+            ],
         ),
         MenuItem(
             id="billing",
             title="计费管理",
             icon="billing",
             path="/admin/billing",
+            children=[
+                MenuItem(
+                    id="plans",
+                    title="套餐管理",
+                    icon="plan",
+                    path="/admin/plans",
+                ),
+                MenuItem(
+                    id="orders",
+                    title="订单管理",
+                    icon="order",
+                    path="/admin/orders",
+                ),
+                MenuItem(
+                    id="credits-accounts",
+                    title="额度账户",
+                    icon="credits",
+                    path="/admin/credits/accounts",
+                ),
+                MenuItem(
+                    id="credits-ledger",
+                    title="额度流水",
+                    icon="ledger",
+                    path="/admin/credits/ledger",
+                ),
+            ],
         ),
         MenuItem(
             id="ops",
             title="运维管理",
             icon="ops",
             path="/admin/ops",
+            children=[
+                MenuItem(
+                    id="provider-call-logs",
+                    title="AI 调用日志",
+                    icon="log",
+                    path="/admin/provider-call-logs",
+                ),
+                MenuItem(
+                    id="cost-stats",
+                    title="成本统计",
+                    icon="cost",
+                    path="/admin/cost-stats",
+                ),
+                MenuItem(
+                    id="risk-logs",
+                    title="风控日志",
+                    icon="risk",
+                    path="/admin/risk-logs",
+                ),
+                MenuItem(
+                    id="feature-flags",
+                    title="功能开关",
+                    icon="feature",
+                    path="/admin/feature-flags",
+                ),
+            ],
         ),
     ]
     return MenuData(menu=menu_items)

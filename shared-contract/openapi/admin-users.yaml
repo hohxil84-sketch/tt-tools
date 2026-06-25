@@ -72,6 +72,39 @@ paths:
         "403":
           $ref: "./common.yaml#/components/responses/Forbidden"
 
+    post:
+      tags: [Admin Users]
+      summary: 创建用户
+      description: |
+        管理员手动创建新用户。需要管理员权限。
+      operationId: createUser
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "200":
+          description: 创建成功的用户信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          description: 账号已存在
+
   /admin/users/{user_id}:
     get:
       tags: [Admin Users]
@@ -102,6 +135,87 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/UserDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+    patch:
+      tags: [Admin Users]
+      summary: 编辑用户信息
+      description: |
+        修改指定用户的展示名称、套餐编码或角色。需要管理员权限。
+        不修改密码，密码修改需单独接口。
+      operationId: updateUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: 用户 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: 更新后的用户信息
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UserDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+    delete:
+      tags: [Admin Users]
+      summary: 删除用户
+      description: |
+        删除指定用户（硬删除，同时清理关联设备和会话）。需要管理员权限。
+        危险操作，建议前端二次确认。
+      operationId: deleteUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: 用户 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted:
+                            type: boolean
         "401":
           $ref: "./common.yaml#/components/responses/Unauthorized"
         "403":
@@ -333,6 +447,45 @@ paths:
         "404":
           $ref: "./common.yaml#/components/responses/NotFound"
 
+    delete:
+      tags: [Admin Users]
+      summary: 删除设备
+      description: |
+        删除指定设备（硬删除，清理绑定关系和会话）。需要管理员权限。
+        危险操作，建议前端二次确认。
+      operationId: deleteDevice
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          description: 设备 ID（UUID）
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          deleted:
+                            type: boolean
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
 components:
   schemas:
     # ============================================================
@@ -415,6 +568,49 @@ components:
         - plan_code
         - created_at
         - updated_at
+
+    CreateUserRequest:
+      type: object
+      description: 创建用户请求
+      properties:
+        account:
+          type: string
+          description: 登录账号
+        password:
+          type: string
+          description: 登录密码（明文，服务端 bcrypt 哈希存储）
+        display_name:
+          type: string
+          nullable: true
+          description: 展示名称
+        role:
+          type: string
+          description: 用户角色（默认 user）
+          enum: [user, admin]
+          default: user
+        plan_code:
+          type: string
+          description: 套餐编码（默认 free）
+          default: free
+      required:
+        - account
+        - password
+
+    UpdateUserRequest:
+      type: object
+      description: 编辑用户信息请求（所有字段可选，只更新传入字段）
+      properties:
+        display_name:
+          type: string
+          nullable: true
+          description: 展示名称
+        plan_code:
+          type: string
+          description: 套餐编码
+        role:
+          type: string
+          description: 用户角色
+          enum: [user, admin]
 
     UpdateUserStatusRequest:
       type: object

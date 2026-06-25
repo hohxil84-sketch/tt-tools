@@ -48,6 +48,7 @@ from service import (
     create_plan,
     update_plan,
     update_plan_status,
+    delete_plan,
     list_all_orders,
     get_admin_order_detail,
     list_credit_accounts,
@@ -222,6 +223,34 @@ async def admin_update_plan_status(
 # ============================================================
 # 订单管理端点
 # ============================================================
+
+
+@router.delete("/admin/plans/{plan_id}")
+async def admin_delete_plan(
+    plan_id: str,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除套餐。
+
+    硬删除套餐。如有关联用户则拒绝。需要管理员权限。
+
+    对齐 admin-billing.yaml DELETE /admin/plans/{plan_id}。
+    """
+    try:
+        data = await delete_plan(db=db, plan_id=plan_id)
+        return success_response(data, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code,
+                message=e.message,
+                request_id=request_id,
+                details=e.details,
+            ),
+            status_code=e.status_code,
+        )
 
 
 @router.get("/admin/orders")

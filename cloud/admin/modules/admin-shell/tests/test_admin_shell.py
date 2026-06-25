@@ -82,7 +82,7 @@ class TestMenu:
         required_fields = {"id", "title", "icon", "path"}
         for item in menu:
             for field in required_fields:
-                assert field in item, f"菜单项缺少 {field} 字段"
+                assert field in item, f"Menu item missing field {field}"
 
         # 验证菜单项 ID
         menu_ids = [item["id"] for item in menu]
@@ -170,7 +170,7 @@ class TestMenuStructure:
         body = resp.json()
         menu = body["data"]["menu"]
         assert menu[0]["id"] == "dashboard"
-        assert menu[0]["title"] == "首页仪表盘"
+        assert menu[0]["title"] == "仪表盘"
 
 
 # ============================================================

@@ -29,7 +29,12 @@ from schemas import (
     DeviceItem,
     DeviceDetail,
     DeviceListData,
+    CreateUserRequest,
+    UpdateUserRequest,
 )
+
+# bcrypt 密码哈希
+import bcrypt
 
 # 允许的用户状态值
 VALID_USER_STATUSES = {"active", "blocked", "deleted"}
@@ -209,6 +214,165 @@ async def update_user_status(
         created_at=user.created_at,
         updated_at=user.updated_at,
     )
+
+
+async def create_user(
+    db: AsyncSession,
+    account: str,
+    password: str,
+    display_name: Optional[str] = None,
+    role: str = "user",
+    plan_code: str = "free",
+) -> UserDetail:
+    """创建新用户（管理员手动创建）。
+
+    Args:
+        db: 数据库异步会话
+        account: 登录账号
+        password: 明文密码（将 bcrypt 哈希存储）
+        display_name: 展示名称（可选）
+        role: 用户角色（默认 user）
+        plan_code: 套餐编码（默认 free）
+
+    Returns:
+        UserDetail 创建的用户信息
+
+    Raises:
+        AppError: 账号已存在时抛出 409
+    """
+    # 检查账号是否已存在
+    existing = await db.execute(select(User).where(User.account == account))
+    if existing.scalar_one_or_none() is not None:
+        raise AppError(
+            code="ACCOUNT_EXISTS",
+            message=f"账号 {account} 已存在",
+            status_code=409,
+        )
+
+    # 密码哈希
+    password_hash = bcrypt.hashpw(
+        password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    user = User(
+        account=account,
+        password_hash=password_hash,
+        display_name=display_name,
+        role=role,
+        status="active",
+        plan_code=plan_code,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(user)
+    await db.flush()
+
+    return UserDetail(
+        id=user.id,
+        account=user.account,
+        display_name=user.display_name,
+        role=user.role,
+        status=user.status,
+        plan_code=user.plan_code,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
+
+
+async def update_user(
+    db: AsyncSession,
+    user_id: str,
+    display_name: Optional[str] = None,
+    plan_code: Optional[str] = None,
+    role: Optional[str] = None,
+) -> UserDetail:
+    """编辑用户信息（只更新传入的非 None 字段）。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 用户 ID
+        display_name: 新展示名称（可选）
+        plan_code: 新套餐编码（可选）
+        role: 新角色（可选）
+
+    Returns:
+        UserDetail 更新后的用户信息
+
+    Raises:
+        AppError: 用户不存在时抛出 404
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise AppError(
+            code="USER_NOT_FOUND",
+            message=f"用户 {user_id} 不存在",
+            status_code=404,
+        )
+
+    if display_name is not None:
+        user.display_name = display_name
+    if plan_code is not None:
+        user.plan_code = plan_code
+    if role is not None:
+        user.role = role
+
+    user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.flush()
+
+    return UserDetail(
+        id=user.id,
+        account=user.account,
+        display_name=user.display_name,
+        role=user.role,
+        status=user.status,
+        plan_code=user.plan_code,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+    )
+
+
+async def delete_user(db: AsyncSession, user_id: str) -> dict:
+    """删除用户（硬删除，同时清理关联设备）。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 用户 ID
+
+    Returns:
+        {"deleted": True}
+
+    Raises:
+        AppError: 用户不存在时抛出 404
+    """
+    # 查询用户
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise AppError(
+            code="USER_NOT_FOUND",
+            message=f"用户 {user_id} 不存在",
+            status_code=404,
+        )
+
+    # 删除关联设备
+    await db.execute(
+        select(Device).where(Device.user_id == user_id)
+    )
+    devices_result = await db.execute(
+        select(Device).where(Device.user_id == user_id)
+    )
+    for device in devices_result.scalars().all():
+        await db.delete(device)
+
+    # 删除用户
+    await db.delete(user)
+    await db.flush()
+
+    return {"deleted": True}
 
 
 async def list_user_devices(
@@ -431,3 +595,32 @@ async def update_device_status(
         created_at=device.created_at,
         updated_at=device.updated_at,
     )
+
+
+async def delete_device(db: AsyncSession, device_id: str) -> dict:
+    """删除设备（硬删除）。
+
+    Args:
+        db: 数据库异步会话
+        device_id: 设备 ID
+
+    Returns:
+        {"deleted": True}
+
+    Raises:
+        AppError: 设备不存在时抛出 404
+    """
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+
+    if device is None:
+        raise AppError(
+            code="DEVICE_NOT_FOUND",
+            message=f"设备 {device_id} 不存在",
+            status_code=404,
+        )
+
+    await db.delete(device)
+    await db.flush()
+
+    return {"deleted": True}
