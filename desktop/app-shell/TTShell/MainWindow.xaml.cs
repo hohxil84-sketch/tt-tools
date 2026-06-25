@@ -49,29 +49,51 @@ public partial class MainWindow : Window
         _authState.LoggedOut += OnUserLoggedOut;
 
         SetNavButtonSelected(NavHome);
-        UpdateMaxRestoreButton();
-        StateChanged += (_, _) => UpdateMaxRestoreButton();
     }
 
-    /// <summary>登录成功后自动跳转到首页并更新状态栏</summary>
+    /// <summary>登录成功后自动跳转到首页并更新状态栏和右上角用户按钮</summary>
     private void OnUserLoggedIn(object? sender, EventArgs e)
     {
         Dispatcher.Invoke(() =>
         {
             StatusText.Text = $"当前：首页 | 用户：{_authState.User.DisplayName ?? _authState.User.Account}";
+            UserEntryButton.Content = $"👤 {_authState.User.DisplayName ?? _authState.User.Account}";
             // 登录成功后自动跳转到首页
             MainContent.Content = new HomePage();
             SetNavButtonSelected(NavHome);
         });
     }
 
-    /// <summary>登出后清除状态栏用户信息</summary>
+    /// <summary>登出后清除状态栏用户信息和右上角用户按钮</summary>
     private void OnUserLoggedOut(object? sender, EventArgs e)
     {
         Dispatcher.Invoke(() =>
         {
             StatusText.Text = "就绪（未登录）";
+            UserEntryButton.Content = "👤 登录";
         });
+    }
+
+    /// <summary>
+    /// 右上角用户按钮点击处理。
+    /// 未登录时跳转登录页，已登录时跳转设备状态页。
+    /// </summary>
+    private void OnUserEntryClick(object sender, RoutedEventArgs e)
+    {
+        if (_authState.IsLoggedIn)
+        {
+            // 已登录 -> 显示设备绑定状态（含退出登录按钮）
+            MainContent.Content = new DeviceStatusView { DataContext = new DeviceStatusViewModel(_authState, _apiClient) };
+            StatusText.Text = "当前：设备状态";
+            _currentNavButton = null; // 取消侧边栏高亮
+        }
+        else
+        {
+            // 未登录 -> 跳转登录页
+            MainContent.Content = new LoginView { DataContext = new LoginViewModel(_authState, _apiClient) };
+            StatusText.Text = "当前：登录管理";
+            _currentNavButton = null;
+        }
     }
 
     /// <summary>
@@ -157,25 +179,7 @@ public partial class MainWindow : Window
 
     private void OnTitleBarMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount == 2)
-            OnMaximizeRestore(sender, e);
-        else if (e.LeftButton == MouseButtonState.Pressed)
+        if (e.LeftButton == MouseButtonState.Pressed)
             DragMove();
     }
-
-    private void OnMinimize(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-
-    private void OnMaximizeRestore(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState == WindowState.Maximized
-            ? WindowState.Normal
-            : WindowState.Maximized;
-    }
-
-    private void UpdateMaxRestoreButton()
-    {
-        MaxRestoreButton.Content = WindowState == WindowState.Maximized ? "❐" : "□";
-    }
-
-    private void OnClose(object sender, RoutedEventArgs e) => Close();
 }
