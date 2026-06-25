@@ -35,12 +35,13 @@ class OCRResult:
 
     text_lines: List[OCRBox]  # 所有检测到的文字行
     total_text: str  # 所有文字拼接后的完整文本（按阅读顺序）
-    elapsed_total: float  # 总耗时（秒）
-    elapsed_det: float  # 文字检测耗时（秒）
-    elapsed_cls: Optional[float]  # 文字方向分类耗时（秒），未启用时为 None
-    elapsed_rec: float  # 文字识别耗时（秒）
-    engine_name: str  # OCR 引擎名称，如 "RapidOCR"
-    engine_version: str  # OCR 引擎版本
+    formatted_text: str = ""  # 按原图坐标排版后的格式化文本（保留换行、缩进、空格）
+    elapsed_total: float = 0.0  # 总耗时（秒）
+    elapsed_det: float = 0.0  # 文字检测耗时（秒）
+    elapsed_cls: Optional[float] = None  # 文字方向分类耗时（秒），未启用时为 None
+    elapsed_rec: float = 0.0  # 文字识别耗时（秒）
+    engine_name: str = "RapidOCR"  # OCR 引擎名称
+    engine_version: str = ""  # OCR 引擎版本
     image_width: Optional[int] = None  # 原图宽度（像素）
     image_height: Optional[int] = None  # 原图高度（像素）
 
@@ -71,6 +72,7 @@ class OCRResult:
         return {
             "line_count": self.line_count,
             "total_text": self.total_text,
+            "formatted_text": self.formatted_text,
             "text_lines": [
                 {
                     "text": line.text,

@@ -14,9 +14,19 @@ namespace TTTools.OCR.Services;
 /// OCR 服务
 /// 封装与 local-worker OCR 引擎的通信，提供单张识别、批量识别、健康检查能力。
 /// 通过 LocalRuntimeClient 启动 Python worker 进程，使用 stdin/stdout JSON 协议通信。
+///
+/// 阈值说明：
+///   - 引擎端使用 text_score=0.0 保留所有低置信度结果
+///   - UI 遮罩由 mask_below_score 控制，在 Python formatted_text 和 C# DisplayLines 中分别应用
 /// </summary>
 public class OcrService : IDisposable
 {
+    /// <summary>引擎端文字过滤阈值（低值保留所有结果，UI 层自行遮罩）</summary>
+    private const double EngineTextScore = 0.0;
+
+    /// <summary>默认 UI 遮罩阈值</summary>
+    private const double DefaultMaskBelowScore = 0.5;
+
     private readonly LocalRuntimeClient? _runtimeClient;
     private readonly JobManager? _jobManager;
     private readonly AppLogger? _logger;
@@ -110,13 +120,13 @@ public class OcrService : IDisposable
     /// 对单张图片执行 OCR 识别
     /// </summary>
     /// <param name="filePath">图片文件路径</param>
-    /// <param name="textScore">置信度阈值 (0.0 ~ 1.0)</param>
+    /// <param name="maskBelowScore">UI 遮罩阈值 (0.0 ~ 1.0)，低于此值的文字在 formatted_text 中替换为 □</param>
     /// <param name="useDml">是否使用 GPU 加速</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>OCR 识别结果</returns>
     public async Task<OcrJobResult> RecognizeAsync(
         string filePath,
-        double textScore = 0.5,
+        double maskBelowScore = DefaultMaskBelowScore,
         bool useDml = false,
         CancellationToken ct = default)
     {
@@ -136,10 +146,13 @@ public class OcrService : IDisposable
         _logger?.Info($"开始 OCR 识别: {Path.GetFileName(filePath)}", "desktop-ocr");
 
         // 发送识别请求
+        // text_score: 引擎过滤阈值（低值保留所有结果）
+        // mask_below_score: UI 遮罩阈值（控制 □ 替换）
         var requestData = new
         {
             file_path = filePath,
-            text_score = textScore,
+            text_score = EngineTextScore,
+            mask_below_score = maskBelowScore,
             use_dml = useDml
         };
 
@@ -169,6 +182,7 @@ public class OcrService : IDisposable
             resp.TryGetProperty("data", out var data) ? data : resp,
             filePath);
         result.IsSuccess = true;
+        result.ConfidenceThreshold = maskBelowScore;
 
         _logger?.Info(
             $"OCR 识别完成: {Path.GetFileName(filePath)}, {result.LineCount} 行, " +
@@ -182,16 +196,18 @@ public class OcrService : IDisposable
     /// 批量识别多张图片
     /// </summary>
     /// <param name="filePaths">图片文件路径列表</param>
-    /// <param name="textScore">置信度阈值</param>
+    /// <param name="maskBelowScore">UI 遮罩阈值</param>
     /// <param name="useDml">是否使用 GPU 加速</param>
-    /// <param name="progressCallback">进度回调 (当前索引, 总数)</param>
+    /// <param name="onImageStart">每张开始时的回调 (序号0, 总数, 文件名)</param>
+    /// <param name="onImageComplete">每张完成时的回调 (已完成数, 总数)</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>OCR 识别结果列表</returns>
     public async Task<List<OcrJobResult>> RecognizeBatchAsync(
         List<string> filePaths,
-        double textScore = 0.5,
+        double maskBelowScore = DefaultMaskBelowScore,
         bool useDml = false,
-        Action<int, int>? progressCallback = null,
+        Action<int, int, string>? onImageStart = null,
+        Action<int, int>? onImageComplete = null,
         CancellationToken ct = default)
     {
         if (!_isAvailable || _runtimeClient == null)
@@ -207,9 +223,14 @@ public class OcrService : IDisposable
             ct.ThrowIfCancellationRequested();
 
             var filePath = filePaths[i];
+            var fileName = Path.GetFileName(filePath);
+
+            // 每张开始时回调：让 UI 显示"正在识别 X/total：文件名"
+            onImageStart?.Invoke(i, total, fileName);
+
             try
             {
-                var result = await RecognizeAsync(filePath, textScore, useDml, ct);
+                var result = await RecognizeAsync(filePath, maskBelowScore, useDml, ct);
                 results.Add(result);
             }
             catch (Exception ex)
@@ -225,7 +246,8 @@ public class OcrService : IDisposable
                     $"批量 OCR 第 {i + 1}/{total} 张失败: {ex.Message}", ex, "desktop-ocr");
             }
 
-            progressCallback?.Invoke(i + 1, total);
+            // 每张完成后回调：更新进度条
+            onImageComplete?.Invoke(i + 1, total);
         }
 
         return results;
@@ -236,13 +258,13 @@ public class OcrService : IDisposable
     /// 创建 JobRecord 并在开始、进度、完成时更新状态。
     /// </summary>
     /// <param name="filePaths">图片文件路径列表</param>
-    /// <param name="textScore">置信度阈值</param>
+    /// <param name="maskBelowScore">UI 遮罩阈值</param>
     /// <param name="useDml">是否使用 GPU 加速</param>
     /// <param name="ct">取消令牌</param>
     /// <returns>创建的任务 ID</returns>
     public async Task<string> RecognizeWithJobTrackingAsync(
         List<string> filePaths,
-        double textScore = 0.5,
+        double maskBelowScore = DefaultMaskBelowScore,
         bool useDml = false,
         CancellationToken ct = default)
     {
@@ -262,13 +284,13 @@ public class OcrService : IDisposable
             _jobManager.UpdateJobProgress(job.Id, 0);
 
             var results = await RecognizeBatchAsync(
-                filePaths, textScore, useDml,
-                (current, total) =>
+                filePaths, maskBelowScore, useDml,
+                onImageComplete: (completed, total) =>
                 {
-                    var progress = (int)((double)current / total * 100);
+                    var progress = (int)((double)completed / total * 100);
                     _jobManager.UpdateJobProgress(job.Id, progress);
                 },
-                ct);
+                ct: ct);
 
             // 检查结果
             var successCount = results.Count(r => r.IsSuccess);

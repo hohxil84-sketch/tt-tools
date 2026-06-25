@@ -17,7 +17,7 @@
         <SolidColorBrush x:Key="SuccessBrush" Color="#2E7D32"/>
         <!-- 错误状态颜色 -->
         <SolidColorBrush x:Key="ErrorBrush" Color="#C62828"/>
-        <!-- 低置信度 XX 占位符颜色 -->
+        <!-- 低置信度 □ 占位符颜色 -->
         <SolidColorBrush x:Key="LowConfReplacementBrush" Color="#D32F2F"/>
         <!-- 正常文本颜色 -->
         <SolidColorBrush x:Key="NormalTextBrush" Color="#212121"/>
@@ -88,12 +88,15 @@
                     <TextBlock Text="{Binding ServiceStatusText}" VerticalAlignment="Center" FontSize="12"/>
                 </StackPanel>
 
+                <!-- 选择图片按钮：只打开文件对话框，不自动识别 -->
                 <Button Grid.Column="1" Content="选择图片" Command="{Binding SelectFilesCommand}"
                         Width="100" Height="32" Margin="8,0" FontSize="13"
-                        ToolTip="打开文件选择对话框，选择要识别的图片文件"/>
+                        ToolTip="打开文件选择对话框，将图片加入待识别列表"/>
+
+                <!-- 开始识别按钮：对待识别列表执行 OCR -->
                 <Button Grid.Column="2" Content="开始识别" Command="{Binding StartRecognitionCommand}"
                         Width="100" Height="32" Margin="0,0,8,0" FontSize="13"
-                        ToolTip="对已选择的图片文件执行 OCR 识别"/>
+                        ToolTip="对已选择的图片执行 OCR 识别"/>
 
                 <!-- 置信度阈值滑块（百分比） -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0">
@@ -101,7 +104,7 @@
                     <Slider Minimum="0" Maximum="100" Value="{Binding TextScorePercent}"
                             Width="120" SmallChange="5" LargeChange="10"
                             TickFrequency="10" IsSnapToTickEnabled="True"
-                            ToolTip="低于此百分比的识别文字将用 XX 替换"/>
+                            ToolTip="低于此百分比的识别文字将用 □ 替换"/>
                     <TextBlock Text="{Binding TextScorePercent, StringFormat={}{0}%}" VerticalAlignment="Center"
                                FontSize="12" Width="40" Margin="6,0,0,0"/>
                 </StackPanel>
@@ -111,7 +114,7 @@
                         ToolTip="复制选中识别结果的文本到剪贴板"/>
                 <Button Grid.Column="5" Content="清除结果" Command="{Binding ClearResultsCommand}"
                         Width="90" Height="32" Margin="4,0" FontSize="13"
-                        ToolTip="清除所有 OCR 识别结果"/>
+                        ToolTip="清除所有 OCR 识别结果和待识别列表"/>
             </Grid>
         </Border>
 
@@ -216,7 +219,7 @@
                                             <TextBlock FontSize="11">
                                                 <Run Text="高: "/>
                                                 <Run Text="{Binding HighConfidenceCount, Mode=OneWay}" Foreground="Green" FontWeight="SemiBold"/>
-                                                <Run Text="  低: "/>
+                                                <Run Text="  遮: "/>
                                                 <Run Text="{Binding LowConfidenceCount, Mode=OneWay}" Foreground="Red" FontWeight="SemiBold"/>
                                             </TextBlock>
                                         </StackPanel>
@@ -289,7 +292,7 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 格式化文本展示区 -->
+                    <!-- 格式化文本展示区（等宽字体，保留空格排版） -->
                     <Border Grid.Row="2" Margin="8,8,8,8">
                         <Grid>
                             <!-- 无结果时的提示 -->
@@ -307,44 +310,31 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <!-- 有结果时按原始排版展示，低置信度行显示红色 XX -->
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ScrollViewer.Style>
-                                <Style TargetType="ScrollViewer">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasSelectedResult}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ScrollViewer.Style>
+                            <!-- 有结果时显示格式化文本，使用等宽字体保留排版 -->
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer.Style>
+                                    <Style TargetType="ScrollViewer">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasSelectedResult}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ScrollViewer.Style>
 
-                            <ItemsControl ItemsSource="{Binding SelectedResult.DisplayLines}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <!-- 每行：根据原图坐标缩进，低置信度显示红色 XX -->
-                                        <TextBlock FontSize="15" FontFamily="Microsoft YaHei"
-                                                   LineHeight="24" TextWrapping="Wrap"
-                                                   Padding="{Binding IndentThickness}"
-                                                   ToolTip="{Binding OriginalText}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="{Binding DisplayText}"/>
-                                                    <Setter Property="Foreground" Value="{StaticResource NormalTextBrush}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsLowConfidence}" Value="True">
-                                                            <Setter Property="Foreground" Value="{StaticResource LowConfReplacementBrush}"/>
-                                                            <Setter Property="FontWeight" Value="Bold"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                                <!-- 优先展示 FormattedText（坐标排版），回退到 TotalText -->
+                                <!-- 使用等宽字体 Consolas + 中文字体 Microsoft YaHei -->
+                                <TextBlock Text="{Binding SelectedFormattedText}"
+                                           FontFamily="Consolas, Microsoft YaHei UI"
+                                           FontSize="15"
+                                           LineHeight="24"
+                                           TextWrapping="NoWrap"
+                                           HorizontalAlignment="Left"
+                                           Margin="4"
+                                           Foreground="{StaticResource NormalTextBrush}"/>
+                            </ScrollViewer>
                         </Grid>
                     </Border>
                 </Grid>
@@ -361,15 +351,34 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
+                <!-- 状态消息 -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <!-- 待识别数量提示 -->
+                    <TextBlock FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"
+                               Foreground="#1565C0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasPendingFiles}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                        <Run Text="待识别: "/>
+                        <Run Text="{Binding PendingFiles.Count, Mode=OneWay}" FontWeight="SemiBold"/>
+                        <Run Text=" 张"/>
+                    </TextBlock>
+
                     <TextBlock Text="{Binding StatusMessage}" FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <!-- 进度条（运行中时显示） -->
+                <!-- 进度条 + 统计 -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <ProgressBar Width="200" Height="12" Margin="0,0,8,0"
                                  Value="{Binding ProgressValue}" Maximum="{Binding ProgressMax}"
-                                 Visibility="{Binding IsRunning, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                 IsIndeterminate="False"/>
                     <TextBlock FontSize="12" VerticalAlignment="Center">
                         <Run Text="{Binding SuccessCount, Mode=OneWay}" Foreground="Green" FontWeight="SemiBold"/>
                         <Run Text=" 成功, "/>

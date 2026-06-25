@@ -21,6 +21,7 @@ local-worker/modules/ocr/engine — OCR 引擎核心
   - shared (local-worker/shared)
 """
 
+import statistics
 import time
 import uuid
 from pathlib import Path
@@ -41,14 +42,160 @@ SUPPORTED_IMAGE_SUFFIXES = [".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".
 # RapidOCR 版本（安装时确定）
 RAPIDOCR_VERSION = "1.4.4"
 
-# 默认文字置信度阈值
-DEFAULT_TEXT_SCORE = 0.5
+# 默认引擎文字置信度阈值（传给 RapidOCR，较低以保留更多结果供 UI 层过滤）
+DEFAULT_ENGINE_TEXT_SCORE = 0.0
+
+# 默认 UI 遮罩阈值（低于此值的文字在 formatted_text 中替换为 □）
+DEFAULT_MASK_BELOW_SCORE = 0.5
 
 # 最大图片边长（像素），超过会自动缩放
 DEFAULT_MAX_SIDE_LEN = 2000
 
 # 模块级日志
 logger = get_logger("local-worker.ocr")
+
+
+def format_ocr_result(
+    text_lines: List[OCRBox],
+    mask_below_score: Optional[float] = None,
+    image_width: Optional[int] = None,
+) -> str:
+    """按原图坐标排版 OCR 识别结果，生成保留视觉格式的文本。
+
+    算法：
+    1. 按文字框中心点 y 坐标分组为行（动态阈值 = 中位文字框高度 × 0.5）
+    2. 同一行内按 x 坐标从左到右排序
+    3. 行之间按 y 坐标从上到下排序
+    4. 根据 x 坐标差距插入空格，还原列间距
+    5. 大 y 间距保留额外空行（段落分隔）
+    6. 如果指定 mask_below_score，低于阈值的文字替换为等长 □
+
+    参数：
+        text_lines: OCR 识别结果列表。
+        mask_below_score: UI 置信度遮罩阈值 (0.0~1.0)，None 表示不遮罩。
+        image_width: 原图宽度（像素），预留用于更精确的间距计算。
+
+    返回：
+        格式化后的多行文本，保留换行和空格排版。
+    """
+    if not text_lines:
+        return ""
+
+    # ---- 辅助函数：计算文字框中心点 ----
+    def _center_y(box: List[List[float]]) -> float:
+        """文字框中心 y 坐标。"""
+        if box and len(box) >= 4:
+            return sum(p[1] for p in box[:4]) / 4.0
+        return 0.0
+
+    def _center_x(box: List[List[float]]) -> float:
+        """文字框中心 x 坐标。"""
+        if box and len(box) >= 4:
+            return sum(p[0] for p in box[:4]) / 4.0
+        return 0.0
+
+    def _box_width(box: List[List[float]]) -> float:
+        """文字框近似宽度（取上下边平均值）。"""
+        if box and len(box) >= 4:
+            top_w = abs(box[1][0] - box[0][0])
+            bot_w = abs(box[2][0] - box[3][0])
+            return (top_w + bot_w) / 2.0
+        return 50.0
+
+    def _box_height(box: List[List[float]]) -> float:
+        """文字框近似高度（取左右边平均值）。"""
+        if box and len(box) >= 4:
+            left_h = abs(box[3][1] - box[0][1])
+            right_h = abs(box[2][1] - box[1][1])
+            return (left_h + right_h) / 2.0
+        return 20.0
+
+    # ---- 1. 计算动态行分组阈值 ----
+    heights = [_box_height(line.box) for line in text_lines if line.box and len(line.box) >= 4]
+    if heights:
+        median_height = statistics.median(heights)
+        row_threshold = max(median_height * 0.5, 5.0)  # 至少 5 像素
+    else:
+        row_threshold = 10.0
+
+    # ---- 2. 按 y 中心初步排序 ----
+    sorted_lines = sorted(text_lines, key=lambda l: (_center_y(l.box), _center_x(l.box)))
+
+    # ---- 3. 按 y 邻近度分组成行 ----
+    rows: List[List[OCRBox]] = []
+    current_row = [sorted_lines[0]]
+    current_y = _center_y(sorted_lines[0].box)
+
+    for line in sorted_lines[1:]:
+        y = _center_y(line.box)
+        if abs(y - current_y) <= row_threshold:
+            current_row.append(line)
+        else:
+            rows.append(current_row)
+            current_row = [line]
+            current_y = y
+    rows.append(current_row)
+
+    # ---- 4. 每行内按 x 坐标从左到右排序 ----
+    for row in rows:
+        row.sort(key=lambda l: _center_x(l.box))
+
+    # ---- 5. 构建格式化文本行 ----
+    # 根据图片宽度估算每像素对应的空格数
+    if image_width and image_width > 0:
+        px_per_space = max(image_width / 200.0, 4.0)  # 粗略估计：约 200 字符宽
+    else:
+        px_per_space = 8.0  # 默认每 8px 视为一个空格宽度
+
+    formatted_rows: List[str] = []
+    for row in rows:
+        parts: List[str] = []
+        prev_right_edge: Optional[float] = None
+
+        for line in row:
+            # 应用 □ 遮罩
+            text = line.text
+            if mask_below_score is not None and line.score < mask_below_score:
+                text = "□" * len(text)
+
+            x_center = _center_x(line.box)
+            box_w = _box_width(line.box)
+
+            if prev_right_edge is not None:
+                gap = x_center - prev_right_edge - box_w * 0.5
+                # 如果 gap 为负（文字框重叠），放一个空格；否则按比例插入空格
+                if gap > px_per_space * 0.5:
+                    num_spaces = max(1, round(gap / px_per_space))
+                else:
+                    num_spaces = 1 if gap > -px_per_space else 0
+                parts.append(" " * num_spaces)
+
+            parts.append(text)
+            prev_right_edge = x_center + box_w * 0.5
+
+        formatted_rows.append("".join(parts))
+
+    # ---- 6. 大 y 间距加空行（段落分隔） ----
+    result_lines: List[str] = []
+    prev_row_bottom: Optional[float] = None
+
+    for i, (row, formatted) in enumerate(zip(rows, formatted_rows)):
+        if row:
+            row_top = min(_center_y(line.box) - _box_height(line.box) * 0.5 for line in row)
+            if prev_row_bottom is not None:
+                gap = row_top - prev_row_bottom
+                # 间距超过 2 倍行高阈值时插入空行
+                if gap > row_threshold * 3.0:
+                    result_lines.append("")
+
+        result_lines.append(formatted)
+
+        if row:
+            prev_row_bottom = max(
+                _center_y(line.box) + _box_height(line.box) * 0.5 for line in row
+            )
+
+    return "\n".join(result_lines)
 
 
 class OCREngine:
@@ -65,11 +212,11 @@ class OCREngine:
 
         # 自定义参数
         engine = OCREngine(
-            text_score=0.7,
+            text_score=0.0,       # 引擎过滤阈值（低值保留更多结果）
             use_dml=True,
             use_angle_cls=False,
         )
-        result = engine.recognize(np_array)
+        result = engine.recognize(np_array, mask_below_score=0.5)
 
         # 作为上下文管理器（自动释放资源）
         with OCREngine() as engine:
@@ -77,11 +224,17 @@ class OCREngine:
 
     线程安全：每个 OCREngine 实例独立持有 RapidOCR 引擎，不共享状态。
     建议每个线程创建独立实例，或使用上下文管理器。
+
+    阈值说明：
+        text_score:  传给 RapidOCR 的引擎过滤阈值。设为较低值（如 0.0）可保留
+                     低置信度结果，让 UI 层自行决定显示/遮罩。
+        mask_below_score: recognize() 时的可选参数，用于在 formatted_text
+                         中将低于该阈值的文字替换为 □。
     """
 
     def __init__(
         self,
-        text_score: float = DEFAULT_TEXT_SCORE,
+        text_score: float = DEFAULT_ENGINE_TEXT_SCORE,
         use_det: bool = True,
         use_cls: bool = True,
         use_rec: bool = True,
@@ -92,7 +245,9 @@ class OCREngine:
         """初始化 OCR 引擎。
 
         参数：
-            text_score: 文字识别置信度阈值 (0.0 ~ 1.0)，低于此值的结果会被过滤。
+            text_score: 文字识别置信度阈值 (0.0 ~ 1.0)，传给 RapidOCR。
+                        低于此值的结果会被 RapidOCR 过滤。
+                        默认 0.0 以保留所有结果，UI 过滤由 mask_below_score 控制。
             use_det: 是否启用文字检测（定位文字区域）。
             use_cls: 是否启用文字方向分类器（自动旋转 180° 颠倒文字）。
             use_rec: 是否启用文字识别。
@@ -124,7 +279,7 @@ class OCREngine:
             )
 
         self._logger.info(
-            "初始化 OCR 引擎 | text_score=%.2f use_det=%s use_cls=%s use_rec=%s "
+            "初始化 OCR 引擎 | engine_text_score=%.2f use_det=%s use_cls=%s use_rec=%s "
             "use_dml=%s actual_dml=%s max_side_len=%d",
             text_score, use_det, use_cls, use_rec,
             use_dml, actual_use_dml, max_side_len,
@@ -171,6 +326,7 @@ class OCREngine:
         self,
         image: Union[str, np.ndarray, bytes, Path],
         image_name: Optional[str] = None,
+        mask_below_score: Optional[float] = None,
     ) -> OCRResult:
         """对单张图片执行 OCR 识别。
 
@@ -180,9 +336,13 @@ class OCREngine:
                 - np.ndarray: 图片像素数组（BGR 或 RGB，shape: HxWx3）
                 - bytes: 图片二进制数据（PNG/JPEG 等格式）
             image_name: 图片名称（仅用于日志），不传时从路径提取。
+            mask_below_score: UI 置信度遮罩阈值 (0.0~1.0)。
+                              低于此值的文字在 formatted_text 中替换为 □。
+                              None 表示不遮罩。
 
         返回：
             OCRResult: 包含所有识别文字行、耗时、置信度的结构化结果。
+                formatted_text 字段包含按原图坐标排版后的文本。
 
         异常：
             AppError: 文件不存在、格式不支持、识别失败时抛出。
@@ -251,9 +411,17 @@ class OCREngine:
         # 按阅读顺序拼接文本（左上到右下，从上到下）
         total_text = "".join(line.text for line in text_lines)
 
+        # 生成排版格式化文本（按原图坐标排列，保留缩进和空格）
+        formatted_text = format_ocr_result(
+            text_lines,
+            mask_below_score=mask_below_score,
+            image_width=image_width,
+        )
+
         result = OCRResult(
             text_lines=text_lines,
             total_text=total_text,
+            formatted_text=formatted_text,
             elapsed_total=round(total_elapsed, 4),
             elapsed_det=round(elapsed_det, 4),
             elapsed_cls=round(elapsed_cls, 4) if elapsed_cls is not None else None,
@@ -311,6 +479,7 @@ class OCREngine:
                     OCRResult(
                         text_lines=[],
                         total_text=f"[ERROR] {e.message}",
+                        formatted_text="",
                         elapsed_total=0.0,
                         elapsed_det=0.0,
                         elapsed_cls=None,
@@ -439,7 +608,7 @@ class OCREngine:
 
     @property
     def text_score(self) -> float:
-        """当前置信度阈值。"""
+        """当前引擎置信度阈值。"""
         return self._text_score
 
     @property
@@ -457,8 +626,9 @@ class OCREngine:
 
 def recognize_image(
     image: Union[str, np.ndarray, bytes],
-    text_score: float = DEFAULT_TEXT_SCORE,
+    text_score: float = DEFAULT_ENGINE_TEXT_SCORE,
     use_dml: bool = False,
+    mask_below_score: Optional[float] = None,
 ) -> OCRResult:
     """便捷函数：对单张图片执行 OCR 识别（自动创建和释放引擎）。
 
@@ -469,4 +639,4 @@ def recognize_image(
         print(result.total_text)
     """
     with OCREngine(text_score=text_score, use_dml=use_dml) as engine:
-        return engine.recognize(image)
+        return engine.recognize(image, mask_below_score=mask_below_score)

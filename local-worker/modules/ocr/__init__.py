@@ -37,12 +37,13 @@ local-worker/modules/ocr — 本地 OCR 文字识别模块
   来源：RapidOCR / PaddleOCR v4，Apache 2.0 许可证
 """
 
-from .engine import OCREngine, recognize_image, SUPPORTED_IMAGE_SUFFIXES
+from .engine import OCREngine, recognize_image, format_ocr_result, SUPPORTED_IMAGE_SUFFIXES
 from .results import OCRBox, OCRResult
 
 __all__ = [
     "OCREngine",
     "recognize_image",
+    "format_ocr_result",
     "OCRBox",
     "OCRResult",
     "SUPPORTED_IMAGE_SUFFIXES",

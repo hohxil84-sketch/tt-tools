@@ -14,6 +14,10 @@ desktop/modules/ocr/ocr_router.py — OCR 操作路由脚本
   - recognize_batch: 批量图片 OCR 识别
   - shutdown: 关闭进程
 
+阈值说明：
+  - text_score: 传给 RapidOCR 的引擎过滤阈值（默认 0.0，保留所有结果）
+  - mask_below_score: UI 遮罩阈值（默认 0.5），低于此值的文字在 formatted_text 中替换为 □
+
 用法：由 LocalRuntimeClient 自动调用，不直接运行。
 """
 
@@ -34,6 +38,10 @@ if str(_LOCAL_WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(_LOCAL_WORKER_ROOT))
 
 from modules.ocr import OCREngine, recognize_image, OCRResult
+
+
+# 引擎端阈值：使用低值保留所有结果，UI 层由 mask_below_score 控制显示
+ENGINE_TEXT_SCORE = 0.0
 
 
 def send_response(
@@ -74,10 +82,12 @@ def handle_recognize(data: Dict[str, Any], request_id: Optional[str]) -> None:
 
     期望 data 包含：
         - file_path: str (必填) 图片文件路径
-        - text_score: float (可选) 识别置信度阈值，默认 0.5
+        - text_score: float (可选) 引擎置信度阈值，默认 0.0（保留所有结果）
+        - mask_below_score: float (可选) UI 遮罩阈值，默认 0.5
         - use_dml: bool (可选) 是否使用 DirectML GPU 加速，默认 false
 
-    返回：OCRResult.to_dict() 序列化的结构化识别结果。
+    返回：OCRResult.to_dict() 序列化的结构化识别结果，
+          包含 formatted_text 字段（按原图坐标排版）。
     """
     file_path = data.get("file_path")
     if not file_path:
@@ -92,7 +102,12 @@ def handle_recognize(data: Dict[str, Any], request_id: Optional[str]) -> None:
         )
         return
 
-    text_score = float(data.get("text_score", 0.5))
+    # 引擎过滤阈值：使用低值保留所有结果
+    text_score = float(data.get("text_score", ENGINE_TEXT_SCORE))
+    # UI 遮罩阈值：低于此值的文字在 formatted_text 中替换为 □
+    mask_below_score = data.get("mask_below_score", None)
+    if mask_below_score is not None:
+        mask_below_score = float(mask_below_score)
     use_dml = bool(data.get("use_dml", False))
 
     try:
@@ -102,11 +117,16 @@ def handle_recognize(data: Dict[str, Any], request_id: Optional[str]) -> None:
 
         engine = OCREngine(text_score=text_score, use_dml=use_dml)
         # 传 bytes + 文件名（仅用于日志），引擎内部会用 cv2.imdecode 解码
-        result = engine.recognize(img_bytes, image_name=Path(file_path).name)
+        result = engine.recognize(
+            img_bytes,
+            image_name=Path(file_path).name,
+            mask_below_score=mask_below_score,
+        )
         engine.close()
 
-        # 转为字典并修复 total_text：用换行符拼接，保留原始排版
+        # 转为字典，包含 formatted_text
         result_dict = result.to_dict()
+        # total_text 保留原有行为：用换行符拼接
         if result.text_lines:
             result_dict["total_text"] = "\n".join(
                 line.text for line in result.text_lines
@@ -129,7 +149,8 @@ def handle_recognize_batch(data: Dict[str, Any], request_id: Optional[str]) -> N
 
     期望 data 包含：
         - file_paths: List[str] (必填) 图片文件路径列表
-        - text_score: float (可选) 识别置信度阈值，默认 0.5
+        - text_score: float (可选) 引擎置信度阈值，默认 0.0
+        - mask_below_score: float (可选) UI 遮罩阈值，默认 0.5
         - use_dml: bool (可选) 是否使用 DirectML GPU 加速，默认 false
 
     返回：List[OCRResult.to_dict()] 序列化的结果列表。
@@ -139,7 +160,10 @@ def handle_recognize_batch(data: Dict[str, Any], request_id: Optional[str]) -> N
         send_response(success=False, error="缺少必填参数 file_paths", request_id=request_id)
         return
 
-    text_score = float(data.get("text_score", 0.5))
+    text_score = float(data.get("text_score", ENGINE_TEXT_SCORE))
+    mask_below_score = data.get("mask_below_score", None)
+    if mask_below_score is not None:
+        mask_below_score = float(mask_below_score)
     use_dml = bool(data.get("use_dml", False))
 
     results = []
@@ -159,7 +183,11 @@ def handle_recognize_batch(data: Dict[str, Any], request_id: Optional[str]) -> N
                 # 用 Python open 读取文件字节，避免 OpenCV 不支持中文路径
                 with open(fp, "rb") as f:
                     img_bytes = f.read()
-                result = engine.recognize(img_bytes, image_name=Path(fp).name)
+                result = engine.recognize(
+                    img_bytes,
+                    image_name=Path(fp).name,
+                    mask_below_score=mask_below_score,
+                )
                 result_dict = result.to_dict()
                 # 用换行符拼接，保留原始排版格式
                 if result.text_lines:
