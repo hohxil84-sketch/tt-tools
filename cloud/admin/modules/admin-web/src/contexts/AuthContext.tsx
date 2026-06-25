@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       access_token: string;
       refresh_token: string;
       user: User;
-    }>('/auth/login', {
+    }>('/admin/auth/login', {
       method: 'POST',
       body: {
         account,

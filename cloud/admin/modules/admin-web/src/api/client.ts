@@ -97,6 +97,13 @@ export async function apiRequest<T = unknown>(
     throw new ApiError(errMsg, errCode, response.status);
   }
 
+  // 检查业务层 success 字段（后端 error_response 可能返回 HTTP 200 + success=false）
+  if (json.success === false) {
+    const errMsg = json?.error?.message || '请求失败';
+    const errCode = json?.error?.code || 'UNKNOWN';
+    throw new ApiError(errMsg, errCode, response.status);
+  }
+
   return json.data as T;
 }
 
