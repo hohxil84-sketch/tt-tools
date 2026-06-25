@@ -25,8 +25,8 @@ from cloud.shared.database import Base
 
 
 def _utcnow() -> datetime:
-    """获取当前 UTC 时间。"""
-    return datetime.now(timezone.utc)
+    """获取当前 UTC 时间（naive，避免 asyncpg aware/naive 混用报错）。"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _new_uuid() -> str:

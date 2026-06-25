@@ -1,5 +1,15 @@
 # PROGRESS.md - cloud-auth-device
 
+## 2026-06-26 登录无响应 Bug 记录
+
+- 分支：`fix/auth-device-login-no-response`
+- 现象：桌面端登录看起来无响应；直接请求 `/api/v1/auth/login` 时，正确账号进入设备绑定后触发 PostgreSQL `can't subtract offset-naive and offset-aware datetimes`。
+- 根因：PostgreSQL 表为 `TIMESTAMP WITHOUT TIME ZONE`，auth-device 部分写入使用 aware UTC datetime，asyncpg 拒绝 mixed aware/naive datetime。
+- 修复：auth-device ORM 默认时间和服务层写入时间统一转为 naive UTC。
+- 验证：
+  - `python -m pytest cloud\modules\auth-device\tests -q`：20 passed
+  - 8001 临时服务使用 `admin@tttools.com / admin123` 登录返回 `success:true`
+
 ## 当前状态
 
 `DEVELOPMENT_COMPLETE`

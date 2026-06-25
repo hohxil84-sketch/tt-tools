@@ -159,7 +159,7 @@ async def _get_or_create_device(
         (Device, is_new) 元组
     """
     fp_hash = hash_fingerprint(fingerprint)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # 查询已有设备（基于唯一约束）
     result = await db.execute(
@@ -238,7 +238,7 @@ async def _create_session(
 
     # 计算过期时间
     expires_in = shared_settings.auth_access_token_expire_minutes * 60
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     refresh_expires = now + timedelta(days=_REFRESH_TOKEN_EXPIRE_DAYS)
 
     # 写入 auth_sessions 表
@@ -271,7 +271,7 @@ async def _revoke_session(db: AsyncSession, refresh_token: str) -> None:
         refresh_token: 原始 refresh_token
     """
     refresh_hash = hash_token(refresh_token)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     result = await db.execute(
         select(AuthSession).where(
@@ -402,7 +402,7 @@ async def login(
     if device.status == "removed":
         # 设备被移除后重新绑定
         device.status = "active"
-        device.bound_at = datetime.now(timezone.utc)
+        device.bound_at = datetime.now(timezone.utc).replace(tzinfo=None)
         is_new = True
         await db.flush()
 
@@ -488,7 +488,7 @@ async def refresh(
         )
         device = result.scalar_one_or_none()
         if device is not None:
-            device.last_seen_at = datetime.now(timezone.utc)
+            device.last_seen_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await db.flush()
 
     return RefreshData(

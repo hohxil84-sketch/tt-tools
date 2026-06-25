@@ -1,5 +1,15 @@
 # PROGRESS.md - desktop-shared
 
+## 2026-06-26 登录错误结果未返回 Bug 记录
+
+- 分支：`fix/auth-device-login-no-response`
+- 现象：云端返回 4xx/5xx 统一错误体时，桌面登录页拿不到真实错误信息，用户看到像是登录无响应。
+- 根因：`CloudApiClient.SendAsync` 对非成功 HTTP 状态先调用 `EnsureSuccessStatusCode()`，导致后端 JSON 错误体被丢弃。
+- 修复：先读取并反序列化统一 `ApiResponse<T>`；非 JSON 或空错误体再返回 `http_error`。
+- 验证：
+  - `dotnet test desktop\shared\DesktopShared.Tests\DesktopShared.Tests.csproj`：62 passed
+  - `dotnet test desktop\modules\auth-device\DesktopAuthDevice.Tests\DesktopAuthDevice.Tests.csproj`：20 passed
+
 ## 当前状态
 
 `DEVELOPMENT_COMPLETE`

@@ -280,9 +280,37 @@ public class CloudApiClient : IDisposable
                 }
             }
 
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<ApiResponse<T>>(JsonOptions,
-                cancellationToken: ct);
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            if (!string.IsNullOrWhiteSpace(responseBody))
+            {
+                try
+                {
+                    var apiResponse = JsonSerializer.Deserialize<ApiResponse<T>>(responseBody, JsonOptions);
+                    if (apiResponse != null)
+                        return apiResponse;
+                }
+                catch (JsonException)
+                {
+                    // 非统一 JSON 错误体会落到下面的 http_error，避免登录页丢失结果。
+                }
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new ApiResponse<T>
+                {
+                    Success = false,
+                    Data = default,
+                    Error = new ApiError
+                    {
+                        Code = "http_error",
+                        Message = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}"
+                    },
+                    RequestId = string.Empty
+                };
+            }
+
+            return null;
         }
         catch (HttpRequestException ex)
         {
