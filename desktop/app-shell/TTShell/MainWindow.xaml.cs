@@ -1,6 +1,8 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using TTShared.Auth;
 using TTShared.CloudApi;
 using TTShared.FileSystem;
@@ -25,7 +27,7 @@ using TTTools.AiImageToolsClient.ViewModels;
 namespace TTShell;
 
 /// <summary>
-/// TT Tools 主窗口。
+/// Alphoria 主窗口。
 /// 负责导航切换、主题切换、窗口状态管理和模块入口装配。
 /// 全部模块使用 ViewModel 默认构造函数，后续统一 DI 机制就位后替换为带参构造函数。
 /// </summary>
@@ -43,12 +45,22 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        // 设置窗口图标
+        var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "app-icon.png");
+        if (File.Exists(iconPath))
+        {
+            Icon = BitmapFrame.Create(new Uri(iconPath));
+        }
+
         // 使用共享 AuthState 初始化 API 客户端（后续各模块共用）
         _apiClient = new CloudApiClient(AppSettings.Instance.ServerUrl, _authState);
 
         // 订阅认证状态变化，更新状态栏用户名
         _authState.LoggedIn += OnUserLoggedIn;
         _authState.LoggedOut += OnUserLoggedOut;
+
+        // 订阅窗口状态变化，更新最大化/还原按钮图标
+        StateChanged += OnWindowStateChanged;
 
         SetNavButtonSelected(NavHome);
     }
@@ -181,9 +193,106 @@ public partial class MainWindow : Window
         ThemeToggleButton.Content = _currentTheme == "Dark" ? "☀️" : "🌙";
     }
 
+    /// <summary>
+    /// 最小化窗口。
+    /// </summary>
+    private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    /// <summary>
+    /// 最大化 / 还原窗口，并更新按钮图标。
+    /// </summary>
+    private void OnMaxRestoreClick(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+
+    /// <summary>
+    /// 关闭窗口。
+    /// </summary>
+    private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// 窗口状态变化时更新最大化/还原按钮的图标和提示文字。
+    /// </summary>
+    private void OnWindowStateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            MaxRestoreButton.Content = "\uE923";
+            MaxRestoreButton.ToolTip = "还原";
+        }
+        else
+        {
+            MaxRestoreButton.Content = "\uE922";
+            MaxRestoreButton.ToolTip = "最大化";
+        }
+    }
+
+    /// <summary>
+    /// 关闭按钮鼠标进入时变红。
+    /// </summary>
+    private void OnCloseButtonMouseEnter(object sender, MouseEventArgs e)
+    {
+        CloseButton.Background = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)); // ErrorColor
+        CloseButton.Foreground = new System.Windows.Media.SolidColorBrush(
+            System.Windows.Media.Color.FromRgb(0xFF, 0xFF, 0xFF));
+    }
+
+    /// <summary>
+    /// 关闭按钮鼠标离开时恢复透明。
+    /// </summary>
+    private void OnCloseButtonMouseLeave(object sender, MouseEventArgs e)
+    {
+        CloseButton.Background = System.Windows.Media.Brushes.Transparent;
+        CloseButton.Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryBrush");
+    }
+
+    /// <summary>
+    /// 最小化/最大化按钮鼠标进入时显示浅色背景。
+    /// </summary>
+    private void OnSystemButtonMouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is Button btn)
+        {
+            btn.Background = (System.Windows.Media.Brush)FindResource("BorderBrush");
+        }
+    }
+
+    /// <summary>
+    /// 最小化/最大化按钮鼠标离开时恢复透明。
+    /// </summary>
+    private void OnSystemButtonMouseLeave(object sender, MouseEventArgs e)
+    {
+        if (sender is Button btn)
+        {
+            btn.Background = System.Windows.Media.Brushes.Transparent;
+        }
+    }
+
+    /// <summary>
+    /// 标题栏拖拽移动窗口。点击按钮时不触发拖拽，确保按钮 Click 事件正常。
+    /// </summary>
     private void OnTitleBarMouseDown(object sender, MouseButtonEventArgs e)
     {
+        // 如果点击的是按钮或其子元素，不要拖拽窗口（否则 DragMove 会拦截 MouseUp 导致 Click 无效）
+        if (e.OriginalSource is DependencyObject d && IsButtonOrChild(d))
+            return;
+
         if (e.LeftButton == MouseButtonState.Pressed)
             DragMove();
+    }
+
+    /// <summary>
+    /// 判断 DependencyObject 是否自身是 Button 或位于 Button 的视觉树内部。
+    /// </summary>
+    private static bool IsButtonOrChild(DependencyObject? d)
+    {
+        while (d != null)
+        {
+            if (d is Button) return true;
+            d = System.Windows.Media.VisualTreeHelper.GetParent(d);
+        }
+        return false;
     }
 }

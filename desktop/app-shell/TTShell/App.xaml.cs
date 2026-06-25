@@ -4,7 +4,7 @@ using System.Windows.Threading;
 namespace TTShell;
 
 /// <summary>
-/// TT Tools 应用程序入口。
+/// Alphoria 应用程序入口。
 /// 负责启动主窗口、全局异常捕获和主题初始化。
 /// </summary>
 public partial class App : Application
@@ -64,7 +64,7 @@ public partial class App : Application
 
         MessageBox.Show(
             $"发生未预期的错误：{e.Exception.Message}\n\n详细信息已记录，请查看日志。",
-            "TT Tools - 错误",
+            "Alphoria - 错误",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
     }
@@ -79,7 +79,7 @@ public partial class App : Application
             // 非 UI 线程异常无法恢复，记录后提示用户
             MessageBox.Show(
                 $"发生严重错误：{ex.Message}\n\n程序即将退出。",
-                "TT Tools - 严重错误",
+                "Alphoria - 严重错误",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }

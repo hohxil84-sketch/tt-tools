@@ -16,7 +16,7 @@
         xmlns:auth="clr-namespace:TTTools.AuthDevice.Views;assembly=TTTools.AuthDevice"
         xmlns:expset="clr-namespace:TTTools.ExportSettings.Views;assembly=TTTools.ExportSettings"
         xmlns:aiimg="clr-namespace:TTTools.AiImageToolsClient.Views;assembly=TTTools.AiImageToolsClient"
-        Title="TT Tools"
+        Title="Alphoria"
         MinHeight="680"
         MinWidth="1024"
         Height="768"
@@ -24,10 +24,18 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource BackgroundBrush}">
 
+    <!-- WindowChrome：完全自定义标题栏，系统按钮由 WPF 绘制 -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome GlassFrameThickness="0"
+                      CaptionHeight="32"
+                      ResizeBorderThickness="6"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
     <!-- ========== 主窗口布局：标题栏 + 侧栏+内容区 + 状态栏 ========== -->
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="48" />
+            <RowDefinition Height="32" />
             <RowDefinition Height="*" />
             <RowDefinition Height="28" />
         </Grid.RowDefinitions>
@@ -35,44 +43,102 @@
         <!-- ==================== 标题栏 ==================== -->
         <Border Grid.Row="0"
                 Background="{DynamicResource SurfaceBrush}"
-                BorderBrush="{DynamicResource BorderBrush}"
-                BorderThickness="0,0,0,1"
                 MouseLeftButtonDown="OnTitleBarMouseDown">
-            <Grid Margin="16,0">
+            <Grid Margin="12,0,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0"
-                           Text="TT Tools"
-                           FontSize="16"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimaryBrush}"
-                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Image Source="pack://siteoforigin:,,,/Resources/app-icon.png"
+                           Width="18" Height="18"
+                           VerticalAlignment="Center"
+                           Margin="0,0,6,0" />
+                    <TextBlock Text="Alphoria"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               VerticalAlignment="Center" />
+                </StackPanel>
 
-                <!-- 登录 / 用户入口 -->
+                <!-- 登录 -->
                 <Button Grid.Column="2"
                         x:Name="UserEntryButton"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
                         Content="👤 登录"
-                        Height="32"
-                        Padding="12,0"
-                        FontSize="13"
+                        Height="26"
+                        Padding="10,0"
+                        FontSize="12"
                         Background="Transparent" BorderThickness="0"
                         Foreground="{DynamicResource TextPrimaryBrush}"
                         Cursor="Hand" Click="OnUserEntryClick"
                         ToolTip="登录 / 设备状态" />
 
+                <!-- 切换主题 -->
                 <Button Grid.Column="3"
                         x:Name="ThemeToggleButton"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
                         Content="🌙"
-                        Width="36" Height="36"
-                        FontSize="16"
+                        Width="28" Height="26"
+                        FontSize="13"
                         Background="Transparent" BorderThickness="0"
                         Cursor="Hand" Click="OnThemeToggle"
                         ToolTip="切换浅色/深色主题" />
+
+                <!-- 右侧留白：让系统按钮不紧贴主题按钮 -->
+                <Border Grid.Column="4" Width="8" />
+
+                <!-- 最小化 -->
+                <Button Grid.Column="5"
+                        x:Name="MinimizeButton"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
+                        Content="&#xE921;"
+                        Width="46" Height="32"
+                        FontFamily="Segoe MDL2 Assets"
+                        FontSize="10"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="{DynamicResource TextPrimaryBrush}"
+                        Cursor="Hand" Click="OnMinimizeClick"
+                        MouseEnter="OnSystemButtonMouseEnter"
+                        MouseLeave="OnSystemButtonMouseLeave"
+                        ToolTip="最小化" />
+
+                <!-- 最大化 / 还原 -->
+                <Button Grid.Column="6"
+                        x:Name="MaxRestoreButton"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
+                        Content="&#xE922;"
+                        Width="46" Height="32"
+                        FontFamily="Segoe MDL2 Assets"
+                        FontSize="10"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="{DynamicResource TextPrimaryBrush}"
+                        Cursor="Hand" Click="OnMaxRestoreClick"
+                        MouseEnter="OnSystemButtonMouseEnter"
+                        MouseLeave="OnSystemButtonMouseLeave"
+                        ToolTip="最大化" />
+
+                <!-- 关闭 -->
+                <Button Grid.Column="7"
+                        x:Name="CloseButton"
+                        WindowChrome.IsHitTestVisibleInChrome="True"
+                        Content="&#xE8BB;"
+                        Width="46" Height="32"
+                        FontFamily="Segoe MDL2 Assets"
+                        FontSize="10"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="{DynamicResource TextPrimaryBrush}"
+                        Cursor="Hand" Click="OnCloseClick"
+                        MouseEnter="OnCloseButtonMouseEnter"
+                        MouseLeave="OnCloseButtonMouseLeave"
+                        ToolTip="关闭" />
             </Grid>
         </Border>
 
@@ -86,56 +152,54 @@
 
             <!-- 导航侧栏 -->
             <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="0,8,0,0">
-                        <!-- 首页 -->
-                        <Button x:Name="NavHome" Style="{StaticResource NavButtonStyle}"
-                                Content="🏠  首页" Tag="Home" Click="OnNavigationClick" />
+                <StackPanel Margin="0,4,0,0">
+                    <!-- 首页 -->
+                    <Button x:Name="NavHome" Style="{StaticResource NavButtonStyle}"
+                            Content="🏠  首页" Tag="Home" Click="OnNavigationClick" />
 
-                        <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
+                    <Separator Margin="8,3" Background="{DynamicResource DividerBrush}" />
 
-                        <!-- 文件 / 印前 -->
-                        <Button x:Name="NavFileWorkbench" Style="{StaticResource NavButtonStyle}"
-                                Content="📁  文件工作台" Tag="FileWorkbench" Click="OnNavigationClick" />
-                        <Button x:Name="NavOcr" Style="{StaticResource NavButtonStyle}"
-                                Content="📝  OCR 文字识别" Tag="Ocr" Click="OnNavigationClick" />
-                        <Button x:Name="NavPreflight" Style="{StaticResource NavButtonStyle}"
-                                Content="🔍  印前检查" Tag="Preflight" Click="OnNavigationClick" />
+                    <!-- 文件 / 印前 -->
+                    <Button x:Name="NavFileWorkbench" Style="{StaticResource NavButtonStyle}"
+                            Content="📁  文件工作台" Tag="FileWorkbench" Click="OnNavigationClick" />
+                    <Button x:Name="NavOcr" Style="{StaticResource NavButtonStyle}"
+                            Content="📝  OCR 文字识别" Tag="Ocr" Click="OnNavigationClick" />
+                    <Button x:Name="NavPreflight" Style="{StaticResource NavButtonStyle}"
+                            Content="🔍  印前检查" Tag="Preflight" Click="OnNavigationClick" />
 
-                        <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
+                    <Separator Margin="8,3" Background="{DynamicResource DividerBrush}" />
 
-                        <!-- AI 工具 -->
-                        <Button x:Name="NavAiCopy" Style="{StaticResource NavButtonStyle}"
-                                Content="🤖  AI 文案生成" Tag="AiCopy" Click="OnNavigationClick" />
-                        <Button x:Name="NavAiRender" Style="{StaticResource NavButtonStyle}"
-                                Content="🎨  效果图生成" Tag="AiRender" Click="OnNavigationClick" />
-                        <Button x:Name="NavAiImageTools" Style="{StaticResource NavButtonStyle}"
-                                Content="🖼️  AI 图片工具" Tag="AiImageTools" Click="OnNavigationClick" />
+                    <!-- AI 工具 -->
+                    <Button x:Name="NavAiCopy" Style="{StaticResource NavButtonStyle}"
+                            Content="🤖  AI 文案生成" Tag="AiCopy" Click="OnNavigationClick" />
+                    <Button x:Name="NavAiRender" Style="{StaticResource NavButtonStyle}"
+                            Content="🎨  效果图生成" Tag="AiRender" Click="OnNavigationClick" />
+                    <Button x:Name="NavAiImageTools" Style="{StaticResource NavButtonStyle}"
+                            Content="🖼️  AI 图片工具" Tag="AiImageTools" Click="OnNavigationClick" />
 
-                        <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
+                    <Separator Margin="8,3" Background="{DynamicResource DividerBrush}" />
 
-                        <!-- 图片处理 -->
-                        <Button x:Name="NavResizeImage" Style="{StaticResource NavButtonStyle}"
-                                Content="📐  图片改尺寸" Tag="ResizeImage" Click="OnNavigationClick" />
-                        <Button x:Name="NavFormatConvert" Style="{StaticResource NavButtonStyle}"
-                                Content="🖼️  格式转换" Tag="FormatConvert" Click="OnNavigationClick" />
-                        <Button x:Name="NavPdfImageConvert" Style="{StaticResource NavButtonStyle}"
-                                Content="📄  PDF/图片互转" Tag="PdfImageConvert" Click="OnNavigationClick" />
-                        <Button x:Name="NavIdPhoto" Style="{StaticResource NavButtonStyle}"
-                                Content="📸  证件照换底色" Tag="IdPhoto" Click="OnNavigationClick" />
-                        <Button x:Name="NavRemoveBg" Style="{StaticResource NavButtonStyle}"
-                                Content="✂️  智能抠图" Tag="RemoveBg" Click="OnNavigationClick" />
+                    <!-- 图片处理 -->
+                    <Button x:Name="NavResizeImage" Style="{StaticResource NavButtonStyle}"
+                            Content="📐  图片改尺寸" Tag="ResizeImage" Click="OnNavigationClick" />
+                    <Button x:Name="NavFormatConvert" Style="{StaticResource NavButtonStyle}"
+                            Content="🖼️  格式转换" Tag="FormatConvert" Click="OnNavigationClick" />
+                    <Button x:Name="NavPdfImageConvert" Style="{StaticResource NavButtonStyle}"
+                            Content="📄  PDF/图片互转" Tag="PdfImageConvert" Click="OnNavigationClick" />
+                    <Button x:Name="NavIdPhoto" Style="{StaticResource NavButtonStyle}"
+                            Content="📸  证件照换底色" Tag="IdPhoto" Click="OnNavigationClick" />
+                    <Button x:Name="NavRemoveBg" Style="{StaticResource NavButtonStyle}"
+                            Content="✂️  智能抠图" Tag="RemoveBg" Click="OnNavigationClick" />
 
-                        <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
+                    <Separator Margin="8,3" Background="{DynamicResource DividerBrush}" />
 
-                        <Button x:Name="NavExport" Style="{StaticResource NavButtonStyle}"
-                                Content="📤  导出" Tag="Export" Click="OnNavigationClick" />
-                        <Button x:Name="NavLogViewer" Style="{StaticResource NavButtonStyle}"
-                                Content="📋  日志查看" Tag="LogViewer" Click="OnNavigationClick" />
-                        <Button x:Name="NavSettings" Style="{StaticResource NavButtonStyle}"
-                                Content="⚙️  设置" Tag="Settings" Click="OnNavigationClick" />
-                    </StackPanel>
-                </ScrollViewer>
+                    <Button x:Name="NavExport" Style="{StaticResource NavButtonStyle}"
+                            Content="📤  导出" Tag="Export" Click="OnNavigationClick" />
+                    <Button x:Name="NavLogViewer" Style="{StaticResource NavButtonStyle}"
+                            Content="📋  日志查看" Tag="LogViewer" Click="OnNavigationClick" />
+                    <Button x:Name="NavSettings" Style="{StaticResource NavButtonStyle}"
+                            Content="⚙️  设置" Tag="Settings" Click="OnNavigationClick" />
+                </StackPanel>
             </Border>
 
             <!-- 分隔线 -->
