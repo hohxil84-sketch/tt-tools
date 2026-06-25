@@ -53,7 +53,7 @@ async def get_dashboard_stats(db: Optional[AsyncSession] = None) -> DashboardSta
     # 查询今日订单数和收入（UTC 今日 00:00:00 起）
     today_start = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
-    ).strftime("%Y-%m-%d %H:%M:%S")
+    )
 
     orders_result = await db.execute(
         text(

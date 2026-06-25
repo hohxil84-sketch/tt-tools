@@ -37,7 +37,7 @@ router = APIRouter(tags=["Admin Shell"])
 # 仪表盘端点
 # ============================================================
 
-@router.get("/admin/dashboard")
+@router.get("/dashboard")
 async def admin_dashboard(
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_admin),
@@ -68,7 +68,7 @@ async def admin_dashboard(
 # 导航菜单端点
 # ============================================================
 
-@router.get("/admin/menu")
+@router.get("/menu")
 async def admin_menu(
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_admin),
@@ -97,7 +97,7 @@ async def admin_menu(
 # 服务状态端点
 # ============================================================
 
-@router.get("/admin/status")
+@router.get("/status")
 async def admin_status(
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_admin),
