@@ -10,6 +10,11 @@ using TTShared.UI;
 namespace TTTools.AiCopyClient.ViewModels;
 
 /// <summary>
+/// 下拉选项条目（WPF 绑定需要真实属性，不能用 named ValueTuple）
+/// </summary>
+public record ComboOption(string Value, string Display);
+
+/// <summary>
 /// 云端文案生成模块主 ViewModel
 /// 管理文案生成请求参数、调用 CloudApiClient.GenerateAiCopyAsync、展示结果和扣费信息。
 /// 本模块不直接调用第三方 AI，全部通过云端 provider-runtime 完成。
@@ -55,40 +60,40 @@ public class AiCopyViewModel : BaseViewModel
     // ---- 预设数据 ----
 
     /// <summary>可用的场景列表（中文名称）</summary>
-    public static List<(string Value, string Display)> SceneList { get; } = new()
+    public static List<ComboOption> SceneList { get; } = new()
     {
-        ("poster", "海报 / 宣传单"),
-        ("flyer", "传单 / 折页"),
-        ("social_media", "社交媒体通用"),
-        ("wechat", "微信朋友圈 / 公众号"),
-        ("xiaohongshu", "小红书"),
-        ("douyin", "抖音"),
-        ("email", "邮件营销"),
-        ("website", "网站 / 落地页"),
+        new("poster", "海报 / 宣传单"),
+        new("flyer", "传单 / 折页"),
+        new("social_media", "社交媒体通用"),
+        new("wechat", "微信朋友圈 / 公众号"),
+        new("xiaohongshu", "小红书"),
+        new("douyin", "抖音"),
+        new("email", "邮件营销"),
+        new("website", "网站 / 落地页"),
     };
 
     /// <summary>可用的语气列表（中文名称）</summary>
-    public static List<(string Value, string Display)> ToneList { get; } = new()
+    public static List<ComboOption> ToneList { get; } = new()
     {
-        ("direct", "直接有力 - 强调行动号召"),
-        ("professional", "专业正式 - 适合 B2B 场景"),
-        ("friendly", "亲切友好 - 拉近客户距离"),
-        ("humorous", "幽默风趣 - 轻松有趣"),
-        ("urgent", "紧迫促销 - 限时特惠"),
-        ("warm", "温暖走心 - 情感共鸣"),
+        new("direct", "直接有力 - 强调行动号召"),
+        new("professional", "专业正式 - 适合 B2B 场景"),
+        new("friendly", "亲切友好 - 拉近客户距离"),
+        new("humorous", "幽默风趣 - 轻松有趣"),
+        new("urgent", "紧迫促销 - 限时特惠"),
+        new("warm", "温暖走心 - 情感共鸣"),
     };
 
     /// <summary>可用的平台列表（中文名称）</summary>
-    public static List<(string Value, string Display)> PlatformList { get; } = new()
+    public static List<ComboOption> PlatformList { get; } = new()
     {
-        ("offline_poster", "线下海报 / 印刷品"),
-        ("wechat_moment", "微信朋友圈"),
-        ("xiaohongshu", "小红书"),
-        ("douyin", "抖音"),
-        ("weibo", "微博"),
-        ("email", "邮件"),
-        ("website", "网站"),
-        ("print", "印刷物料"),
+        new("offline_poster", "线下海报 / 印刷品"),
+        new("wechat_moment", "微信朋友圈"),
+        new("xiaohongshu", "小红书"),
+        new("douyin", "抖音"),
+        new("weibo", "微博"),
+        new("email", "邮件"),
+        new("website", "网站"),
+        new("print", "印刷物料"),
     };
 
     // ========== 输入属性 ==========

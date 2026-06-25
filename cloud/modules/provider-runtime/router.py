@@ -196,6 +196,19 @@ class ProviderRouter:
             import os
             import sys
 
+            # 清理可能冲突的模块缓存（如 config 可能已被其他模块导入）
+            # 确保重新导入时从本模块目录加载，而非从 sys.modules 缓存中获取
+            # 注意：不能删除 "router" — 调用本模块的上层模块可能已导入自己的 router
+            _conflict_names = {
+                "models", "mock", "base", "errors", "cost",
+                "registry", "config", "deepseek", "doubao", "http_utils",
+            }
+            for _key in list(sys.modules.keys()):
+                if _key in _conflict_names or any(
+                    _key.startswith(_cn + ".") for _cn in _conflict_names
+                ):
+                    del sys.modules[_key]
+
             module_dir = os.path.dirname(__file__)
             if module_dir not in sys.path:
                 sys.path.insert(0, module_dir)

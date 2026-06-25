@@ -236,15 +236,16 @@
                             </WrapPanel>
                         </Border>
 
-                        <!-- 主文案显示 -->
+                        <!-- 主文案显示（可编辑 + 可复制） -->
                         <Border Grid.Row="2" Background="{DynamicResource BackgroundBrush}" CornerRadius="4"
-                                Padding="12" Margin="0,0,0,8"
+                                Padding="4" Margin="0,0,0,8"
                                 Visibility="{Binding HasGeneratedText, Converter={StaticResource BoolToVisibility}}">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <TextBlock Text="{Binding GeneratedText}" FontSize="14"
-                                           Foreground="{DynamicResource TextPrimaryBrush}"
-                                           TextWrapping="Wrap" LineHeight="24" />
-                            </ScrollViewer>
+                            <TextBox Text="{Binding GeneratedText, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="14" Foreground="{DynamicResource TextPrimaryBrush}"
+                                     Background="Transparent" BorderThickness="0"
+                                     TextWrapping="Wrap" AcceptsReturn="True"
+                                     VerticalScrollBarVisibility="Visible" MaxHeight="320"
+                                     SpellCheck.IsEnabled="False" />
                         </Border>
 
                         <!-- 文案变体列表 -->
@@ -258,11 +259,14 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="4"
-                                                    Padding="8,6" Margin="0,0,0,4" Cursor="Hand"
+                                                    Padding="4,2" Margin="0,0,0,4" Cursor="Hand"
                                                     MouseLeftButtonDown="OnVariantClick">
-                                                <TextBlock Text="{Binding}" FontSize="12"
-                                                           Foreground="{DynamicResource TextPrimaryBrush}"
-                                                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+                                                <TextBox Text="{Binding ., Mode=OneWay}" FontSize="12"
+                                                         Foreground="{DynamicResource TextPrimaryBrush}"
+                                                         Background="Transparent" BorderThickness="0"
+                                                         TextWrapping="Wrap" AcceptsReturn="True"
+                                                         IsReadOnly="False"
+                                                         SpellCheck.IsEnabled="False" />
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
