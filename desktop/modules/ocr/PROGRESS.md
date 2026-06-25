@@ -6,7 +6,7 @@
 
 ## 分支
 
-`feature/desktop-ocr`
+`feature/ocr-low-confidence-placeholder` (当前工作分支)
 
 ## 已完成
 
@@ -17,7 +17,9 @@
 - 已实现 OcrViewModel：文件选择（对话框 + 拖拽）、识别触发、结果展示、复制文本、置信度阈值调节。
 - 已实现 OcrView WPF 界面：工具栏、结果列表、详情预览、置信度颜色指示、进度条、拖拽支持。
 - 已实现 OcrJobResult 模型：从 local-worker OCR JSON 响应反序列化的结构化模型。
-- 已创建 DesktopOcr.Tests 测试项目并编写测试（33 项全部通过）。
+- 已创建 DesktopOcr.Tests 测试项目并编写测试（45 项全部通过）。
+- 已实现 5 项功能修复（见下方 2026-06-25 提交记录）。
+- 已实现低置信度占位符从 * 替换为 □。
 
 ## 未完成
 
@@ -32,6 +34,15 @@
 失败原因：无
 修复提交：无
 中文备注：全量单元测试通过，覆盖 ViewModel、Service、Model 各层。
+```
+
+```
+日期：2026-06-25
+测试命令：dotnet test + pytest
+结果：C# 45 项全部通过，Python 37 项全部通过
+失败原因：无
+修复提交：a585ed4
+中文备注：5 项 OCR 功能修复 + 低置信度占位符 *→□，全部测试通过。
 ```
 
 ## Bug 记录
@@ -57,6 +68,11 @@
   - 14 个文件变更，+2344 -20
   - 分支已推送 origin/feature/desktop-ocr
   - 33 项单元测试全部通过
+
+- 2026-06-25: `a585ed4` - fix(ocr): 低置信度占位符从 * 替换为 □
+  - 11 个文件变更，+1075 -187
+  - 分支已推送 origin/feature/ocr-low-confidence-placeholder
+  - Python 37 项 + C# 45 项测试全部通过
 
 ## 下一步
 
