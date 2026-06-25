@@ -127,6 +127,14 @@ def hash_password(plain_password: str) -> str:
 
 import pytest
 import pytest_asyncio
+
+
+@pytest.fixture(autouse=True)
+def _use_mock_provider_runtime(monkeypatch):
+    monkeypatch.setenv("IMAGE_TOOLS_PROVIDER", "mock")
+    monkeypatch.setenv("AI_IMAGE_PROVIDER", "mock")
+    monkeypatch.setenv("DEEPSEEK_ENABLED", "false")
+    monkeypatch.setenv("DOUBAO_ENABLED", "false")
 from httpx import AsyncClient, ASGITransport
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import (

@@ -52,7 +52,10 @@ _PROVIDER_RUNTIME_DIR = os.path.join(
 # 可以安全地通过 sys.path 临时切换导入。
 
 # 可能冲突的模块名（provider-runtime 内部使用）
-_PR_CONFLICT_NAMES = {"models", "mock", "router", "base", "errors", "cost"}
+_PR_CONFLICT_NAMES = {
+    "models", "mock", "router", "base", "errors", "cost",
+    "registry", "config", "deepseek", "doubao", "http_utils",
+}
 
 
 def _import_from_provider_runtime(source_name: str, *names: str):
@@ -103,6 +106,9 @@ MockProvider = _import_from_provider_runtime(
 ProviderRouter = _import_from_provider_runtime(
     "router", "ProviderRouter",
 )
+create_default_router, TEXT, CHEAP = _import_from_provider_runtime(
+    "registry", "create_default_router", "TEXT", "CHEAP",
+)
 
 
 # ============================================================
@@ -110,7 +116,7 @@ ProviderRouter = _import_from_provider_runtime(
 # ============================================================
 
 # 默认使用 deepseek-chat（性价比高，中文能力强）
-_DEFAULT_MODEL = "deepseek-chat"
+_DEFAULT_MODEL = "route"
 
 # 每次调用消耗的默认额度
 _DEFAULT_CREDITS_PER_CALL = 1
@@ -506,9 +512,12 @@ async def _call_provider(
         request_id=request_id,
     )
 
-    provider = MockProvider()
-    router = ProviderRouter()
-    result = await router.call(request=call_request, provider=provider)
+    router = create_default_router(ProviderRouter)
+    result = await router.call_by_route(
+        request=call_request,
+        capability=TEXT,
+        tier=CHEAP,
+    )
 
     return result
 
@@ -542,7 +551,7 @@ async def _insert_provider_log(
     import json
 
     log_id = str(uuid.uuid4())
-    raw_meta = json.dumps({"feature": "ai_copy_cloud", "mock": True})
+    raw_meta = json.dumps({"feature": "ai_copy_cloud", "mock": provider == "mock"})
 
     await db.execute(
         text(

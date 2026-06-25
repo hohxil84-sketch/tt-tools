@@ -70,7 +70,10 @@ _PROVIDER_RUNTIME_DIR = os.path.join(
 # 可以安全地通过 sys.path 临时切换导入。
 
 # 可能冲突的模块名（provider-runtime 内部使用）
-_PR_CONFLICT_NAMES = {"models", "mock", "router", "base", "errors", "cost"}
+_PR_CONFLICT_NAMES = {
+    "models", "mock", "router", "base", "errors", "cost",
+    "registry", "config", "deepseek", "doubao", "http_utils",
+}
 
 
 def _import_from_provider_runtime(source_name: str, *names: str):
@@ -121,6 +124,9 @@ MockProvider = _import_from_provider_runtime(
 ProviderRouter = _import_from_provider_runtime(
     "router", "ProviderRouter",
 )
+create_default_router, IMAGE_EDIT, BALANCED = _import_from_provider_runtime(
+    "registry", "create_default_router", "IMAGE_EDIT", "BALANCED",
+)
 
 
 # ============================================================
@@ -128,7 +134,7 @@ ProviderRouter = _import_from_provider_runtime(
 # ============================================================
 
 # 默认使用 deepseek-chat（性价比高，中文能力强）
-_DEFAULT_MODEL = "deepseek-chat"
+_DEFAULT_MODEL = "route"
 
 # 各子功能消耗的默认额度（对齐功能码复杂度）
 # upscale / vectorize: 3 额度（中等计算量）
@@ -456,9 +462,8 @@ async def create_image_tool_task(
     )
 
     # ---- 步骤 7: 更新任务为 succeeded，写入结果 ----
-    # 根据功能码获取对应的 Mock 结果文件和自定义数据
-    mock_result_files = _get_mock_result_files(req.feature)
-    mock_result_json = _MOCK_RESULT_JSON_BY_FEATURE.get(req.feature)
+    result_files = _get_result_files(req.feature, provider_result)
+    result_json = _get_result_json(req.feature, provider_result)
     await _update_task_result(
         db=db,
         task_id=task_id,
@@ -468,8 +473,8 @@ async def create_image_tool_task(
         model=provider_result.model,
         estimated_cost=provider_result.estimated_cost,
         credits_charged=credits_per_call,
-        result_files=mock_result_files,
-        result_json=mock_result_json,
+        result_files=result_files,
+        result_json=result_json,
     )
 
     return CreatedTaskData(
@@ -907,9 +912,12 @@ async def _call_provider(
         request_id=request_id,
     )
 
-    provider = MockProvider()
-    router = ProviderRouter()
-    result = await router.call(request=call_request, provider=provider)
+    router = create_default_router(ProviderRouter)
+    result = await router.call_by_route(
+        request=call_request,
+        capability=IMAGE_EDIT,
+        tier=BALANCED,
+    )
 
     return result
 
@@ -942,7 +950,7 @@ async def _insert_provider_log(
     provider_call_log 由 Provider Runtime 或其封装服务写入。
     """
     log_id = str(uuid.uuid4())
-    raw_meta = json.dumps({"feature": feature, "mock": True})
+    raw_meta = json.dumps({"feature": feature, "mock": provider == "mock"})
 
     await db.execute(
         text(
@@ -1114,6 +1122,22 @@ def _get_mock_result_files(feature: str) -> List[dict]:
         对应功能的模拟结果文件列表
     """
     return _MOCK_RESULT_FILES_BY_FEATURE.get(feature, _MOCK_REMOVE_BG_FILES)
+
+
+def _get_result_files(feature: str, provider_result) -> List[dict]:
+    """Return real provider files, with mock fixtures only for mock provider."""
+    if getattr(provider_result, "files", None):
+        return provider_result.files
+    if getattr(provider_result, "provider", "") == "mock":
+        return _get_mock_result_files(feature)
+    return []
+
+
+def _get_result_json(feature: str, provider_result) -> Optional[dict]:
+    """Return mock result_json only for mock provider."""
+    if getattr(provider_result, "provider", "") == "mock":
+        return _MOCK_RESULT_JSON_BY_FEATURE.get(feature)
+    return None
 
 
 def _parse_json_field(raw) -> dict:

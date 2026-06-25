@@ -98,6 +98,9 @@ def map_provider_error(exc: Exception) -> ProviderError:
     Returns:
         标准化的 ProviderError 实例
     """
+    if isinstance(exc, ProviderError):
+        return exc
+
     exc_type = type(exc).__name__
     exc_msg = str(exc).lower()
 
