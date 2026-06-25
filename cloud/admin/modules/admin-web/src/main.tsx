@@ -65,16 +65,16 @@ style.textContent = `
   ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
 
-  /* 表格行样式 — 白淡蓝间隔 + 悬停效果 */
+  /* 表格行样式 — 淡蓝间隔 + 悬停效果 */
   .admin-table tbody tr {
-    border-bottom: 1px solid rgba(0, 113, 227, 0.08);
+    border-bottom: 1px solid rgba(0, 113, 227, 0.14);
     transition: background 0.12s ease;
   }
   .admin-table tbody tr:last-child {
     border-bottom: none;
   }
   .admin-table tbody tr:hover {
-    background: rgba(0, 113, 227, 0.06);
+    background: rgba(0, 113, 227, 0.10);
   }
   .admin-table tbody td {
     padding: 12px 16px;
@@ -82,21 +82,21 @@ style.textContent = `
   }
   .admin-table thead th {
     padding: 10px 16px;
-    font-weight: 500;
+    font-weight: 600;
     font-size: 11px;
-    color: var(--gray-500);
+    color: var(--blue);
     letter-spacing: 0.02em;
     text-transform: uppercase;
-    border-bottom: 2px solid rgba(0, 113, 227, 0.15);
-    background: rgba(0, 113, 227, 0.04);
+    border-bottom: 2px solid rgba(0, 113, 227, 0.30);
+    background: rgba(0, 113, 227, 0.08);
     white-space: nowrap;
   }
-  /* 偶数行白淡蓝底色 */
+  /* 偶数行淡蓝底色 */
   .admin-table tbody tr:nth-child(even) {
-    background: rgba(0, 113, 227, 0.025);
+    background: rgba(0, 113, 227, 0.05);
   }
   .admin-table tbody tr:nth-child(even):hover {
-    background: rgba(0, 113, 227, 0.07);
+    background: rgba(0, 113, 227, 0.12);
   }
 `;
 document.head.appendChild(style);
