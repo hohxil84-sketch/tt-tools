@@ -11,10 +11,12 @@ local-worker/modules/ocr 完整测试
 7. 结果数据结构测试
 8. 批量识别测试
 9. 上下文管理器测试
-10. 引擎关闭测试
-11. GPU 检测集成测试
-12. 便捷函数测试
+10. GPU 检测集成测试
+11. 便捷函数测试
+12. 模块导出完整性测试
 13. 置信度过滤测试
+14. 排版格式化算法测试（新增）
+15. □ 遮罩测试（新增）
 """
 
 import io
@@ -55,8 +57,8 @@ class TestEngineInit(unittest.TestCase):
 
         engine = OCREngine()
         self.assertFalse(engine.is_closed)
-        self.assertEqual(engine.text_score, 0.5)
-        print(f"  引擎初始化成功 | text_score={engine.text_score} "
+        self.assertEqual(engine.text_score, 0.0)  # 默认引擎阈值为 0.0
+        print(f"  引擎初始化成功 | engine_text_score={engine.text_score} "
               f"using_dml={engine.using_dml}")
         engine.close()
 
@@ -145,11 +147,13 @@ class TestOCREngineFromFile(unittest.TestCase):
             self.assertIsNotNone(result)
             self.assertGreaterEqual(result.line_count, 0)
             self.assertIsInstance(result.total_text, str)
+            self.assertIsInstance(result.formatted_text, str)  # 应有格式化文本
             self.assertEqual(result.engine_name, "RapidOCR")
             self.assertGreater(result.elapsed_total, 0)
             print(f"  识别结果: {result.line_count} 行, "
                   f"avg_score={result.avg_score:.3f}, "
                   f"total_text={result.total_text[:60]!r}, "
+                  f"formatted_text={result.formatted_text[:60]!r}, "
                   f"elapsed={result.elapsed_total:.3f}s")
         finally:
             engine.close()
@@ -175,6 +179,28 @@ class TestOCREngineFromFile(unittest.TestCase):
         try:
             with self.assertRaises(AppError):
                 engine.recognize_file(os.path.join(self.temp_dir, "notfound.png"))
+        finally:
+            engine.close()
+
+    def test_recognize_with_mask_below_score(self):
+        """识别时传入 mask_below_score，验证 formatted_text 中低置信度被遮罩。"""
+        from modules.ocr import OCREngine
+
+        engine = OCREngine(text_score=0.0)  # 引擎不过滤
+        try:
+            # 使用极高遮罩阈值，几乎所有文字都会变成 □
+            result = engine.recognize(
+                self.test_image_path, mask_below_score=0.99
+            )
+            self.assertIsNotNone(result)
+            self.assertIsInstance(result.formatted_text, str)
+            print(f"  mask_below_score=0.99 formatted_text={result.formatted_text!r}")
+            # 检查 formatted_text 是否包含格式化内容（至少不为空时应该有换行或空格）
+            if result.line_count > 0:
+                self.assertTrue(len(result.formatted_text) > 0)
+                # 极高阈值下，应至少有 □ 字符
+                if any(line.score < 0.99 for line in result.text_lines):
+                    self.assertIn("□", result.formatted_text)
         finally:
             engine.close()
 
@@ -305,6 +331,7 @@ class TestOCRResultStructure(unittest.TestCase):
         result = OCRResult(
             text_lines=[],
             total_text="",
+            formatted_text="",
             elapsed_total=1.0,
             elapsed_det=0.3,
             elapsed_cls=0.1,
@@ -319,6 +346,7 @@ class TestOCRResultStructure(unittest.TestCase):
         self.assertEqual(result.avg_score, 0.0)
         self.assertEqual(len(result.high_confidence_lines), 0)
         self.assertEqual(len(result.low_confidence_lines), 0)
+        self.assertEqual(result.formatted_text, "")
 
     def test_result_to_dict(self):
         """OCRResult.to_dict() 序列化。"""
@@ -329,6 +357,7 @@ class TestOCRResultStructure(unittest.TestCase):
                 OCRBox(text="Hello", score=0.95, box=[[0, 0], [50, 0], [50, 20], [0, 20]]),
             ],
             total_text="Hello",
+            formatted_text="Hello",
             elapsed_total=0.5,
             elapsed_det=0.1,
             elapsed_cls=0.05,
@@ -342,6 +371,7 @@ class TestOCRResultStructure(unittest.TestCase):
         d = result.to_dict()
         self.assertEqual(d["line_count"], 1)
         self.assertEqual(d["total_text"], "Hello")
+        self.assertEqual(d["formatted_text"], "Hello")  # 新增字段
         self.assertEqual(len(d["text_lines"]), 1)
         self.assertEqual(d["text_lines"][0]["text"], "Hello")
         self.assertEqual(d["text_lines"][0]["score"], 0.95)
@@ -368,6 +398,7 @@ class TestOCRResultStructure(unittest.TestCase):
                 OCRBox(text="low", score=0.3, box=[[0, 1], [1, 1], [1, 2], [0, 2]]),
             ],
             total_text="highlow",
+            formatted_text="high low",
             elapsed_total=0.5,
             elapsed_det=0.1,
             elapsed_cls=None,
@@ -458,7 +489,7 @@ class TestContextManager(unittest.TestCase):
         """使用 with 语句管理引擎生命周期。"""
         from modules.ocr import OCREngine
 
-        with OCREngine(text_score=0.5) as engine:
+        with OCREngine(text_score=0.0) as engine:
             result = engine.recognize(self.img_path)
             self.assertIsNotNone(result)
             self.assertFalse(engine.is_closed)
@@ -532,9 +563,10 @@ class TestConvenienceFunction(unittest.TestCase):
         """便捷函数应可正常使用。"""
         from modules.ocr import recognize_image
 
-        result = recognize_image(self.img_path, text_score=0.5)
+        result = recognize_image(self.img_path, text_score=0.0)
         self.assertIsNotNone(result)
         self.assertIsInstance(result.total_text, str)
+        self.assertIsInstance(result.formatted_text, str)
         self.assertEqual(result.engine_name, "RapidOCR")
         print(f"  便捷函数识别结果: lines={result.line_count}, "
               f"text={result.total_text!r}")
@@ -579,34 +611,153 @@ class TestConfidenceFiltering(unittest.TestCase):
         self.img_path = os.path.join(self.temp_dir, "clear.png")
         img.save(self.img_path)
 
-    def test_high_threshold_filters_low_confidence(self):
-        """高阈值应过滤低置信度结果。"""
+    def test_engine_keeps_low_confidence_results(self):
+        """引擎默认 text_score=0.0 应保留低置信度结果（不过滤）。"""
         from modules.ocr import OCREngine
 
-        # 使用极高阈值
-        engine = OCREngine(text_score=0.99)
-        try:
-            result = engine.recognize(self.img_path)
-            # 极高阈值下可能没有任何结果
-            self.assertIsNotNone(result)
-            # 所有通过的结果置信度应 >= 0.99
-            for line in result.text_lines:
-                self.assertGreaterEqual(line.score, 0.99)
-            print(f"  阈值 0.99 过滤: {result.line_count} 行通过")
-        finally:
-            engine.close()
-
-    def test_low_threshold_retains_more(self):
-        """低阈值应保留更多结果。"""
-        from modules.ocr import OCREngine
-
-        engine = OCREngine(text_score=0.1)
+        # 使用默认引擎阈值 0.0
+        engine = OCREngine()
         try:
             result = engine.recognize(self.img_path)
             self.assertIsNotNone(result)
-            print(f"  阈值 0.1 过滤: {result.line_count} 行通过")
+            # 结果应该被保留（不因低阈值被过滤）
+            print(f"  引擎 text_score=0.0 保留 {result.line_count} 行")
         finally:
             engine.close()
+
+    def test_mask_below_score_replaces_with_asterisks(self):
+        """mask_below_score 应在 formatted_text 中用 □ 替换低置信度文字。"""
+        from modules.ocr import OCREngine, format_ocr_result, OCRBox
+
+        # 使用模拟数据测试格式化
+        text_lines = [
+            OCRBox(text="Hello", score=0.95, box=[[10, 10], [100, 10], [100, 30], [10, 30]]),
+            OCRBox(text="World", score=0.30, box=[[10, 50], [100, 50], [100, 70], [10, 70]]),
+        ]
+
+        formatted = format_ocr_result(text_lines, mask_below_score=0.5)
+        self.assertIn("Hello", formatted)
+        self.assertIn("□□□□□", formatted)  # "World" = 5 chars → 5 □s
+        self.assertNotIn("World", formatted)  # 原始低置信文字不应出现
+
+        print(f"  遮罩结果: {formatted!r}")
+
+    def test_mask_below_score_same_length(self):
+        """□ 数量应等于原文字字符数。"""
+        from modules.ocr import OCREngine, format_ocr_result, OCRBox
+
+        # "金额" = 2 chars, "ABC123" = 6 chars
+        text_lines = [
+            OCRBox(text="金额", score=0.3, box=[[10, 10], [50, 10], [50, 30], [10, 30]]),
+            OCRBox(text="ABC123", score=0.2, box=[[10, 50], [100, 50], [100, 70], [10, 70]]),
+        ]
+
+        formatted = format_ocr_result(text_lines, mask_below_score=0.5)
+        self.assertIn("□□", formatted)       # "金额" → "□□"
+        self.assertIn("□□□□□□", formatted)   # "ABC123" → "□□□□□□"
+
+        print(f"  等长遮罩: {formatted!r}")
+
+
+class TestFormattingAlgorithm(unittest.TestCase):
+    """测试 14：排版格式化算法。"""
+
+    def test_sort_top_to_bottom(self):
+        """应从上到下排列文字。"""
+        from modules.ocr import format_ocr_result, OCRBox
+
+        # 故意乱序：下面的文字行放在前面
+        text_lines = [
+            OCRBox(text="Bottom", score=0.9, box=[[10, 200], [100, 200], [100, 220], [10, 220]]),
+            OCRBox(text="Top", score=0.9, box=[[10, 10], [100, 10], [100, 30], [10, 30]]),
+            OCRBox(text="Middle", score=0.9, box=[[10, 100], [100, 100], [100, 120], [10, 120]]),
+        ]
+
+        formatted = format_ocr_result(text_lines)
+        lines = formatted.split("\n")
+
+        # Top 应在 Middle 之前，Middle 应在 Bottom 之前
+        top_idx = next(i for i, l in enumerate(lines) if "Top" in l)
+        mid_idx = next(i for i, l in enumerate(lines) if "Middle" in l)
+        bot_idx = next(i for i, l in enumerate(lines) if "Bottom" in l)
+
+        self.assertLess(top_idx, mid_idx)
+        self.assertLess(mid_idx, bot_idx)
+        print(f"  从上到下排序: {lines}")
+
+    def test_same_row_left_to_right(self):
+        """同一行内应从左到右排列。"""
+        from modules.ocr import format_ocr_result, OCRBox
+
+        # 两个文字框在同一 y 高度，但 x 位置不同
+        text_lines = [
+            OCRBox(text="Right", score=0.9, box=[[200, 10], [300, 10], [300, 30], [200, 30]]),
+            OCRBox(text="Left", score=0.9, box=[[10, 12], [100, 12], [100, 32], [10, 32]]),
+        ]
+
+        formatted = format_ocr_result(text_lines)
+        # "Left" 应在 "Right" 之前
+        left_idx = formatted.index("Left")
+        right_idx = formatted.index("Right")
+        self.assertLess(left_idx, right_idx)
+        print(f"  同一行左到右: {formatted!r}")
+
+    def test_x_gap_converts_to_spaces(self):
+        """x 间距应转换为空格。"""
+        from modules.ocr import format_ocr_result, OCRBox
+
+        # 两个文字框在同一行，中间有较大间距
+        text_lines = [
+            OCRBox(text="Col1", score=0.9, box=[[10, 10], [80, 10], [80, 30], [10, 30]]),
+            OCRBox(text="Col2", score=0.9, box=[[200, 10], [280, 10], [280, 30], [200, 30]]),
+        ]
+
+        formatted = format_ocr_result(text_lines)
+        # 应包含 Col1 + 空格 + Col2
+        self.assertIn("Col1", formatted)
+        self.assertIn("Col2", formatted)
+        # 两者之间应有空格
+        col1_end = formatted.index("Col1") + len("Col1")
+        col2_start = formatted.index("Col2")
+        gap = formatted[col1_end:col2_start]
+        self.assertTrue(gap.startswith(" "), f"应有空格分隔，实际 gap={gap!r}")
+        print(f"  x 间距转空格: {formatted!r}")
+
+    def test_different_rows_preserve_newlines(self):
+        """不同行应保留换行。"""
+        from modules.ocr import format_ocr_result, OCRBox
+
+        text_lines = [
+            OCRBox(text="Line1", score=0.9, box=[[10, 10], [100, 10], [100, 30], [10, 30]]),
+            OCRBox(text="Line2", score=0.9, box=[[10, 80], [100, 80], [100, 100], [10, 100]]),
+        ]
+
+        formatted = format_ocr_result(text_lines)
+        self.assertIn("\n", formatted)
+        lines = formatted.split("\n")
+        self.assertGreaterEqual(len(lines), 2)
+        print(f"  保留换行: {lines}")
+
+    def test_empty_input(self):
+        """空输入应返回空字符串。"""
+        from modules.ocr import format_ocr_result
+
+        result = format_ocr_result([])
+        self.assertEqual("", result)
+
+    def test_large_y_gap_adds_blank_line(self):
+        """大 y 间距应添加空行（段落分隔）。"""
+        from modules.ocr import format_ocr_result, OCRBox
+
+        # 第一段在顶部，第二段在很远的下方
+        text_lines = [
+            OCRBox(text="Paragraph1", score=0.9, box=[[10, 10], [150, 10], [150, 30], [10, 30]]),
+            OCRBox(text="Paragraph2", score=0.9, box=[[10, 300], [150, 300], [150, 320], [10, 320]]),
+        ]
+
+        formatted = format_ocr_result(text_lines)
+        self.assertIn("\n", formatted)
+        print(f"  段落分隔: {formatted!r}")
 
 
 if __name__ == "__main__":

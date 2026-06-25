@@ -15,6 +15,12 @@ namespace TTTools.OCR.ViewModels;
 /// OCR 模块主 ViewModel
 /// 管理图片文件选择、OCR 识别触发、结果展示、错误处理的完整流程。
 /// OCR 是本地免费功能，不需要云端权限检查。
+///
+/// 工作流程：
+///   1. 点击"选择图片"→ 打开文件对话框，图片加入待识别列表（不自动识别）
+///   2. 点击"开始识别"→ 对待识别列表中的图片逐张执行 OCR
+///   3. 可拖动置信度滑块实时调整低置信度遮罩
+///   4. 右侧详情展示格式化文本（按原图坐标排版）
 /// </summary>
 public class OcrViewModel : BaseViewModel
 {
@@ -46,6 +52,9 @@ public class OcrViewModel : BaseViewModel
     /// <summary>已识别的 OCR 结果列表</summary>
     public ObservableCollection<OcrJobResult> Results { get; } = new();
 
+    /// <summary>待识别图片文件路径列表</summary>
+    public ObservableCollection<string> PendingFiles { get; } = new();
+
     /// <summary>当前执行中的结果（显示在预览区）</summary>
     public OcrJobResult? SelectedResult
     {
@@ -56,6 +65,7 @@ public class OcrViewModel : BaseViewModel
             {
                 OnPropertyChanged(nameof(HasSelectedResult));
                 OnPropertyChanged(nameof(SelectedTotalText));
+                OnPropertyChanged(nameof(SelectedFormattedText));
                 OnPropertyChanged(nameof(SelectedTextLineCount));
             }
         }
@@ -64,8 +74,14 @@ public class OcrViewModel : BaseViewModel
     /// <summary>是否有选中结果</summary>
     public bool HasSelectedResult => SelectedResult != null;
 
-    /// <summary>选中结果的完整文本</summary>
+    /// <summary>选中结果的完整文本（简单拼接）</summary>
     public string SelectedTotalText => SelectedResult?.TotalText ?? string.Empty;
+
+    /// <summary>选中结果的格式化文本（按坐标排版，优先使用）</summary>
+    public string SelectedFormattedText =>
+        !string.IsNullOrEmpty(SelectedResult?.FormattedText)
+            ? SelectedResult.FormattedText
+            : SelectedResult?.TotalText ?? string.Empty;
 
     /// <summary>选中结果的文字行数</summary>
     public int SelectedTextLineCount => SelectedResult?.LineCount ?? 0;
@@ -91,6 +107,9 @@ public class OcrViewModel : BaseViewModel
     /// <summary>是否有错误</summary>
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
 
+    /// <summary>是否有待识别的图片</summary>
+    public bool HasPendingFiles => PendingFiles.Count > 0;
+
     /// <summary>是否正在运行识别</summary>
     public bool IsRunning
     {
@@ -105,8 +124,8 @@ public class OcrViewModel : BaseViewModel
         }
     }
 
-    /// <summary>是否可以开始识别</summary>
-    public bool CanStart => !IsRunning && _isServiceAvailable;
+    /// <summary>是否可以开始识别：服务可用 + 未运行 + 有待识别图片</summary>
+    public bool CanStart => !IsRunning && _isServiceAvailable && PendingFiles.Count > 0;
 
     /// <summary>是否可以取消</summary>
     public bool CanCancel => IsRunning;
@@ -132,13 +151,25 @@ public class OcrViewModel : BaseViewModel
     public int TextScorePercent
     {
         get => _textScorePercent;
-        set => SetProperty(ref _textScorePercent, Math.Clamp(value, 0, 100));
+        set
+        {
+            if (SetProperty(ref _textScorePercent, Math.Clamp(value, 0, 100)))
+            {
+                // 更新所有已有结果的置信度阈值，触发遮罩刷新
+                var threshold = TextScore;
+                foreach (var result in Results)
+                    result.ConfidenceThreshold = threshold;
+
+                // 强制刷新选中结果的展示行绑定
+                OnPropertyChanged(nameof(SelectedResult));
+            }
+        }
     }
 
     /// <summary>内部使用的置信度阈值 (0.0 ~ 1.0)，由 TextScorePercent 自动换算</summary>
     private double TextScore => _textScorePercent / 100.0;
 
-    /// <summary>进度值 (0-100)</summary>
+    /// <summary>进度值</summary>
     public int ProgressValue
     {
         get => _progressValue;
@@ -163,16 +194,16 @@ public class OcrViewModel : BaseViewModel
 
     // ---- 命令 ----
 
-    /// <summary>选择文件命令</summary>
+    /// <summary>选择文件命令（只加入待识别列表，不自动识别）</summary>
     public ICommand SelectFilesCommand { get; }
 
-    /// <summary>开始识别选中文件命令</summary>
+    /// <summary>开始识别命令（对待识别列表中的所有图片执行 OCR）</summary>
     public ICommand StartRecognitionCommand { get; }
 
     /// <summary>取消当前识别命令</summary>
     public ICommand CancelCommand { get; }
 
-    /// <summary>清除所有结果命令</summary>
+    /// <summary>清除所有结果和待识别列表命令</summary>
     public ICommand ClearResultsCommand { get; }
 
     /// <summary>复制选中结果文本命令</summary>
@@ -192,12 +223,18 @@ public class OcrViewModel : BaseViewModel
         SelectFilesCommand = new RelayCommand(SelectFiles);
         StartRecognitionCommand = new RelayCommand(StartRecognitionAsync, () => CanStart);
         CancelCommand = new RelayCommand(CancelRecognition, () => CanCancel);
-        ClearResultsCommand = new RelayCommand(ClearResults, () => Results.Count > 0);
+        ClearResultsCommand = new RelayCommand(ClearResults, () => Results.Count > 0 || PendingFiles.Count > 0);
         CopyTextCommand = new RelayCommand(CopySelectedText, () => HasSelectedResult);
         SelectResultCommand = new RelayCommand<OcrJobResult?>(r => SelectedResult = r);
 
         // 监听结果列表变更以更新命令状态
         Results.CollectionChanged += (_, _) => RefreshCommandStates();
+        PendingFiles.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasPendingFiles));
+            OnPropertyChanged(nameof(CanStart));
+            RefreshCommandStates();
+        };
     }
 
     /// <summary>
@@ -249,7 +286,8 @@ public class OcrViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 打开文件选择对话框，选择要识别的图片文件
+    /// 打开文件选择对话框，将选中的图片加入待识别列表。
+    /// 不会自动开始 OCR 识别。
     /// </summary>
     private void SelectFiles()
     {
@@ -263,13 +301,12 @@ public class OcrViewModel : BaseViewModel
 
         if (dialog.ShowDialog() == true && dialog.FileNames.Length > 0)
         {
-            // 导入选中的文件并进行 OCR 识别
-            _ = StartRecognitionForFilesAsync(dialog.FileNames.ToList());
+            AddFilesToPending(dialog.FileNames);
         }
     }
 
     /// <summary>
-    /// 开始识别（通过拖拽文件触发）- 在 View 层由拖拽事件调用
+    /// 拖拽图片到 OCR 区域时调用 —— 只加入待识别列表，不自动识别。
     /// </summary>
     /// <param name="filePaths">拖入的文件路径列表</param>
     public void RecognizeDroppedFiles(IEnumerable<string> filePaths)
@@ -286,17 +323,57 @@ public class OcrViewModel : BaseViewModel
             return;
         }
 
-        _ = StartRecognitionForFilesAsync(imageFiles);
+        AddFilesToPending(imageFiles);
     }
 
     /// <summary>
-    /// 开始识别命令处理（视图命令绑定） - 委托到 SelectFiles
+    /// 将文件路径加入待识别列表（去重）
     /// </summary>
-    private void StartRecognitionAsync()
+    private void AddFilesToPending(IEnumerable<string> filePaths)
     {
-        // 如果有缓存的待处理文件，直接识别
-        // 否则打开文件选择对话框
-        SelectFiles();
+        var addedCount = 0;
+        var skippedCount = 0;
+
+        foreach (var path in filePaths)
+        {
+            if (string.IsNullOrWhiteSpace(path)) continue;
+            if (!File.Exists(path))
+            {
+                skippedCount++;
+                continue;
+            }
+
+            var normalizedPath = Path.GetFullPath(path);
+            if (PendingFiles.Contains(normalizedPath, StringComparer.OrdinalIgnoreCase))
+            {
+                skippedCount++;
+                continue;
+            }
+
+            PendingFiles.Add(normalizedPath);
+            addedCount++;
+        }
+
+        // 更新状态和进度
+        ProgressValue = 0;
+        ProgressMax = PendingFiles.Count;
+        StatusMessage = $"已选择 {PendingFiles.Count} 张图片，点击\"开始识别\"";
+        ErrorMessage = null;
+
+        _logger?.Info(
+            $"文件加入待识别列表：新增 {addedCount}，跳过 {skippedCount}，共 {PendingFiles.Count} 张",
+            "desktop-ocr");
+    }
+
+    /// <summary>
+    /// 开始识别命令 —— 对待识别列表中所有图片执行 OCR 识别。
+    /// </summary>
+    private async void StartRecognitionAsync()
+    {
+        if (PendingFiles.Count == 0) return;
+
+        var filesToRecognize = PendingFiles.ToList();
+        await StartRecognitionForFilesAsync(filesToRecognize);
     }
 
     /// <summary>
@@ -312,34 +389,43 @@ public class OcrViewModel : BaseViewModel
         ProgressMax = filePaths.Count;
 
         _currentCts = new CancellationTokenSource();
+        var threshold = TextScore;
 
-        StatusMessage = $"正在识别 {filePaths.Count} 张图片...";
+        StatusMessage = $"正在识别 0/{filePaths.Count}...";
 
         try
         {
             var results = await _ocrService.RecognizeBatchAsync(
                 filePaths,
-                TextScore,
+                maskBelowScore: threshold,
                 useDml: false,
-                (current, total) =>
+                onImageStart: (index, total, fileName) =>
                 {
-                    // 在 UI 线程更新进度
+                    // 每张开始时：显示"正在识别 X/total：文件名"
                     System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                     {
-                        ProgressValue = current;
-                        StatusMessage = $"正在识别... {current}/{total}";
+                        StatusMessage = $"正在识别 {index + 1}/{total}：{fileName}";
                     });
                 },
-                _currentCts.Token);
+                onImageComplete: (completed, total) =>
+                {
+                    // 每张完成时：更新进度值
+                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    {
+                        ProgressValue = completed;
+                    });
+                },
+                ct: _currentCts.Token);
 
-            // 将结果添加到列表
+            // 将结果添加到列表（设置置信度阈值）
             foreach (var result in results)
             {
+                result.ConfidenceThreshold = threshold;
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                     Results.Insert(0, result));
             }
 
-            // 如果有结果，选中第一个
+            // 如果有结果，选中第一个成功的
             if (results.Count > 0)
                 SelectedResult = results.FirstOrDefault(r => r.IsSuccess) ?? results[0];
 
@@ -351,12 +437,16 @@ public class OcrViewModel : BaseViewModel
             else
                 StatusMessage = $"识别完成: {successCount} 张图片全部成功";
 
+            // 识别完成后清空待识别列表
+            PendingFiles.Clear();
+
             _logger?.Info(
-                $"OCR 识别完成: {successCount} 成功, {failCount} 失败", "desktop-ocr");
+                $"OCR 批���识别完成: {successCount} 成功, {failCount} 失败", "desktop-ocr");
         }
         catch (OperationCanceledException)
         {
             StatusMessage = "识别已取消";
+            ProgressValue = 0;
             _logger?.Info("OCR 识别已取消", "desktop-ocr");
         }
         catch (Exception ex)
@@ -384,28 +474,35 @@ public class OcrViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 清除所有识别结果
+    /// 清除所有识别结果、待识别列表和进度
     /// </summary>
     private void ClearResults()
     {
         Results.Clear();
+        PendingFiles.Clear();
         SelectedResult = null;
         ErrorMessage = null;
         ProgressValue = 0;
+        ProgressMax = 100;
         StatusMessage = "结果已清除 - 选择图片文件开始 OCR 识别";
         RefreshCommandStates();
     }
 
     /// <summary>
     /// 复制选中结果的文本到剪贴板
+    /// 优先复制格式化文本，其次复制 total_text
     /// </summary>
     private void CopySelectedText()
     {
         if (SelectedResult == null) return;
 
+        var textToCopy = !string.IsNullOrEmpty(SelectedResult.FormattedText)
+            ? SelectedResult.FormattedText
+            : SelectedResult.TotalText;
+
         try
         {
-            System.Windows.Clipboard.SetText(SelectedResult.TotalText);
+            System.Windows.Clipboard.SetText(textToCopy);
             StatusMessage = "已复制识别文本到剪贴板";
         }
         catch (Exception ex)
