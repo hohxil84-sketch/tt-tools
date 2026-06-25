@@ -269,6 +269,10 @@ async def login_admin(db, account: str, password: str, device_fingerprint: str =
         raise AppError(code=ErrorCode.AUTH_INVALID_CREDENTIALS,
                        message="账号已被封禁", status_code=403)
 
+    if role != "admin":
+        raise AppError(code=ErrorCode.AUTH_INVALID_CREDENTIALS,
+                       message="非管理员账号，无权登录后台管理系统", status_code=403)
+
     if not _verify_password(password, password_hash):
         raise AppError(code=ErrorCode.AUTH_INVALID_CREDENTIALS,
                        message="账号或密码错误", status_code=401)
