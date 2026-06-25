@@ -245,7 +245,7 @@ def _create_jwt(user_id: str, role: str, plan_code: str) -> str:
                       algorithm=shared_settings.auth_algorithm)
 
 
-async def login_admin(db, account: str, password: str, device_fingerprint: str,
+async def login_admin(db, account: str, password: str, device_fingerprint: str = "admin-web",
                       device_name: str = None, client_version: str = None):
     """管理员登录。
 

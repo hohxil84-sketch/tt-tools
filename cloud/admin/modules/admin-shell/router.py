@@ -139,7 +139,7 @@ async def auth_login(
             db,
             account=body["account"],
             password=body["password"],
-            device_fingerprint=body["device_fingerprint"],
+            device_fingerprint=body.get("device_fingerprint", "admin-web"),
             device_name=body.get("device_name"),
             client_version=body.get("client_version"),
         )
