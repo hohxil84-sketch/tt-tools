@@ -34,7 +34,7 @@ style.textContent = `
   }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: "PingFang SC", "苹方", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Microsoft YaHei", sans-serif;
     font-size: 14px;
     font-weight: 400;
     letter-spacing: -0.01em;
@@ -47,6 +47,10 @@ style.textContent = `
   a { color: inherit; text-decoration: none; }
   button { font-family: inherit; cursor: pointer; }
   input, select, textarea { font-family: inherit; font-size: inherit; }
+  /* 全局强制苹方 */
+  h1, h2, h3, h4, h5, h6, th, td, label, code, pre, span, div, p, a, button, input, select, textarea, option {
+    font-family: "PingFang SC", "苹方", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  }
   input:focus, select:focus, textarea:focus {
     border-color: var(--blue) !important;
     box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.12);
@@ -61,16 +65,16 @@ style.textContent = `
   ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
 
-  /* 表格行样式 — 记录间隔与悬停效果 */
+  /* 表格行样式 — 白淡蓝间隔 + 悬停效果 */
   .admin-table tbody tr {
-    border-bottom: 1px solid var(--gray-100);
+    border-bottom: 1px solid rgba(0, 113, 227, 0.08);
     transition: background 0.12s ease;
   }
   .admin-table tbody tr:last-child {
     border-bottom: none;
   }
   .admin-table tbody tr:hover {
-    background: rgba(0, 113, 227, 0.03);
+    background: rgba(0, 113, 227, 0.06);
   }
   .admin-table tbody td {
     padding: 12px 16px;
@@ -83,16 +87,16 @@ style.textContent = `
     color: var(--gray-500);
     letter-spacing: 0.02em;
     text-transform: uppercase;
-    border-bottom: 2px solid var(--gray-200);
-    background: var(--gray-100);
+    border-bottom: 2px solid rgba(0, 113, 227, 0.15);
+    background: rgba(0, 113, 227, 0.04);
     white-space: nowrap;
   }
-  /* 偶数行浅灰底 — 提升可读性 */
+  /* 偶数行白淡蓝底色 */
   .admin-table tbody tr:nth-child(even) {
-    background: rgba(0, 0, 0, 0.012);
+    background: rgba(0, 113, 227, 0.025);
   }
   .admin-table tbody tr:nth-child(even):hover {
-    background: rgba(0, 113, 227, 0.04);
+    background: rgba(0, 113, 227, 0.07);
   }
 `;
 document.head.appendChild(style);
