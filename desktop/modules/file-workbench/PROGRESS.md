@@ -39,7 +39,13 @@
 
 ## Bug 记录
 
-暂无。
+- 2026-06-25: **导入文件按钮点击无响应**
+  - 现象：点击"📥 导入文件"按钮没有任何反应，无法导入文件
+  - 根因：XAML 按钮只绑定了 `Command="{Binding ImportFilesCommand}"`，但 ViewModel 中 `ImportFiles` 为空占位。真正触发文件选择对话框的逻辑在 code-behind `OnImportFilesClick` 方法中，按钮未通过 `Click` 事件关联该方法
+  - 修复：在按钮上补加 `Click="OnImportFilesClick"`
+  - 修复分支：`fix/file-workbench-导入文件按钮无响应`
+  - 修复提交：`985383a`
+  - 测试结果：36/36 通过
 
 ## 提交记录
 
@@ -48,6 +54,12 @@
   - 日期：2026-06-20
   - 测试结果：36 项测试全部通过
   - 说明：实现文件拖拽导入、文件预览、最近文件和工作台基础流程，已推送到 origin。
+
+- `985383a` fix(file-workbench): 修复导入文件按钮点击无响应
+  - 分支：fix/file-workbench-导入文件按钮无响应
+  - 日期：2026-06-25
+  - 测试结果：36 项测试全部通过
+  - 说明：补加 `Click="OnImportFilesClick"`，已推送到 origin。
 
 ## 下一步
 
