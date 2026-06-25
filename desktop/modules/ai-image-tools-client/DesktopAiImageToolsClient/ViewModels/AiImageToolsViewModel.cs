@@ -762,18 +762,48 @@ public class AiImageToolsViewModel : BaseViewModel
                 // 更新 OCR 文本结果（保留排版，多行展示）
                 if (data.ResultJson != null)
                 {
-                    // 尝试从 result_json 中提取 OCR 识别的文本
-                    if (data.ResultJson.TryGetValue("text", out var textObj) && textObj is string text)
+                    // 优先处理 text_lines 格式（后端返回的结构化 OCR 结果）
+                    if (data.ResultJson.TryGetValue("text_lines", out var textLinesObj) &&
+                        textLinesObj is System.Text.Json.JsonElement textLinesElement &&
+                        textLinesElement.ValueKind == System.Text.Json.JsonValueKind.Array)
                     {
-                        OcrResultText = text;
+                        var lines = new List<string>();
+                        foreach (var line in textLinesElement.EnumerateArray())
+                        {
+                            if (line.TryGetProperty("text", out var lineText))
+                                lines.Add(lineText.GetString() ?? string.Empty);
+                        }
+                        OcrResultText = string.Join(Environment.NewLine, lines);
                     }
-                    else if (data.ResultJson.TryGetValue("full_text", out var fullTextObj) && fullTextObj is string fullText)
+                    // 兼容其他格式：单个 text 字段
+                    else if (data.ResultJson.TryGetValue("text", out var textObj) && textObj is System.Text.Json.JsonElement textElem &&
+                             textElem.ValueKind == System.Text.Json.JsonValueKind.String)
                     {
-                        OcrResultText = fullText;
+                        OcrResultText = textElem.GetString() ?? string.Empty;
                     }
-                    else if (data.ResultJson.TryGetValue("content", out var contentObj) && contentObj is string content)
+                    else if (data.ResultJson.TryGetValue("text", out var textStrObj) && textStrObj is string textStr)
                     {
-                        OcrResultText = content;
+                        OcrResultText = textStr;
+                    }
+                    // 兼容 full_text 格式
+                    else if (data.ResultJson.TryGetValue("full_text", out var fullTextObj) && fullTextObj is System.Text.Json.JsonElement fullTextElem &&
+                             fullTextElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        OcrResultText = fullTextElem.GetString() ?? string.Empty;
+                    }
+                    else if (data.ResultJson.TryGetValue("full_text", out var fullTextStrObj) && fullTextStrObj is string fullTextStr)
+                    {
+                        OcrResultText = fullTextStr;
+                    }
+                    // 兼容 content 格式
+                    else if (data.ResultJson.TryGetValue("content", out var contentObj) && contentObj is System.Text.Json.JsonElement contentElem &&
+                             contentElem.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        OcrResultText = contentElem.GetString() ?? string.Empty;
+                    }
+                    else if (data.ResultJson.TryGetValue("content", out var contentStrObj) && contentStrObj is string contentStr)
+                    {
+                        OcrResultText = contentStr;
                     }
                 }
 

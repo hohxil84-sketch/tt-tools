@@ -46,5 +46,42 @@
 | desktop-format-convert | desktop/modules/format-convert | feature/desktop-format-convert | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并 |
 | desktop-ai-render-client | desktop/modules/ai-render-client | feature/desktop-ai-render-client | DEVELOPMENT_COMPLETE | 31/31 通过 | 2026-06-24 已合并 |
 | desktop-ai-image-tools-client | desktop/modules/ai-image-tools-client | feature/desktop-ai-image-tools-client | DEVELOPMENT_COMPLETE | 39/39 通过 | 2026-06-26 已合并 |
+| integration-test-ai-image-tools | 全项目 | dev/full-product | INTEGRATION_COMPLETE | 576 通过 (189 cloud + 289 contract + 98 desktop) | 2026-06-26 联调完成，未提交（在 dev/full-product 上直接测试） |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
+
+## 云端 AI 图片工具全量联调记录 (2026-06-26)
+
+**分支**: dev/full-product
+**提交**: 未提交改动（在 dev/full-product 上直接测试，改动待用户确认后提交）
+
+### 联调范围
+桌面端 5 个云端 AI 图片工具功能 + 云端 API + Mock Provider 全链路测试。
+
+### 修改文件
+- `.env` — 切换为 SQLite 本地数据库
+- `cloud/app-shell/main.py` — 移除重复的 ORM 模型预加载
+- `cloud/app-shell/init_tables.py` — 加入 ai-image-tools 模型
+- `cloud/modules/auth-device/service.py` — JWT 签发修复（plan_code 丢失）
+- `desktop/modules/ai-image-tools-client/.../AiImageToolsViewModel.cs` — OCR text_lines 格式支持
+
+### 新增文件
+- `cloud/app-shell/seed_test_data.py` — 测试数据种子脚本
+- `cloud/app-shell/integration_test.py` — 25 个集成测试用例
+- `run_cloud_test.bat` — 云端开发启动脚本
+- `INTEGRATION_TEST_REPORT.md` — 完整联调报告
+
+### 测试结果
+- 集成测试: 25/25 通过（5 个功能全链路 + 失败场景 + 数据库验证）
+- Cloud 测试: 189/189 通过
+- Contract DTO 测试: 289/289 通过
+- Desktop 测试: 98/98 通过
+- Desktop 构建: 0 错误, 0 警告
+- 总计: 576 个自动化测试用例通过
+
+### Bug 修复
+1. JWT plan_code 始终为 "free" → 修复 _create_session() 传入真实值
+2. 云启动报 Table already defined → 移除重复的 importlib 预加载
+3. OCR 结果无法展示 → 支持 text_lines 数组格式
+4. 套餐权限检查失败 → 补全子功能码到 enabled_features_json
+5. init_tables.py 缺 ai-image-tools 模型 → 加入模型目录列表
 

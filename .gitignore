@@ -1,5 +1,8 @@
 ﻿*.bat
 
+# 本地开发数据库文件
+*.db
+
 # WPF 设计器临时文件
 *_wpftmp.csproj
 

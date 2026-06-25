@@ -19,6 +19,11 @@ _parent_dir = os.path.dirname(os.path.abspath(__file__))
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
+# 同时将项目根目录加入 sys.path，确保 cloud.shared 等顶层包可被导入
+_project_root = os.path.abspath(os.path.join(_parent_dir, "..", ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 import uvicorn
 from fastapi import FastAPI
 
@@ -75,8 +80,10 @@ def create_app() -> FastAPI:
     # -- 注册基础中间件 --
     setup_middleware(app)
 
-    # -- 预加载 auth-device ORM 模型，避免后续 sys.modules 清理时丢失表注册 --
-    _preload_auth_device_models()
+    # 注意：不再通过 importlib 预加载 ORM 模型，避免与后续路由注册重复导入导致
+    # "Table is already defined for this MetaData instance" 错误。
+    # 各模块 ORM 模型会在对应的 router 导入链中自动加载到 Base.metadata，
+    # init_db() 在 lifespan startup 阶段调用时所有模型已就绪。
 
     # -- 注册健康检查路由（不挂 /api/v1 前缀，便于探活） --
     app.include_router(health_router)
