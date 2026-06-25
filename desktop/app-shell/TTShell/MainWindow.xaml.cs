@@ -19,6 +19,8 @@ using TTTools.RemoveBg.Views;
 using TTTools.AuthDevice.Views;
 using TTTools.AuthDevice.ViewModels;
 using TTTools.ExportSettings.Views;
+using TTTools.AiImageToolsClient.Views;
+using TTTools.AiImageToolsClient.ViewModels;
 
 namespace TTShell;
 
@@ -117,6 +119,7 @@ public partial class MainWindow : Window
             // AI 工具
             "AiCopy"          => new AiCopyView { DataContext = new TTTools.AiCopyClient.ViewModels.AiCopyViewModel(_apiClient, _authState) },
             "AiRender"        => new AiRenderView { DataContext = new TTTools.AiRenderClient.ViewModels.AiRenderViewModel(_apiClient, _authState) },
+            "AiImageTools"    => new AiImageToolsView { DataContext = new AiImageToolsViewModel(_apiClient, _authState) },
 
             // 图片处理
             "ResizeImage"     => new ResizeImageView { DataContext = new TTTools.ResizeImage.ViewModels.ResizeImageViewModel(new TTTools.ResizeImage.Services.ResizeImageService(), _authState, new FileSystemService()) },
@@ -150,6 +153,7 @@ public partial class MainWindow : Window
         "Preflight"       => "印前检查",
         "AiCopy"          => "AI 文案生成",
         "AiRender"        => "效果图生成",
+        "AiImageTools"    => "AI 图片工具",
         "ResizeImage"     => "图片改尺寸",
         "FormatConvert"   => "格式转换",
         "PdfImageConvert" => "PDF/图片互转",

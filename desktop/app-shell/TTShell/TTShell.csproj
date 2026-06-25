@@ -22,6 +22,7 @@
     <!-- AI 工具 -->
     <ProjectReference Include="..\..\modules\ai-copy-client\DesktopAiCopyClient\DesktopAiCopyClient.csproj" />
     <ProjectReference Include="..\..\modules\ai-render-client\DesktopAiRenderClient\DesktopAiRenderClient.csproj" />
+    <ProjectReference Include="..\..\modules\ai-image-tools-client\DesktopAiImageToolsClient\DesktopAiImageToolsClient.csproj" />
     <!-- 图片处理 -->
     <ProjectReference Include="..\..\modules\resize-image\DesktopResizeImage\DesktopResizeImage.csproj" />
     <ProjectReference Include="..\..\modules\format-convert\DesktopFormatConvert\DesktopFormatConvert.csproj" />

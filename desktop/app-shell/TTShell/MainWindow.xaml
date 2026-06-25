@@ -15,6 +15,7 @@
         xmlns:removebg="clr-namespace:TTTools.RemoveBg.Views;assembly=TTTools.RemoveBg"
         xmlns:auth="clr-namespace:TTTools.AuthDevice.Views;assembly=TTTools.AuthDevice"
         xmlns:expset="clr-namespace:TTTools.ExportSettings.Views;assembly=TTTools.ExportSettings"
+        xmlns:aiimg="clr-namespace:TTTools.AiImageToolsClient.Views;assembly=TTTools.AiImageToolsClient"
         Title="TT Tools"
         MinHeight="680"
         MinWidth="1024"
@@ -108,6 +109,8 @@
                                 Content="🤖  AI 文案生成" Tag="AiCopy" Click="OnNavigationClick" />
                         <Button x:Name="NavAiRender" Style="{StaticResource NavButtonStyle}"
                                 Content="🎨  效果图生成" Tag="AiRender" Click="OnNavigationClick" />
+                        <Button x:Name="NavAiImageTools" Style="{StaticResource NavButtonStyle}"
+                                Content="🖼️  AI 图片工具" Tag="AiImageTools" Click="OnNavigationClick" />
 
                         <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
 
