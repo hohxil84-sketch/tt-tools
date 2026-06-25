@@ -36,15 +36,34 @@
 失败原因：无
 修复提交：无
 中文备注：WPF 主程序外壳编译通过，所有功能点均已实现
+
+日期：2026-06-26
+测试命令：dotnet build
+结果：通过（0 个警告，0 个错误）
+失败原因：无
+修复提交：f0271f7
+分支：fix/desktop-app-shell-titlebar
+中文备注：修复标题栏系统按钮不可见、登录/主题按钮点击无效；替换应用图标；左上角新增图标显示
 ```
 
 ## Bug 记录
 
-暂无。
+### WindowChrome 导致系统按钮不可见 + 自定义按钮无响应
+
+- **现象**：右上角登录和主题切换按钮点击无效；最小化、还原、关闭三个系统按钮不可见
+- **根因**：`WindowChrome` 的 `CaptionHeight="32"` 让 Windows 在 OS 层面拦截标题栏区域鼠标事件；`GlassFrameThickness="1"` 玻璃边框过窄，系统按钮无渲染空间
+- **修复点**：
+  1. `UseAeroCaptionButtons="False"` `CaptionHeight="0"` `GlassFrameThickness="0"` —— 完全由 WPF 控制标题栏
+  2. 新增自定义最小化/最大化/关闭按钮，带悬停变色
+  3. 左上角新增 18×18 应用图标
+- **分支**：`fix/desktop-app-shell-titlebar`
+- **提交**：f0271f7
+- **测试命令**：`dotnet build`
+- **测试结果**：0 警告 0 错误，编译通过
 
 ## 提交记录
 
-待提交推送。
+- 2026-06-26 | f0271f7 | fix/desktop-app-shell-titlebar | 修复标题栏按钮 + 替换图标
 
 ## 下一步
 
