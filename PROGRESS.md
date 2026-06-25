@@ -7,7 +7,7 @@
 | cloud-app-shell | cloud/app-shell | feature/cloud-app-shell | DEVELOPMENT_COMPLETE | 23/23 通过 | 2026-06-20 已合并 |
 | cloud-shared | cloud/shared | feature/cloud-shared | DEVELOPMENT_COMPLETE | 47/47 通过 | 2026-06-20 已合并 |
 | cloud-auth-device | cloud/modules/auth-device | fix/auth-device-login-no-response | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并, 2026-06-26 修复合并 |
-| desktop-ai-copy-client | desktop/modules/ai-copy-client | feature/desktop-ai-copy-client | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并 |
+| desktop-ai-copy-client | desktop/modules/ai-copy-client | fix/ai-copy-client-ui-and-provider-import | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并, 2026-06-26 修复合并 |
 | desktop-app-shell | desktop/app-shell | fix/desktop-app-shell-titlebar | DEVELOPMENT_COMPLETE | 编译 0 错误 | 2026-06-26 已合并 |
 | desktop-auth-device | desktop/modules/auth-device | feature/desktop-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-file-workbench | desktop/modules/file-workbench | fix/file-workbench-导入文件按钮无响应 | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-26 已合并 |
@@ -85,4 +85,21 @@
 3. OCR 结果无法展示 → 支持 text_lines 数组格式
 4. 套餐权限检查失败 → 补全子功能码到 enabled_features_json
 5. init_tables.py 缺 ai-image-tools 模型 → 加入模型目录列表
+
+## Bug 修复记录 (2026-06-26)
+
+**分支**: fix/ai-copy-client-ui-and-provider-import
+**提交**: 5698f36
+
+### 修复范围
+
+1. **provider-runtime router.py** — `call_by_route` 懒加载 `registry` 时未清理 `sys.modules`，导致 `config` 解析到 `cloud/app-shell/config.py`（没有 `get_settings`）而非 `provider-runtime/config.py`，运行时报 `cannot import name 'get_settings' from 'config'`
+
+2. **ai-copy-client ViewModel** — 下拉框 `List<(string Value, string Display)>` 是 C# 命名元组，运行时字段为 `Item1/Item2`，WPF `DisplayMemberPath` 反射找不到 `Display`/`Value`，导致 ComboBox 全部显示空白。改为 `record ComboOption(string Value, string Display)`
+
+3. **ai-copy-client View** — 文案结果区 `TextBlock` 不可编辑/不可选中复制，改为 `TextBox`；滚动条 `Auto` 改为 `Visible`
+
+### 测试结果
+- cloud-ai-copy: 16/16 通过
+- cloud-provider-runtime: 107/107 通过
 
