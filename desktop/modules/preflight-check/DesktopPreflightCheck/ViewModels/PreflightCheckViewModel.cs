@@ -34,7 +34,7 @@ public class PreflightCheckViewModel : BaseViewModel
     private readonly AppLogger? _logger;
 
     private bool _isRunning;
-    private string _statusMessage = "就绪 - 选择图像文件开始印前检查";
+    private string _statusMessage = "请选择文件";
     private string? _errorMessage;
     private int _progressValue;
     private int _progressMax = 100;
@@ -44,6 +44,12 @@ public class PreflightCheckViewModel : BaseViewModel
 
     /// <summary>已完成的检查报告列表</summary>
     public ObservableCollection<PreflightCheckReport> Reports { get; } = new();
+
+    /// <summary>待处理文件路径列表</summary>
+    public ObservableCollection<string> PendingFiles { get; } = new();
+
+    /// <summary>是否有待处理的文件</summary>
+    public bool HasPendingFiles => PendingFiles.Count > 0;
 
     /// <summary>当前选中的检查报告（显示在详情区）</summary>
     public PreflightCheckReport? SelectedReport
@@ -114,8 +120,8 @@ public class PreflightCheckViewModel : BaseViewModel
         }
     }
 
-    /// <summary>是否可以开始检查</summary>
-    public bool CanStart => !IsRunning && _isServiceAvailable;
+    /// <summary>是否可以开始检查：服务可用 + 未运行 + 有待处理文件</summary>
+    public bool CanStart => !IsRunning && _isServiceAvailable && PendingFiles.Count > 0;
 
     /// <summary>是否可以取消</summary>
     public bool CanCancel => IsRunning;
@@ -194,12 +200,18 @@ public class PreflightCheckViewModel : BaseViewModel
         SelectFilesCommand = new RelayCommand(SelectFiles);
         StartCheckCommand = new RelayCommand(StartCheckAsync, () => CanStart);
         CancelCommand = new RelayCommand(CancelCheck, () => CanCancel);
-        ClearReportsCommand = new RelayCommand(ClearReports, () => Reports.Count > 0);
+        ClearReportsCommand = new RelayCommand(ClearReports, () => Reports.Count > 0 || PendingFiles.Count > 0);
         CopyReportCommand = new RelayCommand(CopyReportText, () => HasSelectedReport);
         SelectReportCommand = new RelayCommand<PreflightCheckReport?>(r => SelectedReport = r);
 
         // 监听报告列表变更以更新命令状态
         Reports.CollectionChanged += (_, _) => RefreshCommandStates();
+        PendingFiles.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasPendingFiles));
+            OnPropertyChanged(nameof(CanStart));
+            RefreshCommandStates();
+        };
     }
 
     /// <summary>
@@ -239,19 +251,20 @@ public class PreflightCheckViewModel : BaseViewModel
         {
             IsServiceAvailable = await _checkService.StartAsync();
             StatusMessage = IsServiceAvailable
-                ? "印前检查引擎就绪 - 选择图像文件开始检查"
-                : $"印前检查引擎启动失败: {_checkService.AvailabilityError}";
+                ? "请选择文件"
+                : "处理服务不可用，请检查本地环境";
         }
         catch (Exception ex)
         {
             IsServiceAvailable = false;
-            StatusMessage = $"印前检查引擎启动失败: {ex.Message}";
+            StatusMessage = "处理服务不可用，请检查本地环境";
             _logger?.Error($"印前检查服务初始化失败: {ex.Message}", ex, "desktop-preflight-check");
         }
     }
 
     /// <summary>
-    /// 打开文件选择对话框，选择要检查的图像文件
+    /// 打开文件选择对话框，将选中的文件加入待处理列表。
+    /// 不会自动开始检查。
     /// </summary>
     private void SelectFiles()
     {
@@ -265,12 +278,12 @@ public class PreflightCheckViewModel : BaseViewModel
 
         if (dialog.ShowDialog() == true && dialog.FileNames.Length > 0)
         {
-            _ = StartCheckForFilesAsync(dialog.FileNames.ToList());
+            AddFilesToPending(dialog.FileNames);
         }
     }
 
     /// <summary>
-    /// 开始检查（通过拖拽文件触发）- 在 View 层由拖拽事件调用
+    /// 拖拽文件到窗口时调用 —— 只加入待处理列表，不自动处理。
     /// </summary>
     /// <param name="filePaths">拖入的文件路径列表</param>
     public void CheckDroppedFiles(IEnumerable<string> filePaths)
@@ -287,15 +300,38 @@ public class PreflightCheckViewModel : BaseViewModel
             return;
         }
 
-        _ = StartCheckForFilesAsync(imageFiles);
+        AddFilesToPending(imageFiles);
     }
 
     /// <summary>
-    /// 开始检查命令处理（视图命令绑定）
+    /// 开始检查命令 —— 对待处理列表中的所有文件执行印前检查。
     /// </summary>
-    private void StartCheckAsync()
+    private async void StartCheckAsync()
     {
-        SelectFiles();
+        if (PendingFiles.Count == 0) return;
+        var files = PendingFiles.ToList();
+        await StartCheckForFilesAsync(files);
+    }
+
+    /// <summary>
+    /// 将文件路径加入待处理列表（去重）。
+    /// </summary>
+    private void AddFilesToPending(IEnumerable<string> filePaths)
+    {
+        foreach (var path in filePaths)
+        {
+            if (string.IsNullOrWhiteSpace(path)) continue;
+            if (!File.Exists(path)) continue;
+            var normalized = Path.GetFullPath(path);
+            if (PendingFiles.Any(f => f.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            PendingFiles.Add(normalized);
+        }
+
+        ProgressValue = 0;
+        ProgressMax = PendingFiles.Count;
+        StatusMessage = $"已选择 {PendingFiles.Count} 个文件，点击开始处理";
+        ErrorMessage = null;
     }
 
     /// <summary>
@@ -319,7 +355,7 @@ public class PreflightCheckViewModel : BaseViewModel
             StatusMessage = "一次最多检查 500 个文件，已截取前 500 个";
         }
 
-        StatusMessage = $"正在检查 {filePaths.Count} 个文件...";
+        StatusMessage = $"正在处理 0/{filePaths.Count}...";
 
         try
         {
@@ -330,7 +366,10 @@ public class PreflightCheckViewModel : BaseViewModel
                     System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                     {
                         ProgressValue = current;
-                        StatusMessage = $"正在检查... {current}/{total}";
+                        var fileName = current > 0 && current <= filePaths.Count
+                            ? Path.GetFileName(filePaths[current - 1])
+                            : "";
+                        StatusMessage = $"正在处理 {current}/{total}：{fileName}";
                     });
                 },
                 _currentCts.Token);
@@ -356,11 +395,14 @@ public class PreflightCheckViewModel : BaseViewModel
             var passCount = reports.Count(r => r.OverallRisk == RiskLevel.Pass);
 
             if (errorCount > 0)
-                StatusMessage = $"检查完成: {passCount} 通过, {warnCount} 警告, {errorCount} 错误 — 建议修正后再提交印刷";
+                StatusMessage = $"处理完成：成功 {passCount}，失败 {errorCount}（警告 {warnCount}）";
             else if (warnCount > 0)
-                StatusMessage = $"检查完成: {passCount} 通过, {warnCount} 警告 — 建议人工复核";
+                StatusMessage = $"处理完成：成功 {passCount}，失败 0（警告 {warnCount}）";
             else
-                StatusMessage = $"检查完成: {passCount} 个文件全部通过印前检查";
+                StatusMessage = $"处理完成：成功 {passCount}，失败 0";
+
+            // 处理完成后清空待处理列表
+            PendingFiles.Clear();
 
             _logger?.Info(
                 $"印前检查完成: {passCount} 通过, {warnCount} 警告, {errorCount} 错误",
@@ -368,7 +410,8 @@ public class PreflightCheckViewModel : BaseViewModel
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "检查已取消";
+            StatusMessage = "已取消";
+            ProgressValue = 0;
             _logger?.Info("印前检查已取消", "desktop-preflight-check");
         }
         catch (Exception ex)
@@ -401,10 +444,12 @@ public class PreflightCheckViewModel : BaseViewModel
     private void ClearReports()
     {
         Reports.Clear();
+        PendingFiles.Clear();
         SelectedReport = null;
         ErrorMessage = null;
         ProgressValue = 0;
-        StatusMessage = "报告已清除 - 选择图像文件开始印前检查";
+        ProgressMax = 100;
+        StatusMessage = "请选择文件";
         RefreshCommandStates();
     }
 

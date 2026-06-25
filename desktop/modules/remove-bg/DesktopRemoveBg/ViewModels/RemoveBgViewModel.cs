@@ -24,7 +24,7 @@ public class RemoveBgViewModel : BaseViewModel
     private readonly AppLogger? _logger;
 
     private bool _isRunning;
-    private string _statusMessage = "就绪 - 选择图片文件开始智能抠图";
+    private string _statusMessage = "请选择文件";
     private string? _errorMessage;
     private int _progressValue;
     private int _progressMax = 100;
@@ -44,6 +44,12 @@ public class RemoveBgViewModel : BaseViewModel
 
     /// <summary>已处理的抠图结果列表</summary>
     public ObservableCollection<RemoveBgResult> Results { get; } = new();
+
+    /// <summary>待处理图片文件路径列表</summary>
+    public ObservableCollection<string> PendingFiles { get; } = new();
+
+    /// <summary>是否有待处理的图片</summary>
+    public bool HasPendingFiles => PendingFiles.Count > 0;
 
     /// <summary>当前选中的结果（显示在预览区）</summary>
     public RemoveBgResult? SelectedResult
@@ -102,8 +108,8 @@ public class RemoveBgViewModel : BaseViewModel
         }
     }
 
-    /// <summary>是否可以开始处理</summary>
-    public bool CanStart => !IsRunning && _isServiceAvailable;
+    /// <summary>是否可以开始处理：服务可用 + 未运行 + 有待处理文件</summary>
+    public bool CanStart => !IsRunning && _isServiceAvailable && PendingFiles.Count > 0;
 
     /// <summary>是否可以取消</summary>
     public bool CanCancel => IsRunning;
@@ -269,7 +275,7 @@ public class RemoveBgViewModel : BaseViewModel
         SelectFilesCommand = new RelayCommand(SelectFiles);
         StartProcessingCommand = new RelayCommand(StartProcessingAsync, () => CanStart);
         CancelCommand = new RelayCommand(CancelProcessing, () => CanCancel);
-        ClearResultsCommand = new RelayCommand(ClearResults, () => Results.Count > 0);
+        ClearResultsCommand = new RelayCommand(ClearResults, () => Results.Count > 0 || PendingFiles.Count > 0);
         OpenOutputFileCommand = new RelayCommand(OpenOutputFile, () => HasSelectedResult);
         SelectResultCommand = new RelayCommand<RemoveBgResult?>(r => SelectedResult = r);
         SetWhiteBackgroundCommand = new RelayCommand(() => SetBackgroundColor(255, 255, 255));
@@ -278,6 +284,12 @@ public class RemoveBgViewModel : BaseViewModel
 
         // 监听结果列表变更以更新命令状态
         Results.CollectionChanged += (_, _) => RefreshCommandStates();
+        PendingFiles.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasPendingFiles));
+            OnPropertyChanged(nameof(CanStart));
+            RefreshCommandStates();
+        };
     }
 
     /// <summary>
@@ -304,7 +316,7 @@ public class RemoveBgViewModel : BaseViewModel
             IsServiceAvailable = await _removeBgService.StartAsync();
             if (IsServiceAvailable)
             {
-                StatusMessage = "抠图引擎就绪 - 选择图片文件开始智能抠图";
+                StatusMessage = "请选择文件";
 
                 // 加载可用模型列表
                 try
@@ -321,19 +333,20 @@ public class RemoveBgViewModel : BaseViewModel
             }
             else
             {
-                StatusMessage = $"抠图引擎启动失败: {_removeBgService.AvailabilityError}";
+                StatusMessage = "处理服务不可用，请检查本地环境";
             }
         }
         catch (Exception ex)
         {
             IsServiceAvailable = false;
-            StatusMessage = $"抠图引擎启动失败: {ex.Message}";
+            StatusMessage = "处理服务不可用，请检查本地环境";
             _logger?.Error($"抠图服务初始化失败: {ex.Message}", ex, "desktop-remove-bg");
         }
     }
 
     /// <summary>
-    /// 打开文件选择对话框，选择要抠图的图片文件
+    /// 打开文件选择对话框，将选中的图片加入待处理列表。
+    /// 不会自动开始处理。
     /// </summary>
     private void SelectFiles()
     {
@@ -347,12 +360,12 @@ public class RemoveBgViewModel : BaseViewModel
 
         if (dialog.ShowDialog() == true && dialog.FileNames.Length > 0)
         {
-            _ = StartProcessingForFilesAsync(dialog.FileNames.ToList());
+            AddFilesToPending(dialog.FileNames);
         }
     }
 
     /// <summary>
-    /// 开始处理（通过拖拽文件触发）- 在 View 层由拖拽事件调用
+    /// 拖拽文件到窗口时调用 —— 只加入待处理列表，不自动处理。
     /// </summary>
     /// <param name="filePaths">拖入的文件路径列表</param>
     public void ProcessDroppedFiles(IEnumerable<string> filePaths)
@@ -369,15 +382,38 @@ public class RemoveBgViewModel : BaseViewModel
             return;
         }
 
-        _ = StartProcessingForFilesAsync(imageFiles);
+        AddFilesToPending(imageFiles);
     }
 
     /// <summary>
-    /// 开始处理命令处理（视图命令绑定）
+    /// 开始处理命令 —— 对待处理列表中的所有图片执行抠图处理。
     /// </summary>
-    private void StartProcessingAsync()
+    private async void StartProcessingAsync()
     {
-        SelectFiles();
+        if (PendingFiles.Count == 0) return;
+        var files = PendingFiles.ToList();
+        await StartProcessingForFilesAsync(files);
+    }
+
+    /// <summary>
+    /// 将文件路径加入待处理列表（去重）。
+    /// </summary>
+    private void AddFilesToPending(IEnumerable<string> filePaths)
+    {
+        foreach (var path in filePaths)
+        {
+            if (string.IsNullOrWhiteSpace(path)) continue;
+            if (!File.Exists(path)) continue;
+            var normalized = Path.GetFullPath(path);
+            if (PendingFiles.Any(f => f.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            PendingFiles.Add(normalized);
+        }
+
+        ProgressValue = 0;
+        ProgressMax = PendingFiles.Count;
+        StatusMessage = $"已选择 {PendingFiles.Count} 个文件，点击开始处理";
+        ErrorMessage = null;
     }
 
     /// <summary>
@@ -394,7 +430,7 @@ public class RemoveBgViewModel : BaseViewModel
 
         _currentCts = new CancellationTokenSource();
 
-        StatusMessage = $"正在处理 {filePaths.Count} 张图片...";
+        StatusMessage = $"正在处理 0/{filePaths.Count}...";
 
         try
         {
@@ -453,7 +489,7 @@ public class RemoveBgViewModel : BaseViewModel
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
                     ProgressValue = current;
-                    StatusMessage = $"正在处理... {current}/{filePaths.Count}";
+                    StatusMessage = $"正在处理 {current}/{filePaths.Count}：{Path.GetFileName(filePath)}";
                 });
             }
 
@@ -467,17 +503,18 @@ public class RemoveBgViewModel : BaseViewModel
             var successCount = Results.Count(r => r.IsSuccess);
             var failCount = Results.Count - successCount;
 
-            if (failCount > 0)
-                StatusMessage = $"处理完成: {successCount} 成功, {failCount} 失败";
-            else
-                StatusMessage = $"处理完成: {successCount} 张图片全部成功";
+            StatusMessage = $"处理完成：成功 {successCount}，失败 {failCount}";
+
+            // 处理完成后清空待处理列表
+            PendingFiles.Clear();
 
             _logger?.Info(
                 $"抠图处理完成: {successCount} 成功, {failCount} 失败", "desktop-remove-bg");
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "处理已取消";
+            StatusMessage = "已取消";
+            ProgressValue = 0;
             _logger?.Info("抠图处理已取消", "desktop-remove-bg");
         }
         catch (Exception ex)
@@ -510,10 +547,12 @@ public class RemoveBgViewModel : BaseViewModel
     private void ClearResults()
     {
         Results.Clear();
+        PendingFiles.Clear();
         SelectedResult = null;
         ErrorMessage = null;
         ProgressValue = 0;
-        StatusMessage = "结果已清除 - 选择图片文件开始智能抠图";
+        ProgressMax = 100;
+        StatusMessage = "请选择文件";
         RefreshCommandStates();
     }
 

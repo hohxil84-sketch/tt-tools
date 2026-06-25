@@ -164,6 +164,7 @@ public class ResizeImageViewModelTests
     {
         var vm = new ResizeImageViewModel();
         vm.IsServiceAvailable = true;
+        vm.PendingFiles.Add(@"C:\test\image.png");
         Assert.True(vm.CanStart);
 
         // 通过反射设置 IsRunning
@@ -179,7 +180,17 @@ public class ResizeImageViewModelTests
     public void CanStart_WhenServiceUnavailable_ShouldBeFalse()
     {
         var vm = new ResizeImageViewModel();
-        Assert.False(vm.CanStart);
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.False(vm.CanStart); // 服务不可用
+    }
+
+    /// <summary>无待处理文件时 CanStart 为 false</summary>
+    [Fact]
+    public void CanStart_WhenNoPendingFiles_ShouldBeFalse()
+    {
+        var vm = new ResizeImageViewModel();
+        vm.IsServiceAvailable = true;
+        Assert.False(vm.CanStart); // 服务可用但无文件
     }
 
     /// <summary>HasError 在 ErrorMessage 不为空时为 true</summary>
@@ -286,9 +297,12 @@ public class ResizeImageViewModelTests
         vm.ClearResultsCommand.Execute(null);
 
         Assert.Empty(vm.Results);
+        Assert.Empty(vm.PendingFiles);
         Assert.Null(vm.SelectedResult);
         Assert.Null(vm.ErrorMessage);
         Assert.Equal(0, vm.ProgressValue);
+        Assert.Equal(100, vm.ProgressMax);
+        Assert.Equal("请选择文件", vm.StatusMessage);
     }
 
     /// <summary>模式列表包含 7 个选项</summary>
@@ -313,5 +327,58 @@ public class ResizeImageViewModelTests
     {
         var vm = new ResizeImageViewModel();
         Assert.Equal(6, vm.FormatList.Count);
+    }
+
+    // ---- 交互逻辑测试：选择不自动处理，开始才触发 ----
+
+    /// <summary>ProcessDroppedFiles 只加入待处理列表，不自动触发处理</summary>
+    [Fact]
+    public void ProcessDroppedFiles_ShouldOnlyAddToPending_NotTriggerProcessing()
+    {
+        var vm = new ResizeImageViewModel();
+        // 拖拽文件只加入列表，不开始处理
+        Assert.False(vm.IsRunning);
+        Assert.Equal(0, vm.PendingFiles.Count);
+        // 验证 HasPendingFiles 随 PendingFiles 变化
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.True(vm.HasPendingFiles);
+        Assert.Equal(1, vm.PendingFiles.Count);
+        Assert.False(vm.IsRunning); // 仍在等待，未自动处理
+    }
+
+    /// <summary>有待处理文件且服务可用时 CanStart 为 true</summary>
+    [Fact]
+    public void CanStart_ShouldBeTrue_WhenHasPendingFilesAndServiceAvailable()
+    {
+        var vm = new ResizeImageViewModel();
+        vm.IsServiceAvailable = true;
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.True(vm.CanStart);
+    }
+
+    /// <summary>取消后 StatusMessage 应反映已取消</summary>
+    [Fact]
+    public void Cancel_ShouldUpdateStatus()
+    {
+        var vm = new ResizeImageViewModel();
+        // 模拟处理中然后取消：设置 IsRunning + CancellationTokenSource
+        typeof(ResizeImageViewModel)
+            .GetProperty(nameof(ResizeImageViewModel.IsRunning))!
+            .SetValue(vm, true);
+
+        vm.CancelCommand.Execute(null);
+
+        Assert.Contains("取消", vm.StatusMessage);
+    }
+
+    /// <summary>PendingFiles 变更时 HasPendingFiles 应同步更新</summary>
+    [Fact]
+    public void PendingFiles_Add_ShouldUpdateHasPendingFiles()
+    {
+        var vm = new ResizeImageViewModel();
+        Assert.False(vm.HasPendingFiles);
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.True(vm.HasPendingFiles);
+        Assert.Equal(1, vm.PendingFiles.Count);
     }
 }

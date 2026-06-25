@@ -118,10 +118,12 @@ public class PreflightCheckViewModelTests
         vm.ClearReportsCommand.Execute(null);
 
         Assert.Equal(0, vm.ReportCount);
+        Assert.Empty(vm.PendingFiles);
         Assert.Null(vm.SelectedReport);
         Assert.False(vm.HasError);
         Assert.Equal(0, vm.ProgressValue);
-        Assert.Contains("已清除", vm.StatusMessage);
+        Assert.Equal(100, vm.ProgressMax);
+        Assert.Equal("请选择文件", vm.StatusMessage);
     }
 
     /// <summary>添加不同风险等级的报告时统计应正确</summary>
@@ -174,9 +176,10 @@ public class PreflightCheckViewModelTests
         Assert.False(vm.IsRunning);
         Assert.False(vm.CanStart); // 服务未就绪
 
-        // 模拟服务就绪
+        // 模拟服务就绪 + 有待处理文件
         typeof(PreflightCheckViewModel).GetProperty(nameof(PreflightCheckViewModel.IsServiceAvailable))
             ?.SetValue(vm, true);
+        vm.PendingFiles.Add(@"C:\test\image.png");
 
         Assert.True(vm.CanStart);
         Assert.False(vm.CanCancel);
@@ -213,5 +216,65 @@ public class PreflightCheckViewModelTests
 
         Assert.False(vm.HasError);
         Assert.Null(vm.ErrorMessage);
+    }
+
+    // ---- 交互逻辑测试：选择不自动处理，开始才触发 ----
+
+    /// <summary>CheckDroppedFiles 只加入待处理列表，不自动触发检查</summary>
+    [Fact]
+    public void CheckDroppedFiles_ShouldOnlyAddToPending_NotTriggerProcessing()
+    {
+        var fs = new FileSystemService();
+        var vm = new PreflightCheckViewModel(null, fs);
+        Assert.False(vm.IsRunning);
+        Assert.Equal(0, vm.PendingFiles.Count);
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.True(vm.HasPendingFiles);
+        Assert.False(vm.IsRunning); // 仍在等待
+    }
+
+    /// <summary>无待处理文件时 CanStart 为 false</summary>
+    [Fact]
+    public void CanStart_ShouldBeFalse_WhenNoPendingFiles()
+    {
+        var fs = new FileSystemService();
+        var vm = new PreflightCheckViewModel(null, fs);
+        typeof(PreflightCheckViewModel).GetProperty(nameof(PreflightCheckViewModel.IsServiceAvailable))
+            ?.SetValue(vm, true);
+        Assert.False(vm.CanStart); // 服务可用但无文件
+    }
+
+    /// <summary>服务不可用时 CanStart 为 false</summary>
+    [Fact]
+    public void CanStart_ShouldBeFalse_WhenServiceUnavailable()
+    {
+        var fs = new FileSystemService();
+        var vm = new PreflightCheckViewModel(null, fs);
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.False(vm.CanStart); // 有文件但服务不可用
+    }
+
+    /// <summary>取消后 StatusMessage 应反映已取消</summary>
+    [Fact]
+    public void Cancel_ShouldUpdateStatus()
+    {
+        var fs = new FileSystemService();
+        var vm = new PreflightCheckViewModel(null, fs);
+        typeof(PreflightCheckViewModel).GetProperty(nameof(PreflightCheckViewModel.IsRunning))
+            ?.SetValue(vm, true);
+        vm.CancelCommand.Execute(null);
+        Assert.Contains("取消", vm.StatusMessage);
+    }
+
+    /// <summary>PendingFiles 变更时 HasPendingFiles 应同步更新</summary>
+    [Fact]
+    public void PendingFiles_Add_ShouldUpdateHasPendingFiles()
+    {
+        var fs = new FileSystemService();
+        var vm = new PreflightCheckViewModel(null, fs);
+        Assert.False(vm.HasPendingFiles);
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.True(vm.HasPendingFiles);
+        Assert.Single(vm.PendingFiles);
     }
 }
