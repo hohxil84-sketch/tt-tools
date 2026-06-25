@@ -1,5 +1,18 @@
 # PROGRESS.md - cloud-provider-runtime
 
+## 2026-06-26 多模型真实 API 接入记录
+
+- 代码提交：`ddf9b67` - `feat(provider-runtime): 接入多模型能力路由`
+- 分支：`feature/cloud-provider-runtime-multimodel`
+- 测试结果：
+  - `python -m pytest cloud\modules\provider-runtime\tests -q`：107 passed
+  - `python -m pytest cloud\modules\ai-copy\tests -q`：16 passed
+  - `python -m pytest cloud\modules\ai-image-tools\tests -q`：36 passed
+  - `python -m compileall cloud\modules\provider-runtime cloud\modules\ai-copy cloud\modules\ai-image-tools`：通过
+- 真实 API 验证：DeepSeek 文本、豆包文本、豆包图片均已连通。
+- 安全说明：真实 key 仅写入本地 `.env`，未纳入 Git 提交；提交前已扫描暂存 diff。
+- 中文备注：新增 capability + tier 路由、DeepSeek Provider、Doubao Provider、环境配置读取和测试隔离；`ai-copy` / `ai-image-tools` 已改为通过 provider-runtime 路由调用。
+
 ## 当前状态
 
 `DEVELOPED`

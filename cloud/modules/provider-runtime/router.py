@@ -179,6 +179,52 @@ class ProviderRouter:
 
         return result
 
+    async def call_by_route(
+        self,
+        request: ProviderCallRequest,
+        capability: str = "text",
+        tier: str = "cheap",
+    ) -> ProviderResult:
+        """Execute a call using capability/tier routing.
+
+        Business modules should prefer this method. It resolves
+        capability + tier + feature to provider/model, then delegates to call().
+        """
+        try:
+            from registry import resolve_route
+        except ModuleNotFoundError:
+            import os
+            import sys
+
+            module_dir = os.path.dirname(__file__)
+            if module_dir not in sys.path:
+                sys.path.insert(0, module_dir)
+            from registry import resolve_route
+
+        route = resolve_route(
+            capability=capability,
+            tier=tier,
+            feature=request.feature,
+        )
+        routed_request = request.model_copy(
+            update={
+                "model": route.model,
+                "capability": capability,
+                "tier": tier,
+            }
+        )
+        provider = self._providers.get(route.provider)
+        if provider is None:
+            raise ProviderError(
+                code="PROVIDER_NOT_REGISTERED",
+                message=(
+                    f"Capability '{capability}' tier '{tier}' routes to provider "
+                    f"'{route.provider}', but it is not registered"
+                ),
+                status_code=500,
+            )
+        return await self.call(request=routed_request, provider=provider)
+
 
 # ============================================================
 # 便捷函数

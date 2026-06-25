@@ -31,6 +31,14 @@ class ProviderCallRequest(BaseModel):
     """
 
     model: str = Field(..., description="模型名称，如 deepseek-chat、gpt-4o")
+    capability: str = Field(
+        default="text",
+        description="Provider capability: text / vision_text / image_generation / image_edit",
+    )
+    tier: str = Field(
+        default="cheap",
+        description="Cost tier: cheap / balanced / premium",
+    )
     messages: list[ChatMessage] = Field(..., description="对话消息列表")
     feature: str = Field(..., description="功能码，如 ai_copy_cloud")
     max_tokens: int = Field(default=2048, description="最大生成 token 数")

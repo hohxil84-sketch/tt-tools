@@ -26,6 +26,16 @@ _MODEL_PRICING: dict[str, dict[str, float]] = {
         "output_price_per_million": 2.0,    # ¥2 / 百万输出 token
         "currency": "CNY",
     },
+    "deepseek-v4-flash": {
+        "input_price_per_million": 1.0,
+        "output_price_per_million": 2.0,
+        "currency": "CNY",
+    },
+    "deepseek-v4-pro": {
+        "input_price_per_million": 4.0,
+        "output_price_per_million": 16.0,
+        "currency": "CNY",
+    },
     "deepseek-reasoner": {
         "input_price_per_million": 4.0,     # ¥4 / 百万输入 token
         "output_price_per_million": 16.0,   # ¥16 / 百万输出 token（含推理）
@@ -61,6 +71,29 @@ _MODEL_PRICING: dict[str, dict[str, float]] = {
     "claude-3-haiku": {
         "input_price_per_million": 1.83,    # $0.25 → 约 ¥1.83
         "output_price_per_million": 9.15,   # $1.25 → 约 ¥9.15
+        "currency": "CNY",
+    },
+    # -- Doubao / Volcengine Ark placeholders --
+    # Replace with the exact enabled endpoint pricing before production billing.
+    "doubao-text-default": {
+        "input_price_per_million": 1.0,
+        "output_price_per_million": 2.0,
+        "currency": "CNY",
+    },
+    "doubao-image-default": {
+        "input_price_per_million": 0.0,
+        "output_price_per_million": 0.0,
+        "currency": "CNY",
+    },
+    # -- Future premium route placeholders --
+    "gpt-5.5": {
+        "input_price_per_million": 0.0,
+        "output_price_per_million": 0.0,
+        "currency": "CNY",
+    },
+    "gemini-premium": {
+        "input_price_per_million": 0.0,
+        "output_price_per_million": 0.0,
         "currency": "CNY",
     },
 }
