@@ -52,7 +52,19 @@
                            Foreground="{DynamicResource TextPrimaryBrush}"
                            VerticalAlignment="Center" />
 
+                <!-- 登录 / 用户入口 -->
                 <Button Grid.Column="2"
+                        x:Name="UserEntryButton"
+                        Content="👤 登录"
+                        Height="32"
+                        Padding="12,0"
+                        FontSize="13"
+                        Background="Transparent" BorderThickness="0"
+                        Foreground="{DynamicResource TextPrimaryBrush}"
+                        Cursor="Hand" Click="OnUserEntryClick"
+                        ToolTip="登录 / 设备状态" />
+
+                <Button Grid.Column="3"
                         x:Name="ThemeToggleButton"
                         Content="🌙"
                         Width="36" Height="36"
@@ -60,21 +72,6 @@
                         Background="Transparent" BorderThickness="0"
                         Cursor="Hand" Click="OnThemeToggle"
                         ToolTip="切换浅色/深色主题" />
-
-                <StackPanel Grid.Column="3" Orientation="Horizontal">
-                    <Button Content="─" Width="36" Height="36"
-                            Background="Transparent" BorderThickness="0"
-                            Cursor="Hand" Foreground="{DynamicResource TextPrimaryBrush}"
-                            Click="OnMinimize" ToolTip="最小化" />
-                    <Button x:Name="MaxRestoreButton" Content="□" Width="36" Height="36"
-                            Background="Transparent" BorderThickness="0"
-                            Cursor="Hand" Foreground="{DynamicResource TextPrimaryBrush}"
-                            Click="OnMaximizeRestore" ToolTip="最大化/还原" />
-                    <Button Content="✕" Width="36" Height="36"
-                            Background="Transparent" BorderThickness="0"
-                            Cursor="Hand" Foreground="{DynamicResource TextPrimaryBrush}"
-                            Click="OnClose" ToolTip="关闭" />
-                </StackPanel>
             </Grid>
         </Border>
 
@@ -125,12 +122,6 @@
                                 Content="📸  证件照换底色" Tag="IdPhoto" Click="OnNavigationClick" />
                         <Button x:Name="NavRemoveBg" Style="{StaticResource NavButtonStyle}"
                                 Content="✂️  智能抠图" Tag="RemoveBg" Click="OnNavigationClick" />
-
-                        <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
-
-                        <!-- 系统 -->
-                        <Button x:Name="NavLogin" Style="{StaticResource NavButtonStyle}"
-                                Content="👤  登录管理" Tag="Login" Click="OnNavigationClick" />
 
                         <Separator Margin="16,8" Background="{DynamicResource DividerBrush}" />
 

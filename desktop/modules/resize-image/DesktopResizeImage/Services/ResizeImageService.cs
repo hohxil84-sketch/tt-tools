@@ -3,10 +3,10 @@ using TTShared.Auth;
 using TTShared.CloudApi;
 using TTShared.CloudApi.Dtos;
 using TTShared.FileSystem;
-using TTShared.Settings;
 using TTShared.JobSystem;
 using TTShared.LocalRuntime;
 using TTShared.Logging;
+using TTShared.Settings;
 using TTTools.ResizeImage.Models;
 
 namespace TTTools.ResizeImage.Services;
@@ -28,6 +28,9 @@ public class ResizeImageService : IDisposable
     private readonly string _routerScriptPath;
     private bool _isAvailable;
     private string? _availabilityError;
+
+    /// <summary>关联的认证状态（供 ViewModel 读取登录态）</summary>
+    public AuthState AuthState => _authState;
 
     /// <summary>服务是否可用（worker 已启动且健康检查通过）</summary>
     public bool IsAvailable => _isAvailable;
@@ -78,17 +81,21 @@ public class ResizeImageService : IDisposable
     }
 
     /// <summary>
-    /// 默认构造函数（仅用于设计时或格式校验测试，不使用 LocalRuntimeClient）。
+    /// 默认构造函数（壳层无 DI 时使用，自动解析 Python 路径和 router 脚本路径）
     /// </summary>
     public ResizeImageService()
     {
-        _authState = new AuthState();
+        _authState = AuthState.Shared;
         _cloudApiClient = new CloudApiClient(AppSettings.Instance.ServerUrl, _authState);
-        _pythonPath = AppSettings.Instance.PythonPath
-            ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";
+        // resize-image 模块专用 venv
+        _pythonPath = @"D:\localPath\venvs\local-worker-resize-image\Scripts\python.exe";
+        // router 脚本与 DLL 在同一输出目录（csproj 配置了 CopyToOutputDirectory）
         _routerScriptPath = Path.Combine(
             Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
             "resize_image_router.py");
+
+        _runtimeClient = new LocalRuntimeClient(_pythonPath, _routerScriptPath);
+        _runtimeClient.ProcessExited += OnProcessExited;
     }
 
     /// <summary>
