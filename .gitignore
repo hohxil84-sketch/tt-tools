@@ -1,6 +1,16 @@
-﻿.env
+﻿*.bat
+
+# WPF 设计器临时文件
+*_wpftmp.csproj
+
+# 管理员脚本（仅开发使用）
+cloud/app-shell/create_admin.py
+cloud/app-shell/create_admin.sql
+cloud/app-shell/init_tables.py
+cloud/app-shell/insert_admin.py
+
+.env
 .env.*
-!.env.example
 .venv/
 __pycache__/
 *.pyc
