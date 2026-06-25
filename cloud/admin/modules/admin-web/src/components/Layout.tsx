@@ -8,11 +8,12 @@ interface MenuItem {
   children?: MenuItem[] | null;
 }
 
+/** 跨平台菜单图标映射 — 使用通用 Unicode 字符替代 SF Symbols */
 const iconMap: Record<string, string> = {
-  dashboard: '􀍟', users: '􀉬', billing: '􀖀', ops: '􀍟',
-  list: '􀋲', devices: '􀙗', plan: '􀆵', order: '􀋲',
-  credits: '􀎚', ledger: '􀊴', log: '􀈨', cost: '􀖀',
-  risk: '􀉬', feature: '􀍟',
+  dashboard: '◆', users: '●', billing: '◇', ops: '✦',
+  list: '▸', devices: '◻', plan: '▤', order: '◎',
+  credits: '◆', ledger: '◈', log: '▥', cost: '◉',
+  risk: '⚠', feature: '⚙',
 };
 
 export default function Layout() {
@@ -52,48 +53,52 @@ export default function Layout() {
           borderBottom: '1px solid rgba(255,255,255,0.06)',
         }}>
           {!collapsed && (
-            <span style={{ fontSize: 16, fontWeight: 600, letterSpacing: '-0.01em' }}>
-              TT Tools
+            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '0.01em', color: '#ffffff', display: 'flex', alignItems: 'center', gap: 9 }}>
+              <img src="/admin/app-icon.png" alt="" style={{ width: 24, height: 24, borderRadius: 6, objectFit: 'contain' }} />
+              Alphoria
             </span>
           )}
           <button onClick={() => setCollapsed(!collapsed)} style={{
             background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
             fontSize: 14, cursor: 'pointer', padding: 4,
           }}>
-            {collapsed ? '􀰑' : '􀰒'}
+            {collapsed ? '▶' : '◀'}
           </button>
         </div>
 
-        <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+        <nav style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
           {menu.map(item => (
-            <div key={item.id}>
+            <div key={item.id} style={{ marginBottom: 2 }}>
+              {/* 一级菜单 — 纯白/米白，更大字体，更突出 */}
               <Link to={toPath(item.path)} style={{
-                display: 'flex', alignItems: 'center', gap: collapsed ? 0 : 10,
-                padding: collapsed ? '11px 0' : '9px 20px',
+                display: 'flex', alignItems: 'center', gap: collapsed ? 0 : 12,
+                padding: collapsed ? '12px 0' : '11px 20px',
                 justifyContent: collapsed ? 'center' : 'flex-start',
-                margin: collapsed ? '2px 10px' : '2px 8px',
+                margin: collapsed ? '3px 10px' : '4px 8px',
                 borderRadius: 8,
-                color: active(item.path) ? '#fff' : 'rgba(255,255,255,0.65)',
-                background: active(item.path) ? 'rgba(255,255,255,0.12)' : 'transparent',
-                fontSize: 13, fontWeight: active(item.path) ? 500 : 400,
-                letterSpacing: '-0.01em',
+                color: active(item.path) ? '#ffffff' : '#f5f5f7',
+                background: active(item.path) ? 'rgba(255,255,255,0.15)' : 'transparent',
+                fontSize: 15, fontWeight: active(item.path) ? 600 : 500,
+                letterSpacing: '0.01em',
                 transition: 'all 0.15s ease',
               }}
                 title={collapsed ? item.title : undefined}
               >
-                <span style={{ fontSize: collapsed ? 18 : 15, opacity: active(item.path) ? 1 : 0.7 }}>
-                  {iconMap[item.icon] || '􀍟'}
+                <span style={{ fontSize: collapsed ? 20 : 16, opacity: active(item.path) ? 1 : 0.85 }}>
+                  {iconMap[item.icon] || '◆'}
                 </span>
                 {!collapsed && item.title}
               </Link>
+              {/* 二级菜单 — 稍小字体，米白色 */}
               {!collapsed && item.children?.map(c => (
                 <Link key={c.id} to={toPath(c.path)} style={{
                   display: 'block',
-                  padding: '6px 20px 6px 50px',
-                  color: active(c.path) ? '#fff' : 'rgba(255,255,255,0.5)',
-                  fontSize: 12, fontWeight: active(c.path) ? 500 : 400,
-                  letterSpacing: '-0.01em',
-                  transition: 'color 0.15s ease',
+                  padding: '8px 20px 8px 52px',
+                  color: active(c.path) ? '#ffffff' : '#e8e8ed',
+                  fontSize: 13, fontWeight: active(c.path) ? 500 : 400,
+                  letterSpacing: '0.01em',
+                  transition: 'all 0.15s ease',
+                  opacity: active(c.path) ? 1 : 0.85,
                 }}>
                   {c.title}
                 </Link>
@@ -113,7 +118,7 @@ export default function Layout() {
           padding: '0 28px', flexShrink: 0, zIndex: 50,
         }}>
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--gray-800)', letterSpacing: '-0.01em' }}>
-            管理后台
+            Alphoria 管理后台
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>

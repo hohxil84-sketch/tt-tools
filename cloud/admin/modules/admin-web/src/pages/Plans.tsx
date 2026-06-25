@@ -61,9 +61,14 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   const isEdit = !!plan;
 
   const submit = async (e: React.FormEvent) => { e.preventDefault(); setSaving(true);
-    let pf: Record<string, unknown> = {}; try { pf = JSON.parse(fj); } catch { alert('JSON 格式错误'); setSaving(false); return; }
+    let pf: Record<string, unknown> | undefined;
+    if (!isEdit) {
+      // 新建套餐：需要解析功能开关 JSON
+      try { pf = JSON.parse(fj); } catch { alert('JSON 格式错误'); setSaving(false); return; }
+    }
+    // 编辑套餐：只发送 name 和 monthly_grant，不触碰功能开关（功能开关在 FeatureFlags 页面管理）
     try {
-      if (isEdit) await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body: { name, monthly_grant: mg, enabled_features_json: pf } });
+      if (isEdit) await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body: { name, monthly_grant: mg } });
       else await apiRequest('/admin/plans', { method: 'POST', body: { code, name, monthly_grant: mg, enabled_features_json: pf } });
       done();
     } catch (e: unknown) { alert(e instanceof Error ? e.message : '保存失败'); }
@@ -75,7 +80,7 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
       {!isEdit && <Fld label="编码 *"><input value={code} onChange={e => setCode(e.target.value)} required style={finpS} /></Fld>}
       <Fld label="名称"><input value={name} onChange={e => setName(e.target.value)} required style={finpS} /></Fld>
       <Fld label="月赠额度"><input type="number" value={mg} onChange={e => setMg(Number(e.target.value))} min={0} style={finpS} /></Fld>
-      <Fld label="功能开关 (JSON)"><textarea value={fj} onChange={e => setFj(e.target.value)} rows={5} style={{ ...finpS, fontFamily: 'SF Mono, Monaco, monospace', fontSize: 12 }} /></Fld>
+      {!isEdit && <Fld label="功能开关 (JSON)"><textarea value={fj} onChange={e => setFj(e.target.value)} rows={5} style={{ ...finpS, fontFamily: 'SF Mono, Monaco, monospace', fontSize: 12 }} /></Fld>}
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}><button type="submit" disabled={saving} style={priBtn}>{saving ? '保存中…' : '保存'}</button><button type="button" onClick={close} style={secBtn}>取消</button></div>
     </form>
   </Sheet>;

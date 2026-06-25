@@ -1,5 +1,5 @@
 /**
- * TT Tools Admin — Apple-inspired design system.
+ * Alphoria Admin — Apple-inspired design system.
  */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
@@ -47,10 +47,53 @@ style.textContent = `
   a { color: inherit; text-decoration: none; }
   button { font-family: inherit; cursor: pointer; }
   input, select, textarea { font-family: inherit; font-size: inherit; }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--blue) !important;
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.12);
+    outline: none;
+  }
+  /* 输入框过渡动画 */
+  input, select, textarea {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
+
+  /* 表格行样式 — 记录间隔与悬停效果 */
+  .admin-table tbody tr {
+    border-bottom: 1px solid var(--gray-100);
+    transition: background 0.12s ease;
+  }
+  .admin-table tbody tr:last-child {
+    border-bottom: none;
+  }
+  .admin-table tbody tr:hover {
+    background: rgba(0, 113, 227, 0.03);
+  }
+  .admin-table tbody td {
+    padding: 12px 16px;
+    vertical-align: middle;
+  }
+  .admin-table thead th {
+    padding: 10px 16px;
+    font-weight: 500;
+    font-size: 11px;
+    color: var(--gray-500);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-bottom: 2px solid var(--gray-200);
+    background: var(--gray-100);
+    white-space: nowrap;
+  }
+  /* 偶数行浅灰底 — 提升可读性 */
+  .admin-table tbody tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.012);
+  }
+  .admin-table tbody tr:nth-child(even):hover {
+    background: rgba(0, 113, 227, 0.04);
+  }
 `;
 document.head.appendChild(style);
 

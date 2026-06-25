@@ -1,7 +1,7 @@
 /** Apple-style shared components for admin pages. */
 import React from 'react';
 
-export const priBtn: React.CSSProperties = { padding: '7px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--blue)', color: '#fff', fontSize: 13, fontWeight: 500, letterSpacing: '-0.01em', cursor: 'pointer' };
+export const priBtn: React.CSSProperties = { padding: '7px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: 'var(--blue)', color: '#fff', fontSize: 13, fontWeight: 500, letterSpacing: '-0.01em', cursor: 'pointer', transition: 'all 0.15s ease' };
 export const secBtn: React.CSSProperties = { ...priBtn, background: 'var(--gray-200)', color: 'var(--gray-700)' };
 export const inpS: React.CSSProperties = { padding: '8px 14px', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-md)', fontSize: 13, outline: 'none', color: 'var(--gray-800)', background: 'var(--white)', minWidth: 160 };
 export const selS: React.CSSProperties = { ...inpS, minWidth: 120 };
@@ -12,8 +12,8 @@ export function Card({ children }: { children: React.ReactNode }) {
 }
 
 export function Tbl({ heads, children }: { heads: string[]; children: React.ReactNode }) {
-  return <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-    <thead><tr style={{ background: 'var(--gray-100)' }}>{heads.map((h, i) => <th key={i} style={{ padding: '10px 16px', textAlign: i === heads.length - 1 ? 'right' : 'left', fontWeight: 500, fontSize: 11, color: 'var(--gray-500)', letterSpacing: '0.02em', textTransform: 'uppercase', borderBottom: '1px solid var(--gray-200)' }}>{h}</th>)}</tr></thead>
+  return <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+    <thead><tr>{heads.map((h, i) => <th key={i} style={{ textAlign: i === heads.length - 1 ? 'right' : 'left' }}>{h}</th>)}</tr></thead>
     <tbody>{children}</tbody>
   </table>;
 }

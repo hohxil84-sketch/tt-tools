@@ -37,20 +37,20 @@ function Section({ title, items }: { title: string; items: Brk[] }) {
   return (
     <div style={{ background: 'var(--white)', borderRadius: 'var(--radius-lg)', padding: '20px 24px', border: '1px solid var(--gray-200)', boxShadow: 'var(--shadow-sm)', marginBottom: 18 }}>
       <h3 style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.01em', marginBottom: 14 }}>{title}</h3>
-      {items.length === 0 ? <div style={{ color: 'var(--gray-400)', fontSize: 12 }}>暂无数据</div> : <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead><tr style={{ borderBottom: '1px solid var(--gray-200)' }}>
-          <th style={{ padding: '8px 0', textAlign: 'left', fontWeight: 500, fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>名称</th>
-          <th style={{ padding: '8px 0', textAlign: 'right', fontWeight: 500, fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>调用</th>
-          <th style={{ padding: '8px 0', textAlign: 'right', fontWeight: 500, fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Token</th>
-          <th style={{ padding: '8px 0', textAlign: 'right', fontWeight: 500, fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>成本</th>
-          <th style={{ padding: '8px 0', textAlign: 'right', fontWeight: 500, fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>额度</th>
+      {items.length === 0 ? <div style={{ color: 'var(--gray-400)', fontSize: 12 }}>暂无数据</div> : <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead><tr>
+          <th style={{ textAlign: 'left' }}>名称</th>
+          <th style={{ textAlign: 'right' }}>调用</th>
+          <th style={{ textAlign: 'right' }}>Token</th>
+          <th style={{ textAlign: 'right' }}>成本</th>
+          <th style={{ textAlign: 'right' }}>额度</th>
         </tr></thead>
-        <tbody>{items.map(i => <tr key={i.key} style={{ borderBottom: '1px solid var(--gray-100)' }}>
-          <td style={{ padding: '7px 0' }}><code style={{ fontSize: 12, color: 'var(--blue)' }}>{i.key}</code></td>
-          <td style={{ padding: '7px 0', textAlign: 'right' }}>{i.calls.toLocaleString()}</td>
-          <td style={{ padding: '7px 0', textAlign: 'right' }}>{i.total_tokens.toLocaleString()}</td>
-          <td style={{ padding: '7px 0', textAlign: 'right' }}>${i.total_cost.toFixed(4)}</td>
-          <td style={{ padding: '7px 0', textAlign: 'right' }}>{i.total_credits.toLocaleString()}</td>
+        <tbody>{items.map(i => <tr key={i.key}>
+          <td><code style={{ fontSize: 12, color: 'var(--blue)' }}>{i.key}</code></td>
+          <td style={{ textAlign: 'right' }}>{i.calls.toLocaleString()}</td>
+          <td style={{ textAlign: 'right' }}>{i.total_tokens.toLocaleString()}</td>
+          <td style={{ textAlign: 'right' }}>${i.total_cost.toFixed(4)}</td>
+          <td style={{ textAlign: 'right' }}>{i.total_credits.toLocaleString()}</td>
         </tr>)}</tbody>
       </table>}
     </div>

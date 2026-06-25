@@ -115,8 +115,12 @@ export async function apiRequest<T = unknown>(
     throw new ApiError(msg, json?.error?.code || json?.detail?.code || 'UNKNOWN', response.status);
   }
 
-  // 成功但无 data 字段
+  // 成功但无 data 字段 — 有些端点（如 DELETE）返回 data: null
   if (json?.data === undefined) {
+    // 204 No Content 或无 data 字段视为正常（某些操作不返回数据）
+    if (response.status === 204 || response.status === 200) {
+      return null as T;
+    }
     throw new ApiError(`响应缺少 data 字段: ${JSON.stringify(json).slice(0, 200)}`, 'NO_DATA', response.status);
   }
 
@@ -128,11 +132,11 @@ export function setToken(token: string) {
   localStorage.setItem('admin_token', token);
 }
 
-export function setUser(user: { id: string; account: string; display_name?: string }) {
+export function setUser(user: { id: string; account: string; display_name?: string; plan_code?: string }) {
   localStorage.setItem('admin_user', JSON.stringify(user));
 }
 
-export function getUser(): { id: string; account: string; display_name?: string } | null {
+export function getUser(): { id: string; account: string; display_name?: string; plan_code?: string } | null {
   try {
     const raw = localStorage.getItem('admin_user');
     return raw ? JSON.parse(raw) : null;

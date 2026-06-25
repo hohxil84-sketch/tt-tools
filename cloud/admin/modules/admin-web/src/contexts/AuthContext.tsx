@@ -18,6 +18,7 @@ interface User {
   id: string;
   account: string;
   display_name?: string;
+  plan_code?: string;
 }
 
 interface AuthState {

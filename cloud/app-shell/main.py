@@ -110,6 +110,9 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as credits_billing_router  # noqa: E402
     app.include_router(credits_billing_router, prefix="/api/v1")
+    # 保存 ORM 模型引用供 admin-billing / admin-ops 惰性加载
+    if "models" in sys.modules:
+        sys.modules["credits_billing_models"] = sys.modules["models"]
 
     # 注册 provider-log Provider 调用日志模块路由
     _provider_log_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "provider-log")
@@ -120,6 +123,9 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as provider_log_router  # noqa: E402
     app.include_router(provider_log_router, prefix="/api/v1")
+    # 保存 ORM 模型引用供 admin-ops 惰性加载
+    if "models" in sys.modules:
+        sys.modules["provider_log_models"] = sys.modules["models"]
 
     # 注册 ai-render 效果图生成模块路由
     _ai_render_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "ai-render")
@@ -147,6 +153,9 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as orders_recharge_router  # noqa: E402
     app.include_router(orders_recharge_router, prefix="/api/v1")
+    # 保存 ORM 模型引用供 admin-billing 惰性加载（Order 模型）
+    if "models" in sys.modules:
+        sys.modules["orders_recharge_models"] = sys.modules["models"]
 
     # 注册 admin-shell 后台基础入口模块路由
     # 注：prefix 为 /api/v1/admin，admin-shell 自身的 /auth/login 等路由会挂在 /api/v1/admin/auth/* 下，
@@ -170,6 +179,9 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as admin_users_router  # noqa: E402
     app.include_router(admin_users_router, prefix="/api/v1")
+    # 保存 ORM 模型引用供 admin-billing / admin-ops 惰性加载（User 模型）
+    if "models" in sys.modules:
+        sys.modules["admin_users_models"] = sys.modules["models"]
 
     # 注册 admin-billing 后台套餐、订单、额度管理模块路由
     _admin_billing_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-billing")

@@ -33,18 +33,15 @@ export default function Login() {
         padding: '44px 40px 36px',
         boxShadow: 'var(--shadow-lg)',
       }}>
-        {/* Logo */}
+        {/* Logo — 使用桌面端同款图标 */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 12, margin: '0 auto 14px',
-            background: 'linear-gradient(135deg, #0071e3, #42a5f5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, color: '#fff', fontWeight: 600,
-          }}>
-            TT
-          </div>
+          <img src="/admin/app-icon.png" alt="Alphoria" style={{
+            width: 56, height: 56, borderRadius: 14, margin: '0 auto 14px',
+            display: 'block', objectFit: 'contain',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          }} />
           <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--gray-800)' }}>
-            TT Tools
+            Alphoria
           </h1>
           <p style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 4 }}>
             管理后台
@@ -65,7 +62,7 @@ export default function Login() {
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>账号</label>
             <input type="text" value={account} onChange={e => setAccount(e.target.value)}
-              placeholder="admin@tttools.com" required autoFocus
+              placeholder="管理员账号" required autoFocus
               style={inputStyle} />
           </div>
           <div style={{ marginBottom: 24 }}>
@@ -85,9 +82,6 @@ export default function Login() {
           </button>
         </form>
 
-        <p style={{ marginTop: 20, textAlign: 'center', fontSize: 11, color: 'var(--gray-400)' }}>
-          admin@tttools.com / admin
-        </p>
       </div>
     </div>
   );
