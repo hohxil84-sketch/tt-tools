@@ -22,7 +22,7 @@ public class RemoveBgViewModelTests
         Assert.False(vm.HasSelectedResult);
         Assert.Null(vm.SelectedResult);
         Assert.NotNull(vm.StatusMessage);
-        Assert.Equal("就绪 - 选择图片文件开始智能抠图", vm.StatusMessage);
+        Assert.Equal("请选择文件", vm.StatusMessage);
     }
 
     [Fact]
@@ -68,9 +68,12 @@ public class RemoveBgViewModelTests
     public void IsServiceAvailable_SetTrue_ShouldUpdateCanStart()
     {
         var vm = new RemoveBgViewModel();
-        // 模拟服务就绪
         vm.IsServiceAvailable = true;
+        // CanStart 还依赖 PendingFiles，此时无待处理文件 → false
+        Assert.False(vm.CanStart);
+        vm.PendingFiles.Add(@"C:\test\image.png");
         Assert.True(vm.CanStart);
+        // ServiceStatusText 属性仍然保留供内部使用
         Assert.Equal("抠图引擎就绪", vm.ServiceStatusText);
     }
 
@@ -79,6 +82,7 @@ public class RemoveBgViewModelTests
     {
         var vm = new RemoveBgViewModel();
         vm.IsServiceAvailable = true;
+        vm.PendingFiles.Add(@"C:\test\image.png");
         Assert.True(vm.CanStart);
 
         vm.IsRunning = true;
@@ -265,9 +269,10 @@ public class RemoveBgViewModelTests
         vm.ClearResultsCommand.Execute(null);
 
         Assert.Equal(0, vm.ResultCount);
+        Assert.Empty(vm.PendingFiles);
         Assert.Null(vm.SelectedResult);
         Assert.False(vm.HasError);
-        Assert.Equal("结果已清除 - 选择图片文件开始智能抠图", vm.StatusMessage);
+        Assert.Equal("请选择文件", vm.StatusMessage);
     }
 
     [Fact]
@@ -297,5 +302,74 @@ public class RemoveBgViewModelTests
         var vm = new RemoveBgViewModel();
         vm.StatusMessage = "正在处理...";
         Assert.Equal("正在处理...", vm.StatusMessage);
+    }
+
+    // ---- 交互逻辑测试：选择不自动处理，开始才触发 ----
+
+    /// <summary>ProcessDroppedFiles 只加入待处理列表，不自动触发处理</summary>
+    [Fact]
+    public void ProcessDroppedFiles_ShouldOnlyAddToPending_NotTriggerProcessing()
+    {
+        var vm = new RemoveBgViewModel();
+        Assert.False(vm.IsRunning);
+        Assert.Equal(0, vm.PendingFiles.Count);
+        // 验证 HasPendingFiles 随 PendingFiles 变化
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.True(vm.HasPendingFiles);
+        Assert.Equal(1, vm.PendingFiles.Count);
+        Assert.False(vm.IsRunning); // 仍在等待，未自动处理
+    }
+
+    /// <summary>无待处理文件时 CanStart 为 false</summary>
+    [Fact]
+    public void CanStart_ShouldBeFalse_WhenNoPendingFiles()
+    {
+        var vm = new RemoveBgViewModel();
+        vm.IsServiceAvailable = true;
+        Assert.False(vm.CanStart);
+    }
+
+    /// <summary>有待处理文件且服务可用时 CanStart 为 true</summary>
+    [Fact]
+    public void CanStart_ShouldBeTrue_WhenHasPendingFilesAndServiceAvailable()
+    {
+        var vm = new RemoveBgViewModel();
+        vm.IsServiceAvailable = true;
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.True(vm.CanStart);
+    }
+
+    /// <summary>服务不可用时 CanStart 为 false（即使有文件）</summary>
+    [Fact]
+    public void CanStart_ShouldBeFalse_WhenServiceUnavailable()
+    {
+        var vm = new RemoveBgViewModel();
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.False(vm.CanStart); // 服务不可用
+    }
+
+    /// <summary>取消后 StatusMessage 应反映已取消</summary>
+    [Fact]
+    public void Cancel_ShouldUpdateStatus()
+    {
+        var vm = new RemoveBgViewModel();
+        typeof(RemoveBgViewModel)
+            .GetProperty(nameof(RemoveBgViewModel.IsRunning))!
+            .SetValue(vm, true);
+
+        vm.CancelCommand.Execute(null);
+
+        Assert.Contains("取消", vm.StatusMessage);
+    }
+
+    /// <summary>PendingFiles 变更时 HasPendingFiles 应同步更新</summary>
+    [Fact]
+    public void PendingFiles_Add_ShouldUpdateHasPendingFiles()
+    {
+        var vm = new RemoveBgViewModel();
+        Assert.False(vm.HasPendingFiles);
+        vm.PendingFiles.Add(@"C:\test\image.png");
+        Assert.True(vm.HasPendingFiles);
+        Assert.Single(vm.PendingFiles);
     }
 }

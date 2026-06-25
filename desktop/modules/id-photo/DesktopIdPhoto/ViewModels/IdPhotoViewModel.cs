@@ -24,7 +24,7 @@ public class IdPhotoViewModel : BaseViewModel
     private readonly AppLogger? _logger;
 
     private bool _isRunning;
-    private string _statusMessage = "就绪 - 选择图片开始证件照换底色";
+    private string _statusMessage = "请选择文件";
     private string? _errorMessage;
     private int _progressValue;
     private int _progressMax = 100;
@@ -358,17 +358,17 @@ public class IdPhotoViewModel : BaseViewModel
                     _logger?.Warning($"加载底色列表失败: {ex.Message}", "desktop-id-photo");
                 }
 
-                StatusMessage = "证件照引擎就绪 - 选择图片、规格和底色开始处理";
+                StatusMessage = "请选择文件";
             }
             else
             {
-                StatusMessage = $"证件照引擎启动失败: {_idPhotoService.AvailabilityError}";
+                StatusMessage = "处理服务不可用，请检查本地环境";
             }
         }
         catch (Exception ex)
         {
             IsServiceAvailable = false;
-            StatusMessage = $"证件照引擎启动失败: {ex.Message}";
+            StatusMessage = "处理服务不可用，请检查本地环境";
             _logger?.Error($"证件照服务初始化失败: {ex.Message}", ex, "desktop-id-photo");
         }
 
@@ -391,7 +391,7 @@ public class IdPhotoViewModel : BaseViewModel
         if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.FileName))
         {
             CurrentInputPath = dialog.FileName;
-            StatusMessage = $"已选择: {InputFileName}";
+            StatusMessage = $"已选择：{InputFileName}，点击开始处理";
             ErrorMessage = null;
 
             RefreshCommandStates();
@@ -425,7 +425,9 @@ public class IdPhotoViewModel : BaseViewModel
         }
 
         CurrentInputPath = imageFile;
-        _ = ProcessCurrentFileAsync();
+        StatusMessage = $"已选择：{Path.GetFileName(imageFile)}，点击开始处理";
+        ErrorMessage = null;
+        RefreshCommandStates();
     }
 
     /// <summary>
@@ -453,7 +455,7 @@ public class IdPhotoViewModel : BaseViewModel
 
         _currentCts = new CancellationTokenSource();
 
-        StatusMessage = $"正在处理... {InputFileName}";
+        StatusMessage = $"正在处理 1/1：{InputFileName}";
 
         try
         {
@@ -476,14 +478,14 @@ public class IdPhotoViewModel : BaseViewModel
                 {
                     Results.Insert(0, result);
                     SelectedResult = result;
-                    StatusMessage = $"处理完成: {result.SpecSummary}, {result.BackgroundSummary}";
+                    StatusMessage = "处理完成：成功 1，失败 0";
                 }
                 else
                 {
                     Results.Insert(0, result);
                     SelectedResult = result;
                     ErrorMessage = result.ErrorMessage;
-                    StatusMessage = "处理失败，请查看错误信息";
+                    StatusMessage = "处理完成：成功 0，失败 1";
                 }
             });
 
@@ -493,7 +495,8 @@ public class IdPhotoViewModel : BaseViewModel
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "处理已取消";
+            StatusMessage = "已取消";
+            ProgressValue = 0;
             _logger?.Info("证件照处理已取消", "desktop-id-photo");
         }
         catch (Exception ex)
@@ -570,7 +573,8 @@ public class IdPhotoViewModel : BaseViewModel
         SelectedResult = null;
         ErrorMessage = null;
         ProgressValue = 0;
-        StatusMessage = "结果已清除 - 选择图片开始证件照换底色";
+        ProgressMax = 100;
+        StatusMessage = "请选择文件";
         RefreshCommandStates();
     }
 

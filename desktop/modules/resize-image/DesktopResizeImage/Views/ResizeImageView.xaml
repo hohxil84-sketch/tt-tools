@@ -34,24 +34,6 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- 服务状态 -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,16,0" VerticalAlignment="Center">
-                    <Ellipse Width="10" Height="10" Margin="0,0,6,0">
-                        <Ellipse.Style>
-                            <Style TargetType="Ellipse">
-                                <Setter Property="Fill" Value="#4CAF50" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsServiceAvailable}" Value="False">
-                                        <Setter Property="Fill" Value="#9E9E9E" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Ellipse.Style>
-                    </Ellipse>
-                    <TextBlock Text="{Binding ServiceStatusText}" FontSize="13" VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextSecondaryBrush}" />
-                </StackPanel>
-
                 <Button Grid.Column="1" Content="选择图片" Width="90" Height="30"
                         Command="{Binding SelectFilesCommand}" Margin="0,0,8,0" />
                 <Button Grid.Column="2" Content="开始改尺寸" Width="100" Height="30"
@@ -388,7 +370,7 @@
                     </Border>
 
                     <!-- 未选择结果时的提示 -->
-                    <TextBlock Grid.Row="3" Text="选择左侧处理结果查看详情，或拖拽图片文件到窗口开始处理"
+                    <TextBlock Grid.Row="3" Text="选择左侧处理结果查看详情，或拖拽图片文件到窗口选择文件"
                                FontSize="13" Foreground="{DynamicResource TextTertiaryBrush}"
                                TextWrapping="Wrap" HorizontalAlignment="Center" VerticalAlignment="Center"
                                Visibility="{Binding HasSelectedResult, Converter={StaticResource BoolToVisibility}, FallbackValue=Visible}">

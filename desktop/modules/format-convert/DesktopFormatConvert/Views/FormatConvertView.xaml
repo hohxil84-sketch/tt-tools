@@ -36,27 +36,9 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- 服务状态 -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,16,0" VerticalAlignment="Center">
-                    <Ellipse Width="10" Height="10" Margin="0,0,6,0">
-                        <Ellipse.Style>
-                            <Style TargetType="Ellipse">
-                                <Setter Property="Fill" Value="#4CAF50" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsServiceAvailable}" Value="False">
-                                        <Setter Property="Fill" Value="#9E9E9E" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Ellipse.Style>
-                    </Ellipse>
-                    <TextBlock Text="{Binding ServiceStatusText}" FontSize="13" VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextSecondaryBrush}" />
-                </StackPanel>
-
                 <Button Grid.Column="1" Content="选择图片" Width="90" Height="30"
                         Command="{Binding SelectFilesCommand}"
-                        IsEnabled="{Binding IsServiceAvailable}" Margin="0,0,8,0" />
+                        Margin="0,0,8,0" />
                 <Button Grid.Column="2" Content="开始处理" Width="100" Height="30"
                         Command="{Binding StartProcessingCommand}"
                         IsEnabled="{Binding CanStart}" Margin="0,0,8,0">

@@ -71,23 +71,6 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- 服务状态指示 -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0">
-                    <Ellipse Width="10" Height="10" Margin="0,0,6,0">
-                        <Ellipse.Style>
-                            <Style TargetType="Ellipse">
-                                <Setter Property="Fill" Value="Gray"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsServiceAvailable}" Value="True">
-                                        <Setter Property="Fill" Value="Green"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Ellipse.Style>
-                    </Ellipse>
-                    <TextBlock Text="{Binding ServiceStatusText}" VerticalAlignment="Center" FontSize="12"/>
-                </StackPanel>
-
                 <!-- 选择图片按钮：只打开文件对话框，不自动识别 -->
                 <Button Grid.Column="1" Content="选择图片" Command="{Binding SelectFilesCommand}"
                         Width="100" Height="32" Margin="8,0" FontSize="13"

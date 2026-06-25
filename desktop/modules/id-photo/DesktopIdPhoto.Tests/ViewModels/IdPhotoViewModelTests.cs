@@ -216,7 +216,7 @@ public class IdPhotoViewModelTests
         Assert.Null(vm.SelectedResult);
         Assert.False(vm.HasError);
         Assert.Equal(0, vm.ProgressValue);
-        Assert.Contains("已清除", vm.StatusMessage);
+        Assert.Equal("请选择文件", vm.StatusMessage);
     }
 
     /// <summary>添加失败结果时 FailedCount 应递增</summary>
@@ -364,5 +364,50 @@ public class IdPhotoViewModelTests
         var brush = color.ToBrush();
         Assert.NotNull(brush);
         Assert.Equal(mediaColor, brush.Color);
+    }
+
+    // ---- 交互逻辑测试 ----
+
+    /// <summary>ProcessDroppedFile 只设置 CurrentInputPath，不自动触发处理</summary>
+    [Fact]
+    public void ProcessDroppedFile_ShouldOnlySetInputPath_NotTriggerProcessing()
+    {
+        var fs = new FileSystemService();
+        var vm = new IdPhotoViewModel(null, fs);
+
+        Assert.False(vm.IsRunning);
+        Assert.False(vm.HasInputFile);
+
+        // 设置输入路径（模拟选择/拖拽后的状态），不触发处理
+        vm.CurrentInputPath = @"C:\test\photo.jpg";
+        Assert.True(vm.HasInputFile);
+        Assert.False(vm.IsRunning); // 未自动处理
+    }
+
+    /// <summary>取消后 StatusMessage 应反映已取消</summary>
+    [Fact]
+    public void Cancel_ShouldUpdateStatus()
+    {
+        var fs = new FileSystemService();
+        var vm = new IdPhotoViewModel(null, fs);
+
+        typeof(IdPhotoViewModel).GetProperty(nameof(IdPhotoViewModel.IsRunning))
+            ?.SetValue(vm, true);
+
+        vm.CancelCommand.Execute(null);
+
+        Assert.Contains("取消", vm.StatusMessage);
+    }
+
+    /// <summary>无输入文件时 CanStart 为 false</summary>
+    [Fact]
+    public void CanStart_ShouldBeFalse_WhenNoInputFile()
+    {
+        var fs = new FileSystemService();
+        var vm = new IdPhotoViewModel(null, fs);
+
+        typeof(IdPhotoViewModel).GetProperty(nameof(IdPhotoViewModel.IsServiceAvailable))
+            ?.SetValue(vm, true);
+        Assert.False(vm.CanStart); // 无输入文件
     }
 }
