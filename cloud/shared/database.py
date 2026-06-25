@@ -30,7 +30,13 @@ def _get_engine() -> AsyncEngine:
     """获取或创建数据库异步引擎（惰性初始化，首次调用时创建）。"""
     global _engine
     if _engine is None:
-        url = shared_settings.database_url or "sqlite+aiosqlite:///:memory:"
+        url = shared_settings.database_url
+        if not url:
+            raise RuntimeError(
+                "APP_DATABASE_URL 未配置，拒绝使用内存 SQLite 运行。"
+                "请在 .env 或启动脚本中设置，例如："
+                "APP_DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/tttools"
+            )
         # 连接池参数仅对 PostgreSQL 有效，SQLite 不支持
         if url.startswith("postgresql") or url.startswith("asyncpg"):
             _engine = create_async_engine(
