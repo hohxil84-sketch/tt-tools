@@ -149,6 +149,50 @@ def create_app() -> FastAPI:
     from router import router as admin_ops_router  # noqa: E402
     app.include_router(admin_ops_router, prefix="/api/v1")
 
+    # -- 生产模式：托管 admin-web 前端静态文件（SPA） --
+    # 构建产物位于 cloud/admin/modules/admin-web/dist/
+    # 使用路由处理器而非 StaticFiles mount，保证 SPA fallback 可靠：
+    #   - /admin/assets/* → 实际文件（JS/CSS）
+    #   - /admin/*        → index.html（React Router 接管路由）
+    # API 路由 /api/v1/admin/* 不受影响（路径前缀不同）
+    _admin_web_dist = os.path.join(
+        os.path.dirname(__file__), "..", "admin", "modules", "admin-web", "dist"
+    )
+    if os.path.isdir(_admin_web_dist):
+        from fastapi.responses import FileResponse
+        from fastapi.staticfiles import StaticFiles
+
+        # 静态资源（JS/CSS/图片等）挂载到 /admin/assets
+        _assets_dir = os.path.join(_admin_web_dist, "assets")
+        if os.path.isdir(_assets_dir):
+            app.mount(
+                "/admin/assets",
+                StaticFiles(directory=_assets_dir),
+                name="admin_web_assets",
+            )
+
+        # SPA 路由：所有 /admin/... 路径未命中静态文件时返回 index.html
+        # 注意：FastAPI 路由优先级高于 mount，所以这个 catch-all 会生效
+        _index_html = os.path.join(_admin_web_dist, "index.html")
+
+        @app.get("/admin/{full_path:path}")
+        async def _admin_spa(full_path: str = ""):
+            """SPA fallback：所有 /admin/* 路由返回 index.html。
+
+            /admin/assets/* 已被上面的 StaticFiles mount 处理，不会进入此函数。
+            React Router 会根据浏览器 URL 渲染对应页面。
+            """
+            # 如果请求匹配到 dist 中的实际文件（非 assets 目录下的），直接返回
+            candidate = os.path.join(_admin_web_dist, full_path)
+            if full_path and os.path.isfile(candidate) and not full_path.startswith("assets/"):
+                return FileResponse(candidate)
+            return FileResponse(_index_html)
+
+        # /admin（无尾部斜杠）也返回 index.html
+        @app.get("/admin")
+        async def _admin_index():
+            return FileResponse(_index_html)
+
     return app
 
 

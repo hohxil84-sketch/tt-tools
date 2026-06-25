@@ -42,6 +42,24 @@ class UserDetail(BaseModel):
     updated_at: datetime = Field(..., description="最近更新时间")
 
 
+class CreateUserRequest(BaseModel):
+    """创建用户请求，对齐 admin-users.yaml CreateUserRequest。"""
+
+    account: str = Field(..., description="登录账号")
+    password: str = Field(..., description="登录密码（明文，服务端 bcrypt 哈希存储）")
+    display_name: Optional[str] = Field(default=None, description="展示名称")
+    role: str = Field(default="user", description="用户角色：user / admin", pattern="^(user|admin)$")
+    plan_code: str = Field(default="free", description="套餐编码")
+
+
+class UpdateUserRequest(BaseModel):
+    """编辑用户信息请求，对齐 admin-users.yaml UpdateUserRequest。"""
+
+    display_name: Optional[str] = Field(default=None, description="展示名称")
+    plan_code: Optional[str] = Field(default=None, description="套餐编码")
+    role: Optional[str] = Field(default=None, description="用户角色：user / admin", pattern="^(user|admin)$")
+
+
 class UpdateUserStatusRequest(BaseModel):
     """修改用户状态请求，对齐 admin-users.yaml UpdateUserStatusRequest。"""
 

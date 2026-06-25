@@ -41,6 +41,7 @@ router = APIRouter(tags=["Admin Shell"])
 async def admin_dashboard(
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_admin),
+    db=Depends(get_db),
 ):
     """后台仪表盘概览。
 
@@ -50,8 +51,8 @@ async def admin_dashboard(
     对齐 admin-shell.yaml GET /admin/dashboard。
     """
     try:
-        # 调用服务层获取统计数据（db 参数预留，后续接入真实查询）
-        data = await get_dashboard_stats(db=None)
+        # 调用服务层获取统计数据（从数据库实时查询）
+        data = await get_dashboard_stats(db=db)
         return success_response(data.model_dump(), request_id)
     except AppError as e:
         return error_response(

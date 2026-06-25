@@ -31,15 +31,24 @@ from cloud.shared import (
     get_db,
 )
 
-from schemas import UpdateUserStatusRequest, UpdateDeviceStatusRequest
+from schemas import (
+    CreateUserRequest,
+    UpdateUserRequest,
+    UpdateUserStatusRequest,
+    UpdateDeviceStatusRequest,
+)
 from service import (
     list_users,
+    create_user,
+    update_user,
+    delete_user,
     get_user_detail,
     update_user_status,
     list_user_devices,
     list_devices,
     get_device_detail,
     update_device_status,
+    delete_device,
 )
 
 # 创建路由，prefix="/api/v1/admin" 在 app-shell 装配时指定
@@ -76,6 +85,104 @@ async def admin_list_users(
             search=search,
         )
         return success_response(data.model_dump(mode="json"), request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code,
+                message=e.message,
+                request_id=request_id,
+                details=e.details,
+            ),
+            status_code=e.status_code,
+        )
+
+
+@router.post("/admin/users")
+async def admin_create_user(
+    body: CreateUserRequest,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """创建新用户。
+
+    管理员手动创建用户，密码 bcrypt 哈希存储。需要管理员权限。
+
+    对齐 admin-users.yaml POST /admin/users。
+    """
+    try:
+        data = await create_user(
+            db=db,
+            account=body.account,
+            password=body.password,
+            display_name=body.display_name,
+            role=body.role,
+            plan_code=body.plan_code,
+        )
+        return success_response(data.model_dump(mode="json"), request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code,
+                message=e.message,
+                request_id=request_id,
+                details=e.details,
+            ),
+            status_code=e.status_code,
+        )
+
+
+@router.patch("/admin/users/{user_id}")
+async def admin_update_user(
+    user_id: str,
+    body: UpdateUserRequest,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """编辑用户信息。
+
+    修改指定用户的展示名称、套餐编码或角色。需要管理员权限。
+
+    对齐 admin-users.yaml PATCH /admin/users/{user_id}。
+    """
+    try:
+        data = await update_user(
+            db=db,
+            user_id=user_id,
+            display_name=body.display_name,
+            plan_code=body.plan_code,
+            role=body.role,
+        )
+        return success_response(data.model_dump(mode="json"), request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code,
+                message=e.message,
+                request_id=request_id,
+                details=e.details,
+            ),
+            status_code=e.status_code,
+        )
+
+
+@router.delete("/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: str,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除用户。
+
+    硬删除用户及其关联设备。需要管理员权限。危险操作。
+
+    对齐 admin-users.yaml DELETE /admin/users/{user_id}。
+    """
+    try:
+        data = await delete_user(db=db, user_id=user_id)
+        return success_response(data, request_id)
     except AppError as e:
         return JSONResponse(
             content=error_response(
@@ -182,6 +289,34 @@ async def admin_list_user_devices(
 # ============================================================
 # 设备管理端点
 # ============================================================
+
+
+@router.delete("/admin/devices/{device_id}")
+async def admin_delete_device(
+    device_id: str,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除设备。
+
+    硬删除指定设备。需要管理员权限。危险操作。
+
+    对齐 admin-users.yaml DELETE /admin/devices/{device_id}。
+    """
+    try:
+        data = await delete_device(db=db, device_id=device_id)
+        return success_response(data, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code,
+                message=e.message,
+                request_id=request_id,
+                details=e.details,
+            ),
+            status_code=e.status_code,
+        )
 
 
 @router.get("/admin/devices")

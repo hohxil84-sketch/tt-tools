@@ -588,6 +588,52 @@ async def get_admin_order_detail(db: AsyncSession, order_id: str) -> AdminOrderD
 # ============================================================
 
 
+async def delete_plan(db: AsyncSession, plan_id: str) -> dict:
+    """删除套餐（硬删除）。
+
+    检查是否有关联用户正在使用该套餐，如有则拒绝删除。
+
+    Args:
+        db: 数据库异步会话
+        plan_id: 套餐 ID
+
+    Returns:
+        {"deleted": True}
+
+    Raises:
+        AppError: 套餐不存在(404)或有关联用户(409)
+    """
+    _load_module_models()
+
+    result = await db.execute(select(_Plan).where(_Plan.id == plan_id))
+    plan = result.scalar_one_or_none()
+
+    if plan is None:
+        raise AppError(
+            code="PLAN_NOT_FOUND",
+            message=f"套餐 {plan_id} 不存在",
+            status_code=404,
+        )
+
+    # 检查是否有关联用户
+    if _User is not None:
+        user_count_result = await db.execute(
+            select(func.count()).select_from(_User).where(_User.plan_code == plan.code)
+        )
+        user_count = user_count_result.scalar_one()
+        if user_count > 0:
+            raise AppError(
+                code="PLAN_HAS_USERS",
+                message=f"套餐 {plan.code} 仍有 {user_count} 个用户在使用，无法删除",
+                status_code=409,
+            )
+
+    await db.delete(plan)
+    await db.flush()
+
+    return {"deleted": True}
+
+
 async def list_credit_accounts(
     db: AsyncSession,
     limit: int = 20,

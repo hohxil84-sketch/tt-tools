@@ -389,11 +389,33 @@ Response `data`: `items`、`total`、`limit`、`offset`
 
 Item fields: `id`、`account`、`display_name`、`role`、`status`、`plan_code`、`created_at`
 
+### POST `/api/v1/admin/users`
+
+创建新用户。
+
+Request: `account`、`password`、`display_name`（可选）、`role`（可选，默认 user）、`plan_code`（可选，默认 free）
+
+Response `data`: 同 UserDetail。
+
 ### GET `/api/v1/admin/users/{user_id}`
 
 查询用户详情。
 
 Response `data`: `id`、`account`、`display_name`、`role`、`status`、`plan_code`、`created_at`、`updated_at`
+
+### PATCH `/api/v1/admin/users/{user_id}`
+
+编辑用户信息（展示名称、套餐、角色）。
+
+Request: `display_name`、`plan_code`、`role`（均可选，只更新传入字段）
+
+Response `data`: 同 UserDetail。
+
+### DELETE `/api/v1/admin/users/{user_id}`
+
+删除用户（硬删除，清理关联设备和会话）。
+
+Response `data`: `{ "deleted": true }`
 
 ### PATCH `/api/v1/admin/users/{user_id}/status`
 
@@ -439,6 +461,12 @@ Request: `{ "status": "blocked" }`
 
 Response `data`: 同设备详情结构。
 
+### DELETE `/api/v1/admin/devices/{device_id}`
+
+删除设备（硬删除，清理绑定关系和会话）。
+
+Response `data`: `{ "deleted": true }`
+
 ## Admin Billing — 后台套餐、订单、额度管理
 
 所有后台接口要求 `Authorization: Bearer <admin_access_token>`，且 JWT 中 role 字段为 `admin`。
@@ -482,6 +510,12 @@ Response `data`: 同套餐详情结构。
 Request: `{ "status": "active" | "disabled" }`
 
 Response `data`: 同套餐详情结构。
+
+### DELETE `/api/v1/admin/plans/{plan_id}`
+
+删除套餐（硬删除）。如有关联用户则拒绝。
+
+Response `data`: `{ "deleted": true }`
 
 ### 订单管理
 
