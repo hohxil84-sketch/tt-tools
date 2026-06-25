@@ -21,7 +21,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloud.shared import AppError, ErrorCode
-from models import User, Device
+from models import UserAdmin as User, DeviceAdmin as Device
 from schemas import (
     UserItem,
     UserDetail,

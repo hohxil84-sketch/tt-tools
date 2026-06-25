@@ -75,11 +75,44 @@ def create_app() -> FastAPI:
     # -- 注册基础中间件 --
     setup_middleware(app)
 
+    # -- 预加载 auth-device ORM 模型，避免后续 sys.modules 清理时丢失表注册 --
+    _preload_auth_device_models()
+
     # -- 注册健康检查路由（不挂 /api/v1 前缀，便于探活） --
     app.include_router(health_router)
 
     # -- 后续业务模块路由注册点 --
     # 格式：app.include_router(xxx_router, prefix="/api/v1")
+
+    # 注册 auth-device 认证/设备模块路由
+    _auth_device_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "auth-device")
+    if _auth_device_dir not in sys.path:
+        sys.path.insert(0, _auth_device_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as auth_device_router  # noqa: E402
+    app.include_router(auth_device_router, prefix="/api/v1")
+
+    # 注册 credits-billing 额度/权限模块路由
+    _credits_billing_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "credits-billing")
+    if _credits_billing_dir not in sys.path:
+        sys.path.insert(0, _credits_billing_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as credits_billing_router  # noqa: E402
+    app.include_router(credits_billing_router, prefix="/api/v1")
+
+    # 注册 provider-log Provider 调用日志模块路由
+    _provider_log_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "provider-log")
+    if _provider_log_dir not in sys.path:
+        sys.path.insert(0, _provider_log_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as provider_log_router  # noqa: E402
+    app.include_router(provider_log_router, prefix="/api/v1")
 
     # 注册 ai-render 效果图生成模块路由
     _ai_render_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "ai-render")
@@ -109,6 +142,8 @@ def create_app() -> FastAPI:
     app.include_router(orders_recharge_router, prefix="/api/v1")
 
     # 注册 admin-shell 后台基础入口模块路由
+    # 注：prefix 为 /api/v1/admin，admin-shell 自身的 /auth/login 等路由会挂在 /api/v1/admin/auth/* 下，
+    # 避免与 auth-device 的 /api/v1/auth/* 冲突
     _admin_shell_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-shell")
     if _admin_shell_dir not in sys.path:
         sys.path.insert(0, _admin_shell_dir)
@@ -117,7 +152,7 @@ def create_app() -> FastAPI:
         if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
             del sys.modules[_key]
     from router import router as admin_shell_router  # noqa: E402
-    app.include_router(admin_shell_router, prefix="/api/v1")
+    app.include_router(admin_shell_router, prefix="/api/v1/admin")
 
     # 注册 admin-users 后台用户和设备管理模块路由
     _admin_users_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-users")

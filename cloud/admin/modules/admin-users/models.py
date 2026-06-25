@@ -1,20 +1,18 @@
 """
 admin-users SQLAlchemy ORM 模型。
 
-对齐 cloud/DATABASE_SCHEMA.md：
-- users 表：用户基本信息、角色、状态、套餐
-- devices 表：设备指纹、绑定、状态
+为避免与 auth-device 模块的 User/Device 类在 SQLAlchemy Base 注册表中同名冲突，
+本模块将类名重命名为 UserAdmin / DeviceAdmin，映射到相同的 users / devices 表。
 
-字段命名使用 snake_case，通过 SQLAlchemy 映射到数据库列。
+对齐 cloud/DATABASE_SCHEMA.md。
 """
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, ForeignKey, Text
+from sqlalchemy import String, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
 
 from cloud.shared import Base
 
@@ -25,19 +23,23 @@ def _utcnow() -> datetime:
 
 
 # ============================================================
-# 用户模型
+# 用户模型（更名为 UserAdmin，避免与 auth-device 的 User 冲突）
 # ============================================================
 
 
-class User(Base):
-    """用户表模型，对齐 DATABASE_SCHEMA.md users 表。"""
+class UserAdmin(Base):
+    """用户表模型，对齐 DATABASE_SCHEMA.md users 表。
+
+    类名使用 UserAdmin 而非 User，避免与 auth-device/models.py 中的 User 类
+    在 SQLAlchemy 声明式基类注册表中同名冲突。
+    """
 
     __tablename__ = "users"
     __table_args__ = {"extend_existing": True}
 
     # 主键
     id: Mapped[str] = mapped_column(
-        String(36),  # UUID 字符串（兼容 SQLite/PostgreSQL）
+        String(36),
         primary_key=True,
         default=lambda: str(uuid.uuid4()),
     )
@@ -61,21 +63,25 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 
     # 关联设备（一对多）
-    devices: Mapped[list["Device"]] = relationship(
-        "Device", back_populates="user", lazy="selectin"
+    devices: Mapped[list["DeviceAdmin"]] = relationship(
+        "DeviceAdmin", back_populates="user", lazy="selectin"
     )
 
     def __repr__(self) -> str:
-        return f"<User id={self.id} account={self.account} role={self.role}>"
+        return f"<UserAdmin id={self.id} account={self.account} role={self.role}>"
 
 
 # ============================================================
-# 设备模型
+# 设备模型（更名为 DeviceAdmin，避免与 auth-device 的 Device 冲突）
 # ============================================================
 
 
-class Device(Base):
-    """设备表模型，对齐 DATABASE_SCHEMA.md devices 表。"""
+class DeviceAdmin(Base):
+    """设备表模型，对齐 DATABASE_SCHEMA.md devices 表。
+
+    类名使用 DeviceAdmin 而非 Device，避免与 auth-device/models.py 中的 Device 类
+    在 SQLAlchemy 声明式基类注册表中同名冲突。
+    """
 
     __tablename__ = "devices"
     __table_args__ = {"extend_existing": True}
@@ -108,7 +114,7 @@ class Device(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 
     # 关联用户（多对一）
-    user: Mapped["User"] = relationship("User", back_populates="devices")
+    user: Mapped["UserAdmin"] = relationship("UserAdmin", back_populates="devices")
 
     def __repr__(self) -> str:
-        return f"<Device id={self.id} user_id={self.user_id} name={self.device_name}>"
+        return f"<DeviceAdmin id={self.id} user_id={self.user_id} name={self.device_name}>"

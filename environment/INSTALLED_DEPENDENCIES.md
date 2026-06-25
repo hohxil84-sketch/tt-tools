@@ -20,8 +20,8 @@
 | bcrypt | pip | 5.0.0 | D:\localPath\venvs\cloud-app-shell | D:\localPath\caches\pip | bcrypt 哈希算法（passlib 依赖） | cloud-shared | pip show bcrypt | installed | 2026-06-20 |
 | python-multipart | pip | 0.0.32 | D:\localPath\venvs\cloud-app-shell | D:\localPath\caches\pip | OAuth2 表单解析（FastAPI 鉴权依赖所需） | cloud-shared | pip show python-multipart | installed | 2026-06-20 |
 | aiosqlite | pip | 0.22.1 | D:\localPath\venvs\cloud-app-shell | D:\localPath\caches\pip | SQLite 异步驱动（测试用） | cloud-shared | pip show aiosqlite | installed | 2026-06-20 |
-| PostgreSQL | service | 待确认 | system / docker / remote | D:\localPath\downloads / D:\localPath\tools | 云端数据库 | cloud-shared | psql --version | planned | 云端开发前确认 |
-| Redis | service | 待确认 | system / docker / remote | D:\localPath\downloads / D:\localPath\tools | 缓存、队列、限流预留 | cloud-shared | redis-cli --version | planned | 云端开发前确认 |
+| PostgreSQL | service | 17.10 | C:\Program Files\PostgreSQL\17 | D:\localPath\downloads | 云端数据库 | cloud-app-shell | psql -U postgres -c "SELECT 1" | installed | 2026-06-25，已创建 tttools 数据库和 tttools 用户，pgpass 配置完成 |
+| Redis (tporadowski) | service | 5.0.14.1 | D:\localPath\tools\Redis | D:\localPath\downloads | 缓存、会话、队列、限流 | cloud-app-shell | redis-cli ping | installed | 2026-06-25，Windows 原生运行，无需 WSL/Docker，已注册为 Windows Service Redis-TTTools 并手动启动 |
 | GitHub CLI | toolchain | 2.93.0 | system (C:\Program Files\GitHub CLI\) | D:\localPath\downloads / D:\localPath\tools | 推送、PR、CI 查询 | project | gh --version | installed | 2026-06-03 确认已安装 gh 2.93.0 + git 2.54.0 |
 | System.Security.Cryptography.ProtectedData | nuget | 8.0.0 | D:\localPath\caches\nuget | D:\localPath\caches\nuget | Windows DPAPI 加密存储令牌 | desktop-shared | dotnet list package | installed | 2026-06-03 引入，用于 TokenStorage 的 access_token / refresh_token 本地安全存储 |
 | Spectral (Stoplight) | OpenAPI lint | 6.16.0 | npx 缓存 (D:\localPath\caches\npm) | D:\localPath\caches\npm | OpenAPI 3.1 规范校验 | contract-base-rules | npx @stoplight/spectral-cli lint | installed | 通过 npx 按需运行，npm 缓存指向 D:\localPath |
