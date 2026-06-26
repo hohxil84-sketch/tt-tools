@@ -32,7 +32,7 @@
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 37/37 通过 | 2026-06-25 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
-| local-worker-remove-bg | local-worker/modules/remove-bg | feature/local-remove-bg | DEVELOPMENT_COMPLETE | 32/32 通过 | 2026-06-21 已合并 |
+| local-worker-remove-bg | local-worker/modules/remove-bg | fix/remove-bg-init-and-layout | DEVELOPMENT_COMPLETE | 32/32 通过 | 2026-06-21 已合并, 2026-06-27 修复合并 |
 | local-worker-resize-image | local-worker/modules/resize-image | feature/local-resize-image | DEVELOPMENT_COMPLETE | 110/110 通过 | 2026-06-21 已合并 |
 | local-worker-pdf-image-convert | local-worker/modules/pdf-image-convert | feature/local-pdf-image-convert | DEVELOPMENT_COMPLETE | 60/60 通过 | 2026-06-24 已合并 |
 | local-worker-format-convert | local-worker/modules/format-convert | feature/local-format-convert | DEVELOPMENT_COMPLETE | 102/102 通过 | 2026-06-24 已合并 |
@@ -41,7 +41,7 @@
 | contract-ai-render | shared-contract/modules/ai-render | feature/contract-ai-render | DEVELOPMENT_COMPLETE | Spectral 0 errors, DTO 81/81 通过, 全量 189/189 | 2026-06-21 已合并 |
 | contract-ai-image-tools | shared-contract/modules/ai-image-tools | feature/contract-ai-image-tools | DEVELOPMENT_COMPLETE | DTO 100/100 通过 | 2026-06-21 已合并 |
 | desktop-id-photo | desktop/modules/id-photo | feature/desktop-id-photo | DEVELOPMENT_COMPLETE | 20/20 C# 通过, 4/4 Python router 通过 | 2026-06-21 已合并 |
-| desktop-remove-bg | desktop/modules/remove-bg | feature/desktop-remove-bg | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-21 已合并 |
+| desktop-remove-bg | desktop/modules/remove-bg | fix/remove-bg-init-and-layout | BUGFIX_COMPLETE | 46/46 通过 | 2026-06-21 已合并, 2026-06-27 修复合并 |
 | desktop-resize-image | desktop/modules/resize-image | feature/desktop-resize-image | DEVELOPMENT_COMPLETE | 54/54 C# + 4/4 Python smoke 通过 | 2026-06-21 已合并 |
 | desktop-pdf-image-convert | desktop/modules/pdf-image-convert | feature/desktop-pdf-image-convert | DEVELOPMENT_COMPLETE | 25/25 通过 | 2026-06-24 已合并 |
 | desktop-format-convert | desktop/modules/format-convert | feature/desktop-format-convert | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并 |
