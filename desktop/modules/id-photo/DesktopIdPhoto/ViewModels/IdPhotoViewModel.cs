@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using TTShared.UI;
 using TTShared.Logging;
@@ -40,6 +42,7 @@ public class IdPhotoViewModel : BaseViewModel
     private bool _edgeFeather = true;
 
     private CancellationTokenSource? _currentCts;
+    private BitmapImage? _inputImageThumbnail;
 
     /// <summary>已完成的处理结果列表</summary>
     public ObservableCollection<IdPhotoResult> Results { get; } = new();
@@ -96,6 +99,7 @@ public class IdPhotoViewModel : BaseViewModel
             {
                 OnPropertyChanged(nameof(HasInputFile));
                 OnPropertyChanged(nameof(InputFileName));
+                OnPropertyChanged(nameof(InputFileFormat));
             }
         }
     }
@@ -106,6 +110,19 @@ public class IdPhotoViewModel : BaseViewModel
     /// <summary>当前输入文件名</summary>
     public string InputFileName =>
         string.IsNullOrEmpty(CurrentInputPath) ? "未选择文件" : Path.GetFileName(CurrentInputPath);
+
+    /// <summary>输入图片缩略图（用于预览）</summary>
+    public BitmapImage? InputImageThumbnail
+    {
+        get => _inputImageThumbnail;
+        set => SetProperty(ref _inputImageThumbnail, value);
+    }
+
+    /// <summary>当前输入文件的格式（扩展名大写，不含点）</summary>
+    public string InputFileFormat =>
+        string.IsNullOrEmpty(CurrentInputPath)
+            ? ""
+            : Path.GetExtension(CurrentInputPath).TrimStart('.').ToUpper();
 
     /// <summary>当前状态栏消息</summary>
     public string StatusMessage
@@ -209,6 +226,30 @@ public class IdPhotoViewModel : BaseViewModel
     /// <summary>背景色预览画刷（用于 UI 色块）</summary>
     public Brush? BackgroundColorPreview => SelectedBackgroundColor?.ToBrush();
 
+    /// <summary>输出格式选项</summary>
+    public class FormatOption
+    {
+        public string Value { get; set; } = "";
+        public string Display { get; set; } = "";
+    }
+
+    /// <summary>输出格式选择列表</summary>
+    public static List<FormatOption> AvailableFormats { get; } = new()
+    {
+        new FormatOption { Value = "png", Display = "PNG - 无损" },
+        new FormatOption { Value = "jpeg", Display = "JPEG - 体积小" },
+        new FormatOption { Value = "bmp", Display = "BMP - 无压缩" },
+    };
+
+    private string _outputFormat = "png";
+
+    /// <summary>当前选中的输出格式</summary>
+    public string OutputFormat
+    {
+        get => _outputFormat;
+        set => SetProperty(ref _outputFormat, value);
+    }
+
     /// <summary>目标 DPI (72~600)</summary>
     public int Dpi
     {
@@ -221,6 +262,15 @@ public class IdPhotoViewModel : BaseViewModel
     {
         get => _autoDetectBackground;
         set => SetProperty(ref _autoDetectBackground, value);
+    }
+
+    private bool _renameOnExport;
+
+    /// <summary>导出时是否自动重命名（年月日_尺寸_底色.扩展名）</summary>
+    public bool RenameOnExport
+    {
+        get => _renameOnExport;
+        set => SetProperty(ref _renameOnExport, value);
     }
 
     /// <summary>是否边缘羽化</summary>
@@ -297,14 +347,60 @@ public class IdPhotoViewModel : BaseViewModel
 
         // 监听结果列表变更以更新命令状态
         Results.CollectionChanged += (_, _) => RefreshCommandStates();
+
+        // 初始化硬编码默认规格和底色，确保 UI 不为空
+        // （后续 InitializeAsync 成功后会从 worker 加载动态数据覆盖）
+        InitializeDefaultSpecs();
+        InitializeDefaultColors();
+
+        // 默认选择第一个规格（1寸）和第一个底色（白色）
+        SelectedSpec = AvailableSpecs.FirstOrDefault();
+        SelectedBackgroundColor = AvailableBackgroundColors.FirstOrDefault();
     }
 
     /// <summary>
-    /// 默认构造函数（用于设计时）
+    /// 默认构造函数（用于设计时和 MainWindow 导航）
     /// </summary>
-    public IdPhotoViewModel() : this(null, new FileSystemService())
+    public IdPhotoViewModel() : this(new IdPhotoService(), new FileSystemService())
     {
-        // 设计时无需额外初始化
+    }
+
+    /// <summary>
+    /// 初始化硬编码默认证件照规格列表
+    /// 确保即使 Python worker 未启动，UI 也始终有可选项
+    /// </summary>
+    private void InitializeDefaultSpecs()
+    {
+        AvailableSpecs.Clear();
+        // 名称必须与 local-worker/modules/id-photo/specifications.py 的 _SPEC_DEFINITIONS 一致
+        AvailableSpecs.Add(new PhotoSpecItem { Name = "1寸", WidthMm = 25, HeightMm = 35, WidthPx = 295, HeightPx = 413, Dpi = 300 });
+        AvailableSpecs.Add(new PhotoSpecItem { Name = "小1寸", WidthMm = 22, HeightMm = 32, WidthPx = 260, HeightPx = 378, Dpi = 300 });
+        AvailableSpecs.Add(new PhotoSpecItem { Name = "大一寸", WidthMm = 33, HeightMm = 48, WidthPx = 390, HeightPx = 567, Dpi = 300 });
+        AvailableSpecs.Add(new PhotoSpecItem { Name = "2寸", WidthMm = 35, HeightMm = 49, WidthPx = 413, HeightPx = 579, Dpi = 300 });
+        AvailableSpecs.Add(new PhotoSpecItem { Name = "小2寸", WidthMm = 33, HeightMm = 48, WidthPx = 390, HeightPx = 567, Dpi = 300 });
+        AvailableSpecs.Add(new PhotoSpecItem { Name = "大二寸", WidthMm = 35, HeightMm = 53, WidthPx = 413, HeightPx = 626, Dpi = 300 });
+        AvailableSpecs.Add(new PhotoSpecItem { Name = "5寸", WidthMm = 89, HeightMm = 127, WidthPx = 1050, HeightPx = 1500, Dpi = 300 });
+        AvailableSpecs.Add(new PhotoSpecItem { Name = "6寸", WidthMm = 102, HeightMm = 152, WidthPx = 1200, HeightPx = 1800, Dpi = 300 });
+    }
+
+    /// <summary>
+    /// 初始化硬编码默认背景色列表
+    /// 确保即使 Python worker 未启动，UI 也始终有可选项
+    /// 色值必须与 local-worker/modules/id-photo/specifications.py 中的 BACKGROUND_COLORS 保持一致
+    /// </summary>
+    private void InitializeDefaultColors()
+    {
+        AvailableBackgroundColors.Clear();
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "白色", Key = "white", R = 255, G = 255, B = 255, Hex = "#FFFFFF" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "红色", Key = "red", R = 219, G = 0, B = 0, Hex = "#DB0000" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "蓝色", Key = "blue", R = 67, G = 142, B = 219, Hex = "#438EDB" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "浅蓝", Key = "light_blue", R = 100, G = 170, B = 235, Hex = "#64AAEB" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "深红", Key = "dark_red", R = 180, G = 0, B = 0, Hex = "#B40000" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "灰色", Key = "gray", R = 200, G = 200, B = 200, Hex = "#C8C8C8" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "天蓝", Key = "sky_blue", R = 135, G = 206, B = 235, Hex = "#87CEEB" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "米色", Key = "beige", R = 245, G = 245, B = 220, Hex = "#F5F5DC" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "深蓝", Key = "dark_blue", R = 0, G = 51, B = 153, Hex = "#003399" });
+        AvailableBackgroundColors.Add(new BackgroundColorItem { Name = "浅红", Key = "light_red", R = 255, G = 100, B = 100, Hex = "#FF6464" });
     }
 
     /// <summary>
@@ -326,32 +422,41 @@ public class IdPhotoViewModel : BaseViewModel
             IsServiceAvailable = await _idPhotoService.StartAsync();
             if (IsServiceAvailable)
             {
-                // 加载规格列表
+                // StartAsync 内部已通过 LoadSpecsAndColorsAsync 缓存了数据
+                // 直接使用缓存（useCache: true），避免重复调用 worker 导致返回空列表覆盖默认值
                 try
                 {
-                    var specs = await _idPhotoService.GetSpecsAsync(useCache: false);
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    var specs = await _idPhotoService.GetSpecsAsync(useCache: true);
+                    // 只有 worker 返回非空数据时才替换硬编码默认值，
+                    // 防止 worker 异常返回空列表导致下拉框变空白
+                    if (specs.Count > 0)
                     {
-                        AvailableSpecs.Clear();
-                        foreach (var spec in specs)
-                            AvailableSpecs.Add(spec);
-                    });
+                        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                        {
+                            AvailableSpecs.Clear();
+                            foreach (var spec in specs)
+                                AvailableSpecs.Add(spec);
+                        });
+                    }
                 }
                 catch (Exception ex)
                 {
                     _logger?.Warning($"加载规格列表失败: {ex.Message}", "desktop-id-photo");
                 }
 
-                // 加载底色列表
+                // 加载底色列表（同样使用缓存 + 非空保护）
                 try
                 {
-                    var colors = await _idPhotoService.GetBackgroundColorsAsync(useCache: false);
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                    var colors = await _idPhotoService.GetBackgroundColorsAsync(useCache: true);
+                    if (colors.Count > 0)
                     {
-                        AvailableBackgroundColors.Clear();
-                        foreach (var color in colors)
-                            AvailableBackgroundColors.Add(color);
-                    });
+                        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                        {
+                            AvailableBackgroundColors.Clear();
+                            foreach (var color in colors)
+                                AvailableBackgroundColors.Add(color);
+                        });
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -391,6 +496,7 @@ public class IdPhotoViewModel : BaseViewModel
         if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.FileName))
         {
             CurrentInputPath = dialog.FileName;
+            LoadThumbnail(dialog.FileName);
             StatusMessage = $"已选择：{InputFileName}，点击开始处理";
             ErrorMessage = null;
 
@@ -425,6 +531,7 @@ public class IdPhotoViewModel : BaseViewModel
         }
 
         CurrentInputPath = imageFile;
+        LoadThumbnail(imageFile);
         StatusMessage = $"已选择：{Path.GetFileName(imageFile)}，点击开始处理";
         ErrorMessage = null;
         RefreshCommandStates();
@@ -461,13 +568,14 @@ public class IdPhotoViewModel : BaseViewModel
         {
             var result = await _idPhotoService.ProcessAsync(
                 CurrentInputPath,
-                outputPath: null, // 自动生成输出路径
+                outputPath: null, // 自动生成临时路径
                 background: SelectedBackgroundColor.Key,
                 specName: SelectedSpec.Name,
                 dpi: Dpi,
                 autoDetectBackground: AutoDetectBackground,
                 edgeFeather: EdgeFeather,
-                _currentCts.Token);
+                outputFormat: OutputFormat,
+                ct: _currentCts.Token);
 
             // 更新进度
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
@@ -540,12 +648,26 @@ public class IdPhotoViewModel : BaseViewModel
     {
         if (SelectedResult == null || !SelectedResult.IsSuccess) return;
 
+        var ext = OutputFormat == "jpeg" ? ".jpg" : $".{OutputFormat}";
+        var formatFilter = OutputFormat switch
+        {
+            "png" => "PNG 图片|*.png",
+            "jpeg" => "JPEG 图片|*.jpg|JPEG 图片|*.jpeg",
+            "bmp" => "BMP 图片|*.bmp",
+            _ => "所有文件|*.*"
+        };
+
+        // 重命名勾选时自动生成文件名：年月日_尺寸_底色.扩展名
+        var defaultName = RenameOnExport
+            ? $"{DateTime.Now:yyyy-MM-dd}_{SelectedSpec?.Name ?? ""}_{SelectedBackgroundColor?.Name ?? ""}{ext}"
+            : Path.GetFileNameWithoutExtension(SelectedResult.InputPath) + "_证件照";
+
         var dialog = new SaveFileDialog
         {
             Title = "导出证件照",
-            FileName = Path.GetFileNameWithoutExtension(SelectedResult.InputPath) + "_证件照",
-            DefaultExt = ".png",
-            Filter = "PNG 图片|*.png|JPEG 图片|*.jpg|所有文件|*.*",
+            FileName = defaultName,
+            DefaultExt = ext,
+            Filter = $"{formatFilter}|所有文件|*.*",
             OverwritePrompt = true
         };
 
@@ -574,8 +696,33 @@ public class IdPhotoViewModel : BaseViewModel
         ErrorMessage = null;
         ProgressValue = 0;
         ProgressMax = 100;
+        CurrentInputPath = null;
+        InputImageThumbnail = null;
         StatusMessage = "请选择文件";
         RefreshCommandStates();
+    }
+
+    /// <summary>
+    /// 从文件路径加载缩略图（解码宽度 200px），用于输入预览
+    /// </summary>
+    /// <param name="filePath">图片文件路径</param>
+    private void LoadThumbnail(string filePath)
+    {
+        try
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(filePath);
+            bitmap.DecodePixelWidth = 200; // 缩略图宽度，保持宽高比
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze(); // 冻结后可跨线程访问
+            InputImageThumbnail = bitmap;
+        }
+        catch
+        {
+            InputImageThumbnail = null;
+        }
     }
 
     /// <summary>

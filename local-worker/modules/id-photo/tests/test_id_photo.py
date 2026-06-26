@@ -592,8 +592,11 @@ class TestProcessIdPhotoFromPath:
                 output_path,
                 background="white",
                 spec_name="1寸",
+                output_format="jpeg",
             )
-            assert os.path.exists(output_path)
+            # output_format="jpeg" 标准化为 .jpg（与 cv2.imwrite 一致）
+            expected_path = output_path  # 扩展名保持 .jpg
+            assert os.path.exists(expected_path)
 
     def test_nonexistent_input(self):
         """不存在的输入文件应抛出异常。"""

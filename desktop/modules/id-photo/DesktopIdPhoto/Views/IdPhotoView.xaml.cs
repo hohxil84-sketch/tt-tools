@@ -28,6 +28,21 @@ public partial class IdPhotoView : UserControl
 
         // 数据上下文变更时更新 ViewModel 引用
         DataContextChanged += OnDataContextChanged;
+
+        // 视图加载完成后异步初始化证件照服务
+        Loaded += OnLoaded;
+    }
+
+    /// <summary>
+    /// 视图加载完成后调用 ViewModel 初始化，启动 worker 并加载规格/底色列表
+    /// </summary>
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded; // 只执行一次
+        if (_viewModel != null)
+        {
+            await _viewModel.InitializeAsync();
+        }
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)

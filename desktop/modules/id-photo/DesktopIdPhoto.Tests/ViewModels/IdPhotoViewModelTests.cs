@@ -26,8 +26,8 @@ public class IdPhotoViewModelTests
         Assert.False(vm.CanStart);
         Assert.True(vm.CanCancel == false);
         Assert.False(vm.HasInputFile);
-        Assert.False(vm.HasSelectedSpec);
-        Assert.False(vm.HasSelectedBackground);
+        Assert.True(vm.HasSelectedSpec); // 默认选中第一个规格（1寸）
+        Assert.True(vm.HasSelectedBackground); // 默认选中第一个底色（白色）
         Assert.False(vm.HasSelectedResult);
         Assert.Equal(0, vm.ResultCount);
         Assert.Equal(0, vm.SuccessCount);
@@ -80,8 +80,8 @@ public class IdPhotoViewModelTests
         var fs = new FileSystemService();
         var vm = new IdPhotoViewModel(null, fs);
 
-        Assert.False(vm.HasSelectedSpec);
-        Assert.Contains("请选择规格", vm.SelectedSpecText);
+        Assert.True(vm.HasSelectedSpec); // 默认选中第一个规格（1寸）
+        Assert.Contains("1寸", vm.SelectedSpecText);
 
         vm.SelectedSpec = new PhotoSpecItem
         {
@@ -104,7 +104,7 @@ public class IdPhotoViewModelTests
         var fs = new FileSystemService();
         var vm = new IdPhotoViewModel(null, fs);
 
-        Assert.False(vm.HasSelectedBackground);
+        Assert.True(vm.HasSelectedBackground); // 默认选中第一个底色（白色）
 
         vm.SelectedBackgroundColor = new BackgroundColorItem
         {

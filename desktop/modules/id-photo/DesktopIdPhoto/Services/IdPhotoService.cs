@@ -74,6 +74,10 @@ public class IdPhotoService : IDisposable
         _routerScriptPath = Path.Combine(
             Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
             "id_photo_router.py");
+
+        // 创建本地运行时客户端，与参数化构造函数保持一致
+        _runtimeClient = new LocalRuntimeClient(_pythonPath, _routerScriptPath);
+        _runtimeClient.ProcessExited += OnProcessExited;
     }
 
     /// <summary>
@@ -233,6 +237,7 @@ public class IdPhotoService : IDisposable
         int dpi = 300,
         bool autoDetectBackground = true,
         bool edgeFeather = true,
+        string outputFormat = "png",
         CancellationToken ct = default)
     {
         if (!_isAvailable || _runtimeClient == null)
@@ -249,18 +254,22 @@ public class IdPhotoService : IDisposable
                 $"不支持的图片格式: {ext}，支持: {string.Join(", ", SupportedFormats)}");
 
         _logger?.Info($"开始证件照换底色: {Path.GetFileName(inputPath)}, " +
-                      $"底色={background}, 规格={specName}", "desktop-id-photo");
+                      $"底色={background}, 规格={specName}, 格式={outputFormat}", "desktop-id-photo");
+
+        // 未指定输出路径时，使用系统临时目录，避免污染用户目录
+        outputPath ??= Path.Combine(Path.GetTempPath(), $"id_photo_{Guid.NewGuid()}.{outputFormat}");
 
         // 发送处理请求
         var requestData = new
         {
             input_path = inputPath,
-            output_path = outputPath ?? "",
+            output_path = outputPath,
             background,
             spec_name = specName,
             dpi,
             auto_detect_background = autoDetectBackground,
             edge_feather = edgeFeather,
+            output_format = outputFormat,
         };
 
         JsonElement? response = await _runtimeClient.SendAsync<object, JsonElement>(
@@ -319,6 +328,7 @@ public class IdPhotoService : IDisposable
         int dpi = 300,
         bool autoDetectBackground = true,
         bool edgeFeather = true,
+        string outputFormat = "png",
         CancellationToken ct = default)
     {
         if (_jobManager == null)
@@ -338,7 +348,7 @@ public class IdPhotoService : IDisposable
 
             var result = await ProcessAsync(
                 inputPath, outputPath, background, specName, dpi,
-                autoDetectBackground, edgeFeather, ct);
+                autoDetectBackground, edgeFeather, outputFormat, ct);
 
             _jobManager.UpdateJobProgress(job.Id, 50);
 

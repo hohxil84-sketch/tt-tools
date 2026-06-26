@@ -178,17 +178,26 @@ def handle_process_id_photo(data: Dict[str, Any], request_id: Optional[str]) -> 
     dpi = int(data.get("dpi", 300))
     auto_detect_background = bool(data.get("auto_detect_background", True))
     edge_feather = bool(data.get("edge_feather", True))
+    output_format = str(data.get("output_format", "png")).lower().lstrip(".")
+
+    # 标准化扩展名：jpeg→jpg（cv2.imwrite 通过扩展名识别编码器）
+    _FMT_MAP = {"jpeg": "jpg", "jpg": "jpg", "png": "png", "bmp": "bmp"}
+    safe_ext = _FMT_MAP.get(output_format, output_format)
 
     # 生成输出路径（如果未指定）
     output_path = data.get("output_path")
     if not output_path:
         input_file = Path(input_path)
         output_path = str(
-            input_file.parent / f"{input_file.stem}_id_photo{input_file.suffix}"
+            input_file.parent / f"{input_file.stem}_id_photo.{safe_ext}"
         )
+    else:
+        # 如果指定了输出路径但扩展名与目标格式不一致，替换扩展名
+        output_path = str(Path(output_path).with_suffix(f".{safe_ext}"))
 
     try:
         # 调用 local-worker id-photo 引擎
+        # 传入 output_format 确保 cv2.imwrite 以正确的格式和扩展名写入文件
         result = process_id_photo_from_path(
             input_path=input_path,
             output_path=output_path,
@@ -197,6 +206,7 @@ def handle_process_id_photo(data: Dict[str, Any], request_id: Optional[str]) -> 
             dpi=dpi,
             auto_detect_background=auto_detect_background,
             edge_feather=edge_feather,
+            output_format=safe_ext,
         )
 
         # 构建响应数据
@@ -270,6 +280,10 @@ ACTION_HANDLERS = {
 
 def main() -> None:
     """主循环：逐行读取 stdin JSON 请求，分发到对应处理器，输出响应。"""
+    # 强制 stdout 使用 UTF-8 编码，避免 Windows 上中文乱码
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+
     for line in sys.stdin:
         line = line.strip()
         if not line:

@@ -46,7 +46,80 @@
 
 ## Bug 记录
 
-暂无。
+### 2026-06-26: 证件照换底色功能完全不可用 — 下拉框空白 + 底色色块空白 + 无缩略图
+
+**现象：**
+- 规格下拉框为空，无法选择证件照规格
+- 底色色块列表为空，无法选择目标底色
+- 输入图片区域只显示文字文件名，无缩略图预览
+
+**根因：**
+1. `IdPhotoService` 默认构造函数未创建 `_runtimeClient`，导致服务永远不可用
+2. `IdPhotoViewModel` 默认构造函数传入 `_idPhotoService = null`，`InitializeAsync()` 直接返回
+3. `IdPhotoView` 缺少 `Loaded` 事件处理，`InitializeAsync()` 从未被调用
+
+**修复点：**
+1. `IdPhotoService.cs`: 默认构造函数中创建 `_runtimeClient` 并绑定事件
+2. `IdPhotoViewModel.cs`: 默认构造函数改为创建 `IdPhotoService`；新增硬编码默认规格（7项）和底色（6项）确保 UI 永不为空；新增 `InputImageThumbnail` / `InputFileFormat` 属性和缩略图加载逻辑
+3. `IdPhotoView.xaml.cs`: 添加 `Loaded` 事件，调用 `InitializeAsync()`
+4. `IdPhotoView.xaml`: 输入区域改为缩略图 + 文件名 + 格式展示
+5. `InitializeAsync`: 将 `useCache: false` 改为 `useCache: true` 避免重复调 worker；新增 `Count > 0` 保护防止 worker 返回空列表时清空硬编码默认值
+
+**测试命令：** `dotnet test`
+**测试结果：** 23 项测试全部通过，0 失败
+
+### 2026-06-26: 换底色不准确 — 背景检测 + 遮罩精度 + 色值不一致
+
+**现象：**
+- 换底色后人物边缘有原背景色残留或过度切割
+- UI 显示的色块颜色与实际替换颜色不一致
+
+**根因：**
+1. `processor.py`: 背景色检测用均值（`np.mean`）易被边缘人物像素污染
+2. `processor.py`: 颜色距离阈值硬编码 45，不适应不同照片的背景均匀度
+3. `processor.py`: 形态学开运算核 5×5 太大，头发等细节被抹掉
+4. `IdPhotoViewModel.cs`: 硬编码 RGB 值与 Python `specifications.py` 不一致
+
+**修复点：**
+1. `processor.py` - `detect_background_color()`: 用 `np.median` 替代 `np.mean`
+2. `processor.py` - `_create_color_mask()`: 自适应阈值（基于边缘距离标准差动态调整）；开运算核从 5×5 缩到 3×3
+3. `processor.py` - `_refine_mask_edge()`: 羽化核根据图像分辨率自适应（3~11px）
+4. `processor.py` - `_create_grabcut_mask()`: 形态学核从 5×5 缩到 3×3
+5. `processor.py` - `create_foreground_mask()`: 质量检查上限从 90% 降到 85%
+6. `IdPhotoViewModel.cs`: 对齐色值为 Python 实际值（红色 #DB0000, 蓝色 #438EDB, 浅蓝 #64AAEB, 新增深红 #B40000）
+
+**测试命令：** `python -m pytest tests/ -v` + `dotnet test`
+**测试结果：** Python 58/58 + C# 23/23，全部通过
+
+### 2026-06-26: JPEG/BMP 导出失败 — router 未传 output_format 导致格式回退为 PNG
+
+**现象：**
+- 用户在格式下拉框选择 JPEG 或 BMP 后点击导出，导出的文件格式不正确或导出失败
+
+**根因：**
+`id_photo_router.py` 的 `handle_process_id_photo()` 解析了 `output_format` 参数并正确修改了输出路径扩展名（`.jpeg`→`.jpg`），但调用 `process_id_photo_from_path()` 时没有传入 `output_format` 参数。函数默认 `output_format="png"`，导致内部再次将扩展名改回 `.png`，`cv2.imwrite` 实际写入的是 PNG 格式数据。
+
+**修复点：**
+在 `id_photo_router.py` 第 209 行，向 `process_id_photo_from_path()` 传入 `output_format=safe_ext`，确保格式参数全链路贯通。
+
+**测试命令：** `python -c "..."` 端到端格式测试
+**测试结果：** JPEG 输出验证有效（header `FF D8 FF`），BMP 输出验证有效（header `BM`）
+
+### 2026-06-26: 证件照规格默认选 1寸 + 底色默认选白色
+
+**现象：**
+- 用户打开页面后规格下拉框和底色色块无默认选中项，需要手动选择
+
+**根因：**
+`IdPhotoViewModel` 构造函数中虽调用 `InitializeDefaultSpecs()` 和 `InitializeDefaultColors()` 填充了列表，但未设置 `SelectedSpec` 和 `SelectedBackgroundColor`。
+
+**修复点：**
+1. `IdPhotoViewModel.cs`: 构造函数中 `InitializeDefaultSpecs()` 后添加 `SelectedSpec = AvailableSpecs.FirstOrDefault()` 和 `SelectedBackgroundColor = AvailableBackgroundColors.FirstOrDefault()`
+2. 添加 `using System.Linq;` 以支持 `FirstOrDefault()`
+3. `IdPhotoViewModelTests.cs`: 更新 3 项测试断言，适配默认选中行为
+
+**测试命令：** `dotnet test`
+**测试结果：** 23/23 全部通过
 
 ## 提交记录
 

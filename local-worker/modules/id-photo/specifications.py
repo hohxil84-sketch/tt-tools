@@ -75,6 +75,7 @@ _SPEC_DEFINITIONS = [
     ("大一寸", 33, 48),
     ("大二寸", 35, 53),
     ("5寸", 89, 127),
+    ("6寸", 102, 152),
 ]
 
 
@@ -184,6 +185,10 @@ BACKGROUND_COLORS: Dict[str, BackgroundColor] = {
     "light_blue": BackgroundColor("浅蓝", 100, 170, 235), # 浅蓝
     "dark_red": BackgroundColor("深红", 180, 0, 0),       # 深红
     "gray": BackgroundColor("灰色", 200, 200, 200),       # 灰底
+    "sky_blue": BackgroundColor("天蓝", 135, 206, 235),   # 天蓝（常见考试照）
+    "dark_blue": BackgroundColor("深蓝", 0, 51, 153),     # 深蓝（护照常用）
+    "light_red": BackgroundColor("浅红", 255, 100, 100),  # 浅红
+    "beige": BackgroundColor("米色", 245, 245, 220),      # 米色（部分签证）
 }
 
 

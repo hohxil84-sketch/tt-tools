@@ -18,6 +18,7 @@ local-worker/modules/id-photo/processor — 证件照换底色核心处理器
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import cv2  # type: ignore
@@ -140,15 +141,17 @@ def detect_background_color(
     if len(samples) == 0:
         return None, False
 
-    mean_bgr = np.mean(samples, axis=0)
+    # 使用中位数检测主导背景色，抗人物边缘像素干扰
+    # 中位数比均值更鲁棒：即使边缘混入少量人物像素，主导色也不被拉偏
+    median_bgr = np.median(samples, axis=0)
     std_bgr = np.std(samples, axis=0)
     avg_std = float(np.mean(std_bgr))
 
-    # 是否纯色背景
+    # 是否纯色背景（标准差低于阈值判定为纯色，可用颜色距离法精确分割）
     is_solid = avg_std < std_threshold
 
     # 转为整数 RGB
-    b, g, r = int(round(mean_bgr[0])), int(round(mean_bgr[1])), int(round(mean_bgr[2]))
+    b, g, r = int(round(median_bgr[0])), int(round(median_bgr[1])), int(round(median_bgr[2]))
     # 限制在 0-255
     r, g, b = max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b))
 
@@ -165,6 +168,11 @@ def detect_background_color(
 # ---- 前景遮罩生成 ----
 
 
+# 颜色距离阈值范围（根据背景均匀度自适应调整）
+_COLOR_DISTANCE_MIN = 20.0
+_COLOR_DISTANCE_MAX = 60.0
+
+
 def _create_color_mask(
     image: np.ndarray,
     background_bgr: Tuple[int, int, int],
@@ -173,11 +181,13 @@ def _create_color_mask(
     """基于颜色距离阈值创建前景遮罩。
 
     计算每个像素与背景色的欧几里得距离，距离大于阈值的视为前景。
+    阈值自适应：背景越均匀（方差小），阈值越紧 → 精准分离；
+                 背景越不均匀，阈值越宽 → 确保背景完全移除。
 
     参数：
         image: BGR 图像。
         background_bgr: 背景色 BGR 值。
-        distance_threshold: 距离阈值。
+        distance_threshold: 基础距离阈值，会被自适应调整覆盖。
 
     返回：
         二值遮罩 (H, W)，255=前景，0=背景。
@@ -189,17 +199,32 @@ def _create_color_mask(
     image_float = image.astype(np.float32)
     distance = np.sqrt(np.sum((image_float - bg) ** 2, axis=2))
 
-    # 距离大于阈值的为前景（人物）
-    raw_mask = (distance > distance_threshold).astype(np.uint8) * 255
+    # 自适应阈值：基于背景区域的颜色方差动态调整
+    # 取边缘区域像素的距离分布，用其标准差估算合适阈值
+    h, w = image.shape[:2]
+    margin = max(int(min(h, w) * 0.05), 5)
+    edge_pixels = image_float[
+        list(range(margin)) + list(range(h - margin, h)), :, :
+    ].reshape(-1, 3)
+    edge_dist = np.sqrt(np.sum((edge_pixels - bg.reshape(1, 3)) ** 2, axis=1))
+    edge_std = float(np.std(edge_dist))
 
-    # 形态学后处理：闭合小孔洞、去除噪点
+    # 自适应阈值：背景均匀时收紧（更精准），不均匀时放宽（确保覆盖）
+    adaptive_threshold = max(_COLOR_DISTANCE_MIN, min(_COLOR_DISTANCE_MAX, edge_std * 2.0))
+    # 如果传入的默认阈值更大，取两者中较小者（宁可偏紧，通过后续羽化补偿边缘）
+    effective_threshold = min(distance_threshold, adaptive_threshold)
+
+    # 距离大于阈值的为前景（人物）
+    raw_mask = (distance > effective_threshold).astype(np.uint8) * 255
+
+    # 形态学后处理：用更小的核保留头发等细节
     kernel_small = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     kernel_medium = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
 
-    # 先闭运算：连接人物区域的断裂
+    # 先闭运算：连接人物区域的细小断裂
     mask = cv2.morphologyEx(raw_mask, cv2.MORPH_CLOSE, kernel_small)
-    # 再开运算：去除孤立噪点
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_medium)
+    # 再开运算：去除孤立噪点（用小核保留边缘细节）
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_small)
 
     return mask
 
@@ -259,8 +284,8 @@ def _create_grabcut_mask(image: np.ndarray) -> np.ndarray:
         np.uint8
     )
 
-    # 形态学后处理
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    # 形态学后处理（用小核保留细节）
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
 
     return fg_mask
@@ -292,10 +317,10 @@ def create_foreground_mask(
         logger.info("使用颜色距离法生成遮罩（纯色背景检测）")
         mask = _create_color_mask(image, background_bgr)
 
-        # 检查遮罩质量：如果前景占比过大（>90%）或过小（<1%），
+        # 检查遮罩质量：如果前景占比过大（>85%）或过小（<1%），
         # 可能颜色检测不准，回退到 GrabCut
         fg_ratio = np.count_nonzero(mask) / (h * w)
-        if fg_ratio > 0.90 or fg_ratio < 0.01:
+        if fg_ratio > 0.85 or fg_ratio < 0.01:
             logger.info(
                 "颜色遮罩质量不佳（前景占比=%.1f%%），回退到 GrabCut",
                 fg_ratio * 100,
@@ -316,10 +341,11 @@ def _refine_mask_edge(
     """对遮罩边缘进行羽化处理。
 
     使用高斯模糊软化遮罩边缘，避免背景替换后出现生硬的锯齿过渡。
+    核大小根据图像分辨率自适应调整。
 
     参数：
         mask: 二值遮罩 (H, W)，值为 0 或 255。
-        blur_kernel_size: 高斯核大小，必须为奇数。
+        blur_kernel_size: 基础高斯核大小，会根据图像尺寸自适应调整。
 
     返回：
         羽化后的遮罩 (H, W)，值域 [0, 255]。
@@ -327,8 +353,15 @@ def _refine_mask_edge(
     if blur_kernel_size % 2 == 0:
         blur_kernel_size += 1  # 确保为奇数
 
+    # 根据图像尺寸自适应核大小：大图用稍大的核，小图用小的核
+    h, w = mask.shape[:2]
+    adaptive_size = max(3, min(11, int(min(w, h) / 120)))
+    if adaptive_size % 2 == 0:
+        adaptive_size += 1
+    kernel_size = max(blur_kernel_size, adaptive_size)
+
     # 高斯模糊
-    blurred = cv2.GaussianBlur(mask.astype(np.float32), (blur_kernel_size, blur_kernel_size), 0)
+    blurred = cv2.GaussianBlur(mask.astype(np.float32), (kernel_size, kernel_size), 0)
     return blurred
 
 
@@ -340,8 +373,15 @@ def replace_background(
     new_background_bgr: Tuple[int, int, int],
     edge_feather: bool = True,
     feather_kernel_size: int = 5,
+    old_background_bgr: Optional[Tuple[int, int, int]] = None,
+    mask_shrink_px: int = 3,
 ) -> np.ndarray:
     """将图像背景替换为新颜色。
+
+    流程模拟 Photoshop "选择背景→反选→收缩→删除→填充新色"：
+      1. 腐蚀前景遮罩（收缩选区），把被原背景色污染的边缘像素剔除
+      2. 羽化遮罩边缘，让过渡自然
+      3. Alpha 混合：前景原色 + 新背景色
 
     参数：
         image: 原始 BGR 图像。
@@ -349,29 +389,39 @@ def replace_background(
         new_background_bgr: 目标背景色 BGR 值。
         edge_feather: 是否进行边缘羽化。
         feather_kernel_size: 羽化核大小。
+        old_background_bgr: 保留参数（兼容性），不再用于去污染。
+        mask_shrink_px: 遮罩收缩像素数，模拟 PS "收缩选区"。
 
     返回：
         换底后的 BGR 图像。
     """
     h, w = image.shape[:2]
 
+    # ---- 第1步：收缩遮罩（PS "选择→反选→收缩"） ----
+    # 腐蚀前景遮罩，把被原背景色污染的最外层边缘像素从前景中剔除
+    # 这些像素将变为背景，被新底色完全覆盖，从而消除蓝边/红边
+    if mask_shrink_px > 0:
+        shrink_kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE,
+            (mask_shrink_px * 2 + 1, mask_shrink_px * 2 + 1),
+        )
+        foreground_mask = cv2.erode(foreground_mask, shrink_kernel, iterations=1)
+
     # 创建新背景图
     new_bg = np.full((h, w, 3), new_background_bgr, dtype=np.uint8)
 
+    # ---- 第2步：羽化（PS "羽化选区"） ----
     if edge_feather:
-        # 羽化遮罩并归一化到 [0, 1]
         alpha = _refine_mask_edge(foreground_mask, feather_kernel_size) / 255.0
     else:
-        # 直接归一化
         alpha = foreground_mask.astype(np.float32) / 255.0
 
-    # 扩展为 3 通道
-    alpha_3ch = np.stack([alpha, alpha, alpha], axis=2)
-
-    # Alpha 混合：result = foreground * alpha + background * (1 - alpha)
+    # ---- 第3步：Alpha 混合 ----
     image_float = image.astype(np.float32)
     new_bg_float = new_bg.astype(np.float32)
+    alpha_3ch = np.stack([alpha, alpha, alpha], axis=2)
 
+    # result = 人物 × alpha + 新底色 × (1-alpha)
     result = image_float * alpha_3ch + new_bg_float * (1.0 - alpha_3ch)
 
     return np.clip(result, 0, 255).astype(np.uint8)
@@ -524,6 +574,7 @@ def process_id_photo(
         mask,
         target_bg.to_bgr(),
         edge_feather=edge_feather,
+        old_background_bgr=bg_bgr,  # 传入原背景色用于边缘去污染
     )
 
     # ---- 第4步：缩放裁剪 ----
@@ -556,6 +607,7 @@ def process_id_photo_from_path(
     dpi: int = 300,
     auto_detect_background: bool = True,
     edge_feather: bool = True,
+    output_format: str = "png",
 ) -> IdPhotoResult:
     """从文件路径读取图像，处理后保存到输出路径。
 
@@ -567,10 +619,15 @@ def process_id_photo_from_path(
         dpi: 目标 DPI。
         auto_detect_background: 是否自动检测原图背景色。
         edge_feather: 是否边缘羽化。
+        output_format: 输出格式 (png/jpeg/bmp)，默认 png。
 
     返回：
         IdPhotoResult 对象。
     """
+    # 将格式名映射为标准扩展名（cv2.imwrite 靠扩展名识别编码器）
+    _FORMAT_TO_EXT = {"jpg": "jpg", "jpeg": "jpg", "png": "png", "bmp": "bmp"}
+    ext = _FORMAT_TO_EXT.get(output_format.lstrip(".").lower(), output_format.lstrip(".").lower())
+    output_path = str(Path(output_path).with_suffix(f".{ext}"))
     # 读取图像（cv2.imread 返回 BGR 格式）
     image = cv2.imread(input_path, cv2.IMREAD_COLOR)
     if image is None:

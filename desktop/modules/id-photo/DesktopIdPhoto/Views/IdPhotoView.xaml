@@ -8,6 +8,7 @@
              xmlns:models="clr-namespace:TTTools.IdPhoto.Models"
              mc:Ignorable="d"
              d:DesignHeight="650" d:DesignWidth="1000"
+             FontFamily="Microsoft YaHei UI, Segoe UI, SimSun"
              Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
 
     <UserControl.Resources>
@@ -37,6 +38,7 @@
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- 工具栏 -->
+            <RowDefinition Height="Auto"/>  <!-- 处理选项横条 -->
             <RowDefinition Height="Auto"/>  <!-- 错误提示条 -->
             <RowDefinition Height="*"/>      <!-- 主内容区 -->
             <RowDefinition Height="Auto"/>  <!-- 底部状态栏 -->
@@ -84,8 +86,57 @@
             </Grid>
         </Border>
 
+        <!-- ===== 处理选项横条 ===== -->
+        <Border Grid.Row="1" Padding="6,4" Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- DPI -->
+                <TextBlock Text="DPI:" VerticalAlignment="Center" FontSize="12" Margin="8,0,4,0"/>
+                <TextBox Text="{Binding Dpi, UpdateSourceTrigger=PropertyChanged}"
+                         Width="50" Height="24" FontSize="12"
+                         ToolTip="输出分辨率 (72-600)，默认 300"/>
+
+                <!-- 分隔 -->
+                <Border Width="1" Background="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" Margin="10,2"/>
+
+                <!-- 输出格式 -->
+                <TextBlock Text="输出格式:" VerticalAlignment="Center" FontSize="12" Margin="4,0,4,0"/>
+                <ComboBox ItemsSource="{x:Static vm:IdPhotoViewModel.AvailableFormats}"
+                          SelectedValue="{Binding OutputFormat}"
+                          SelectedValuePath="Value"
+                          DisplayMemberPath="Display"
+                          Width="110" Height="24" FontSize="12"
+                          Background="{DynamicResource {x:Static SystemColors.ControlLightLightBrushKey}}"
+                          Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+
+                <!-- 分隔 -->
+                <Border Width="1" Background="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" Margin="10,2"/>
+
+                <!-- 自动检测背景色 -->
+                <CheckBox IsChecked="{Binding AutoDetectBackground}"
+                          VerticalAlignment="Center" Margin="4,0" FontSize="12"
+                          ToolTip="自动分析原图背景色并生成人物遮罩">
+                    <TextBlock Text="自动检测背景" FontSize="12"/>
+                </CheckBox>
+
+                <!-- 边缘羽化 -->
+                <CheckBox IsChecked="{Binding EdgeFeather}"
+                          VerticalAlignment="Center" Margin="4,0" FontSize="12"
+                          ToolTip="对人物边缘进行羽化处理，避免生硬过渡">
+                    <TextBlock Text="边缘羽化" FontSize="12"/>
+                </CheckBox>
+
+                <!-- 重命名 -->
+                <CheckBox IsChecked="{Binding RenameOnExport}"
+                          VerticalAlignment="Center" Margin="4,0" FontSize="12"
+                          ToolTip="导出时自动按 年月日_尺寸_底色 格式命名">
+                    <TextBlock Text="导出重命名" FontSize="12"/>
+                </CheckBox>
+            </StackPanel>
+        </Border>
+
         <!-- ===== 错误提示条 ===== -->
-        <Border Grid.Row="1" Background="#FFEBEE" Padding="8"
+        <Border Grid.Row="2" Background="#FFEBEE" Padding="8"
                 Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -101,11 +152,10 @@
         </Border>
 
         <!-- ===== 主内容区：左-输入配置 | 右-结果预览 ===== -->
-        <Grid Grid.Row="2" Margin="0,8,0,0">
+        <Grid Grid.Row="3" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" MinWidth="280"/>  <!-- 左侧：输入和配置 -->
-                <ColumnDefinition Width="Auto"/>                <!-- 分隔线 -->
-                <ColumnDefinition Width="*" MinWidth="400"/>     <!-- 右侧：结果预览和历史 -->
+                <ColumnDefinition Width="270"/>     <!-- 左侧：输入和配置 -->
+                <ColumnDefinition Width="*"/>        <!-- 右侧：结果预览和历史 -->
             </Grid.ColumnDefinitions>
 
             <!-- ===== 左侧：输入区域和配置面板 ===== -->
@@ -117,29 +167,12 @@
                         <StackPanel>
                             <TextBlock Text="输入图片" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
 
-                            <!-- 拖拽区域 -->
-                            <Border Height="100" BorderBrush="#BDBDBD" BorderThickness="2"
+                            <!-- 拖拽区域（含缩略图预览） -->
+                            <Border Height="160" BorderBrush="#BDBDBD" BorderThickness="2"
                                     CornerRadius="4" Background="#F5F5F5"
                                     AllowDrop="True"
                                     ToolTip="将图片拖拽到此处或点击下方按钮选择">
                                 <Grid>
-                                    <!-- 有文件时显示文件名 -->
-                                    <TextBlock Text="{Binding InputFileName}"
-                                               FontSize="13" Foreground="#1565C0"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" Margin="8,0">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding HasInputFile}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-
                                     <!-- 无文件时显示提示 -->
                                     <TextBlock Text="拖拽图片到此处，或点击「选择图片」按钮"
                                                FontSize="13" Foreground="Gray"
@@ -156,6 +189,43 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
+
+                                    <!-- 有文件时显示缩略图 + 文件名 + 格式 -->
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasInputFile}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+
+                                        <!-- 缩略图 -->
+                                        <Image Source="{Binding InputImageThumbnail}"
+                                               MaxWidth="180" MaxHeight="110"
+                                               Stretch="Uniform"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,0,0,8"/>
+
+                                        <!-- 文件名 -->
+                                        <TextBlock Text="{Binding InputFileName}"
+                                                   FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="#1565C0"
+                                                   HorizontalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="260"
+                                                   Margin="0,0,0,2"/>
+
+                                        <!-- 文件格式 -->
+                                        <TextBlock FontSize="12" Foreground="Gray"
+                                                   HorizontalAlignment="Center">
+                                            <Run Text="格式: "/>
+                                            <Run Text="{Binding InputFileFormat, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
                                 </Grid>
                             </Border>
                         </StackPanel>
@@ -253,44 +323,11 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 处理选项 -->
-                    <Border BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
-                            BorderThickness="1" CornerRadius="4" Margin="0,0,0,8" Padding="12">
-                        <StackPanel>
-                            <TextBlock Text="处理选项" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
-
-                            <!-- DPI 设置 -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                <TextBlock Text="DPI:" VerticalAlignment="Center" FontSize="13" Width="60"/>
-                                <TextBox Text="{Binding Dpi, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="70" Height="26" FontSize="13"
-                                         ToolTip="输出分辨率 (72-600)，默认 300"/>
-                            </StackPanel>
-
-                            <!-- 自动检测背景色 -->
-                            <CheckBox IsChecked="{Binding AutoDetectBackground}"
-                                      Margin="0,4" FontSize="13"
-                                      ToolTip="自动分析原图背景色并生成人物遮罩">
-                                <TextBlock Text="自动检测原图背景色" FontSize="13"/>
-                            </CheckBox>
-
-                            <!-- 边缘羽化 -->
-                            <CheckBox IsChecked="{Binding EdgeFeather}"
-                                      Margin="0,2" FontSize="13"
-                                      ToolTip="对人物边缘进行羽化处理，避免生硬过渡">
-                                <TextBlock Text="边缘羽化（更自然的过渡效果）" FontSize="13"/>
-                            </CheckBox>
-                        </StackPanel>
-                    </Border>
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- 分隔线 -->
-            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center" VerticalAlignment="Stretch"
-                          Background="Transparent"/>
-
             <!-- ===== 右侧：结果预览和历史列表 ===== -->
-            <Grid Grid.Column="2" Margin="8,0,0,0">
+            <Grid Grid.Column="1" Margin="8,0,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>      <!-- 上半部分：预览 -->
                     <RowDefinition Height="Auto"/>   <!-- 分隔 -->
@@ -509,7 +546,7 @@
         </Grid>
 
         <!-- ===== 底部状态栏 ===== -->
-        <Border Grid.Row="3" Padding="8,4" Margin="0,8,0,0"
+        <Border Grid.Row="4" Padding="8,4" Margin="0,8,0,0"
                 Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="0,1,0,0">
             <Grid>
