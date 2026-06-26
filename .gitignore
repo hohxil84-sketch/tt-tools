@@ -25,6 +25,7 @@ node_modules/
 dist/
 build/
 /models/
+remove_bg_models/
 *.onnx
 *.pt
 *.pth

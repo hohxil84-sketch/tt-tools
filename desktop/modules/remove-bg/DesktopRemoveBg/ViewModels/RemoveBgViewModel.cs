@@ -41,12 +41,13 @@ public class RemoveBgViewModel : BaseViewModel
     private int _bgRed = 255;
     private int _bgGreen = 255;
     private int _bgBlue = 255;
+    private string _outputDirectory = string.Empty;
 
     /// <summary>已处理的抠图结果列表</summary>
     public ObservableCollection<RemoveBgResult> Results { get; } = new();
 
-    /// <summary>待处理图片文件路径列表</summary>
-    public ObservableCollection<string> PendingFiles { get; } = new();
+    /// <summary>待处理图片文件列表（含缩略图等展示信息）</summary>
+    public ObservableCollection<PendingFileInfo> PendingFiles { get; } = new();
 
     /// <summary>是否有待处理的图片</summary>
     public bool HasPendingFiles => PendingFiles.Count > 0;
@@ -69,9 +70,16 @@ public class RemoveBgViewModel : BaseViewModel
     public bool HasSelectedResult => SelectedResult != null;
 
     /// <summary>选中结果的预览文本</summary>
-    public string SelectedPreviewText => SelectedResult != null
-        ? $"模型: {SelectedResult.ModelSummary}\n尺寸: {SelectedResult.SizeSummary}\n格式: {SelectedResult.OutputFormatSummary}\n前景占比: {SelectedResult.ForegroundRatioSummary}"
-        : string.Empty;
+    public string SelectedPreviewText
+    {
+        get
+        {
+            if (SelectedResult == null) return string.Empty;
+            if (!SelectedResult.IsSuccess)
+                return $"✕ 抠图失败\n\n错误信息: {SelectedResult.ErrorMessage ?? "未知错误"}\n\n源文件: {SelectedResult.InputFileName}";
+            return $"模型: {SelectedResult.ModelSummary}\n尺寸: {SelectedResult.SizeSummary}\n格式: {SelectedResult.OutputFormatSummary}\n前景占比: {SelectedResult.ForegroundRatioSummary}";
+        }
+    }
 
     /// <summary>当前状态栏消息</summary>
     public string StatusMessage
@@ -108,8 +116,8 @@ public class RemoveBgViewModel : BaseViewModel
         }
     }
 
-    /// <summary>是否可以开始处理：服务可用 + 未运行 + 有待处理文件</summary>
-    public bool CanStart => !IsRunning && _isServiceAvailable && PendingFiles.Count > 0;
+    /// <summary>是否可以开始处理：未运行 + 有待处理文件（服务按需初始化，不阻塞按钮）</summary>
+    public bool CanStart => !IsRunning && PendingFiles.Count > 0;
 
     /// <summary>是否可以取消</summary>
     public bool CanCancel => IsRunning;
@@ -124,6 +132,8 @@ public class RemoveBgViewModel : BaseViewModel
             {
                 OnPropertyChanged(nameof(CanStart));
                 OnPropertyChanged(nameof(ServiceStatusText));
+                // 手动刷新命令可执行状态，确保按钮 IsEnabled 立即响应
+                RefreshCommandStates();
             }
         }
     }
@@ -194,6 +204,21 @@ public class RemoveBgViewModel : BaseViewModel
         set => SetProperty(ref _bgBlue, Math.Clamp(value, 0, 255));
     }
 
+    /// <summary>输出目录（用户选择图片处理后的保存位置）</summary>
+    public string OutputDirectory
+    {
+        get => _outputDirectory;
+        set
+        {
+            if (SetProperty(ref _outputDirectory, value))
+                OnPropertyChanged(nameof(OutputDirectoryDisplay));
+        }
+    }
+
+    /// <summary>输出目录显示文本</summary>
+    public string OutputDirectoryDisplay =>
+        string.IsNullOrEmpty(_outputDirectory) ? "默认（源文件目录）" : _outputDirectory;
+
     /// <summary>背景色预览（WPF 颜色）</summary>
     public Color BackgroundColorPreview
     {
@@ -246,14 +271,20 @@ public class RemoveBgViewModel : BaseViewModel
     /// <summary>取消当前处理命令</summary>
     public ICommand CancelCommand { get; }
 
-    /// <summary>清除所有结果命令</summary>
+    /// <summary>清除所有结果和待处理文件命令</summary>
     public ICommand ClearResultsCommand { get; }
+
+    /// <summary>清除所有待处理文件命令</summary>
+    public ICommand ClearPendingCommand { get; }
 
     /// <summary>打开输出文件命令</summary>
     public ICommand OpenOutputFileCommand { get; }
 
     /// <summary>选择结果项命令</summary>
     public ICommand SelectResultCommand { get; }
+
+    /// <summary>移除单个待处理文件命令</summary>
+    public ICommand RemovePendingFileCommand { get; }
 
     /// <summary>设置白色背景命令</summary>
     public ICommand SetWhiteBackgroundCommand { get; }
@@ -263,6 +294,9 @@ public class RemoveBgViewModel : BaseViewModel
 
     /// <summary>设置蓝色背景命令</summary>
     public ICommand SetBlueBackgroundCommand { get; }
+
+    /// <summary>选择输出目录命令</summary>
+    public ICommand SelectOutputDirectoryCommand { get; }
 
     public RemoveBgViewModel(RemoveBgService? removeBgService, FileSystemService fileSystem,
         JobManager? jobManager = null, AppLogger? logger = null)
@@ -276,11 +310,17 @@ public class RemoveBgViewModel : BaseViewModel
         StartProcessingCommand = new RelayCommand(StartProcessingAsync, () => CanStart);
         CancelCommand = new RelayCommand(CancelProcessing, () => CanCancel);
         ClearResultsCommand = new RelayCommand(ClearResults, () => Results.Count > 0 || PendingFiles.Count > 0);
+        ClearPendingCommand = new RelayCommand(ClearPending, () => PendingFiles.Count > 0);
         OpenOutputFileCommand = new RelayCommand(OpenOutputFile, () => HasSelectedResult);
         SelectResultCommand = new RelayCommand<RemoveBgResult?>(r => SelectedResult = r);
+        RemovePendingFileCommand = new RelayCommand<PendingFileInfo?>(RemovePendingFile);
         SetWhiteBackgroundCommand = new RelayCommand(() => SetBackgroundColor(255, 255, 255));
         SetRedBackgroundCommand = new RelayCommand(() => SetBackgroundColor(255, 0, 0));
         SetBlueBackgroundCommand = new RelayCommand(() => SetBackgroundColor(0, 0, 255));
+        SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory);
+
+        // 构造时填充默认模型列表（硬编码兜底，不依赖 worker）
+        PopulateDefaultModels();
 
         // 监听结果列表变更以更新命令状态
         Results.CollectionChanged += (_, _) => RefreshCommandStates();
@@ -299,7 +339,8 @@ public class RemoveBgViewModel : BaseViewModel
 
     /// <summary>
     /// 初始化抠图服务
-    /// 异步启动 worker 进程并进行健康检查，加载可用模型列表。
+    /// 异步启动 worker 进程并进行健康检查，尝试从 worker 加载模型列表覆盖默认值。
+    /// 无论 worker 是否启动成功，默认模型列表都已就绪。
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -318,30 +359,55 @@ public class RemoveBgViewModel : BaseViewModel
             {
                 StatusMessage = "请选择文件";
 
-                // 加载可用模型列表
+                // 尝试从 worker 加载模型列表，覆盖默认值
                 try
                 {
                     var models = await _removeBgService.GetModelsAsync(useCache: false);
-                    AvailableModels.Clear();
-                    foreach (var model in models)
-                        AvailableModels.Add(model);
+                    if (models.Count > 0)
+                    {
+                        AvailableModels.Clear();
+                        foreach (var model in models)
+                            AvailableModels.Add(model);
+                    }
                 }
                 catch
                 {
-                    // 加载模型列表失败不是致命错误
+                    // 加载失败不覆盖默认列表，已在构造时填充
                 }
             }
             else
             {
-                StatusMessage = "处理服务不可用，请检查本地环境";
+                StatusMessage = "处理服务不可用，请检查本地环境（模型列表仍可用）";
             }
         }
         catch (Exception ex)
         {
             IsServiceAvailable = false;
-            StatusMessage = "处理服务不可用，请检查本地环境";
+            StatusMessage = "处理服务不可用，请检查本地环境（模型列表仍可用）";
             _logger?.Error($"抠图服务初始化失败: {ex.Message}", ex, "desktop-remove-bg");
         }
+
+        // 确保初始化完成后命令状态刷新
+        RefreshCommandStates();
+    }
+
+    /// <summary>
+    /// 填充默认模型列表（硬编码兜底，不依赖 Python worker）。
+    /// 如果 worker 可用，后续 InitializeAsync 会用远程列表覆盖。
+    /// </summary>
+    private void PopulateDefaultModels()
+    {
+        var defaults = new List<RemoveBgModelInfo>
+        {
+            new() { Name = "u2net", Description = "默认模型，质量最佳，约 168 MB", IsDefault = true },
+            new() { Name = "u2netp", Description = "轻量模型，速度快，约 4.4 MB", IsDefault = false },
+            new() { Name = "u2net_human_seg", Description = "人像专用分割模型", IsDefault = false },
+            new() { Name = "isnet-general-use", Description = "ISNet 通用模型，较新架构", IsDefault = false },
+            new() { Name = "silueta", Description = "轻量级模型，适合简单场景", IsDefault = false },
+        };
+        AvailableModels.Clear();
+        foreach (var m in defaults)
+            AvailableModels.Add(m);
     }
 
     /// <summary>
@@ -386,17 +452,74 @@ public class RemoveBgViewModel : BaseViewModel
     }
 
     /// <summary>
+    /// 打开文件夹选择对话框，让用户选择抠图结果的输出目录。
+    /// 使用 Win32 SHBrowseForFolder API，避免依赖 WinForms。
+    /// </summary>
+    private void SelectOutputDirectory()
+    {
+        var result = Win32FolderBrowser.Browse("选择抠图结果的输出目录", _outputDirectory);
+        if (!string.IsNullOrEmpty(result))
+            OutputDirectory = result;
+    }
+
+    /// <summary>
     /// 开始处理命令 —— 对待处理列表中的所有图片执行抠图处理。
+    /// 如果服务尚未初始化，先按需启动服务。
     /// </summary>
     private async void StartProcessingAsync()
     {
         if (PendingFiles.Count == 0) return;
-        var files = PendingFiles.ToList();
+
+        // 按需初始化服务：如果服务尚未可用，先尝试启动
+        if (!_isServiceAvailable && _removeBgService != null)
+        {
+            StatusMessage = "正在启动抠图引擎...";
+            try
+            {
+                IsServiceAvailable = await _removeBgService.StartAsync();
+                if (IsServiceAvailable)
+                {
+                    // 尝试从 worker 加载模型列表
+                    try
+                    {
+                        var models = await _removeBgService.GetModelsAsync(useCache: false);
+                        if (models.Count > 0)
+                        {
+                            AvailableModels.Clear();
+                            foreach (var m in models)
+                                AvailableModels.Add(m);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"抠图服务启动失败: {ex.Message}", ex, "desktop-remove-bg");
+            }
+
+            if (!_isServiceAvailable)
+            {
+                ErrorMessage = "抠图引擎启动失败，请检查 Python 环境和 rembg 是否正确安装。\n"
+                    + "默认路径: D:\\localPath\\venvs\\local-worker-remove-bg\\Scripts\\python.exe";
+                StatusMessage = "处理服务不可用";
+                return;
+            }
+        }
+
+        if (!_isServiceAvailable)
+        {
+            ErrorMessage = "抠图服务未配置，无法开始处理";
+            StatusMessage = "服务不可用";
+            return;
+        }
+
+        var files = PendingFiles.Select(f => f.FilePath).ToList();
         await StartProcessingForFilesAsync(files);
     }
 
     /// <summary>
-    /// 将文件路径加入待处理列表（去重）。
+    /// 将文件路径加入待处理列表（去重），并为每个文件异步加载缩略图。
     /// </summary>
     private void AddFilesToPending(IEnumerable<string> filePaths)
     {
@@ -405,15 +528,54 @@ public class RemoveBgViewModel : BaseViewModel
             if (string.IsNullOrWhiteSpace(path)) continue;
             if (!File.Exists(path)) continue;
             var normalized = Path.GetFullPath(path);
-            if (PendingFiles.Any(f => f.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
+            if (PendingFiles.Any(f => f.FilePath.Equals(normalized, StringComparison.OrdinalIgnoreCase)))
                 continue;
-            PendingFiles.Add(normalized);
+
+            var fileInfo = new FileInfo(normalized);
+            var pendingFile = new PendingFileInfo
+            {
+                FilePath = normalized,
+                FileSizeDisplay = FormatFileSize(fileInfo.Length),
+            };
+
+            // 异步加载缩略图（fire-and-forget，不阻塞 UI）
+            _ = pendingFile.LoadThumbnailAsync();
+
+            PendingFiles.Add(pendingFile);
         }
 
         ProgressValue = 0;
         ProgressMax = PendingFiles.Count;
         StatusMessage = $"已选择 {PendingFiles.Count} 个文件，点击开始处理";
         ErrorMessage = null;
+    }
+
+    /// <summary>
+    /// 根据用户选择的输出目录生成输出文件路径。
+    /// 文件名为 "原文件名_remove_bg.png"，放在用户指定目录下。
+    /// </summary>
+    private string GenerateOutputPath(string inputPath)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(inputPath);
+        var ext = OutputRgba || SynthesizeBackground ? ".png" : ".jpg";
+        var outputFileName = $"{fileName}_remove_bg{ext}";
+
+        if (!string.IsNullOrEmpty(_outputDirectory) && Directory.Exists(_outputDirectory))
+            return Path.Combine(_outputDirectory, outputFileName);
+
+        // 默认保存到源文件同目录
+        return Path.Combine(Path.GetDirectoryName(inputPath)!, outputFileName);
+    }
+
+    /// <summary>
+    /// 格式化文件大小为可读字符串
+    /// </summary>
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024.0):F1} MB";
+        return $"{bytes / (1024.0 * 1024.0 * 1024.0):F2} GB";
     }
 
     /// <summary>
@@ -441,6 +603,9 @@ public class RemoveBgViewModel : BaseViewModel
                 var filePath = filePaths[i];
                 try
                 {
+                    // 生成输出路径（如果用户选择了输出目录，则保存到该目录）
+                    var outputPath = GenerateOutputPath(filePath);
+
                     RemoveBgResult result;
                     if (_synthesizeBackground)
                     {
@@ -448,6 +613,7 @@ public class RemoveBgViewModel : BaseViewModel
                         var compositeColor = new List<int> { BgRed, BgGreen, BgBlue };
                         result = await _removeBgService.ProcessAsync(
                             filePath,
+                            outputPath: outputPath,
                             modelName: SelectedModelName,
                             alphaMatting: AlphaMatting,
                             outputRgba: false,
@@ -459,6 +625,7 @@ public class RemoveBgViewModel : BaseViewModel
                         // RGBA 透明输出模式
                         result = await _removeBgService.ProcessAsync(
                             filePath,
+                            outputPath: outputPath,
                             modelName: SelectedModelName,
                             alphaMatting: AlphaMatting,
                             outputRgba: OutputRgba,
@@ -542,7 +709,7 @@ public class RemoveBgViewModel : BaseViewModel
     }
 
     /// <summary>
-    /// 清除所有处理结果
+    /// 清除所有处理结果和待处理文件
     /// </summary>
     private void ClearResults()
     {
@@ -554,6 +721,39 @@ public class RemoveBgViewModel : BaseViewModel
         ProgressMax = 100;
         StatusMessage = "请选择文件";
         RefreshCommandStates();
+    }
+
+    /// <summary>
+    /// 清除所有待处理文件（不删除已处理结果）
+    /// </summary>
+    private void ClearPending()
+    {
+        PendingFiles.Clear();
+        ProgressValue = 0;
+        ProgressMax = 100;
+        StatusMessage = "请选择文件";
+        RefreshCommandStates();
+    }
+
+    /// <summary>
+    /// 从待处理列表中移除单个文件
+    /// </summary>
+    private void RemovePendingFile(PendingFileInfo? file)
+    {
+        if (file != null)
+            PendingFiles.Remove(file);
+
+        if (PendingFiles.Count == 0)
+        {
+            ProgressValue = 0;
+            ProgressMax = 100;
+            StatusMessage = "请选择文件";
+        }
+        else
+        {
+            ProgressMax = PendingFiles.Count;
+            StatusMessage = $"已选择 {PendingFiles.Count} 个文件，点击开始处理";
+        }
     }
 
     /// <summary>
@@ -605,6 +805,7 @@ public class RemoveBgViewModel : BaseViewModel
         (StartProcessingCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (CancelCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (ClearResultsCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (ClearPendingCommand as RelayCommand)?.RaiseCanExecuteChanged();
         (OpenOutputFileCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 }

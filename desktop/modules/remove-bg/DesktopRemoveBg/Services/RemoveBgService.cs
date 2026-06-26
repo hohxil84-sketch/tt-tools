@@ -70,10 +70,12 @@ public class RemoveBgService : IDisposable
     public RemoveBgService()
     {
         _pythonPath = AppSettings.Instance.PythonPath
-            ?? @"D:\localPath\venvs\local-worker-shared\Scripts\python.exe";
+            ?? @"D:\localPath\venvs\local-worker-remove-bg\Scripts\python.exe";
         _routerScriptPath = Path.Combine(
             Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!,
             "remove_bg_router.py");
+        _runtimeClient = new LocalRuntimeClient(_pythonPath, _routerScriptPath);
+        _runtimeClient.ProcessExited += OnProcessExited;
     }
 
     /// <summary>

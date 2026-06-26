@@ -36,113 +36,113 @@
             <RowDefinition Height="Auto"/>  <!-- 底部状态栏 -->
         </Grid.RowDefinitions>
 
-        <!-- ===== 工具栏 ===== -->
-        <Border Grid.Row="0" Padding="8" Background="{DynamicResource {x:Static SystemColors.ControlLightLightBrushKey}}"
+        <!-- ===== 工具栏（多行布局，避免窄窗口下元素遮挡） ===== -->
+        <Border Grid.Row="0" Padding="8,6" Background="{DynamicResource {x:Static SystemColors.ControlLightLightBrushKey}}"
                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="0,0,0,1">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+            <StackPanel>
+                <!-- 第1行：操作按钮 -->
+                <WrapPanel Margin="0,0,0,4">
+                    <Button Content="选择图片" Command="{Binding SelectFilesCommand}"
+                            Width="100" Height="30" Margin="0,0,8,4" FontSize="13"
+                            ToolTip="打开文件选择对话框，选择要抠图的图片文件"/>
+                    <Button Content="开始抠图" Command="{Binding StartProcessingCommand}"
+                            Width="100" Height="30" Margin="0,0,8,4" FontSize="13"
+                            ToolTip="对已选择的图片文件执行智能抠图"/>
+                    <Button Content="输出目录" Command="{Binding SelectOutputDirectoryCommand}"
+                            Width="80" Height="30" Margin="0,0,8,4" FontSize="13"
+                            ToolTip="选择抠图结果的保存目录（默认保存在源文件同目录）"/>
+                    <Button Content="打开文件" Command="{Binding OpenOutputFileCommand}"
+                            Width="80" Height="30" Margin="0,0,8,4" FontSize="13"
+                            ToolTip="在文件资源管理器中打开选中的输出文件"/>
+                    <Button Content="清除结果" Command="{Binding ClearResultsCommand}"
+                            Width="80" Height="30" Margin="0,0,8,4" FontSize="13"
+                            ToolTip="清除所有抠图处理结果"/>
+                    <Button Content="取消" Command="{Binding CancelCommand}"
+                            Width="60" Height="30" Margin="0,0,8,4" FontSize="13">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CanCancel}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </WrapPanel>
 
-                <Button Grid.Column="1" Content="选择图片" Command="{Binding SelectFilesCommand}"
-                        Width="100" Height="32" Margin="8,0" FontSize="13"
-                        ToolTip="打开文件选择对话框，选择要抠图的图片文件"/>
-                <Button Grid.Column="2" Content="开始抠图" Command="{Binding StartProcessingCommand}"
-                        Width="100" Height="32" Margin="0,0,8,0" FontSize="13"
-                        ToolTip="对已选择的图片文件执行智能抠图"/>
+                <!-- 输出目录提示 -->
+                <TextBlock Margin="0,0,0,6" FontSize="11" Foreground="Gray">
+                    <Run Text="📁 输出位置: "/>
+                    <Run Text="{Binding OutputDirectoryDisplay, Mode=OneWay}"/>
+                </TextBlock>
 
-                <!-- 参数区 -->
-                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0">
-
+                <!-- 第2行：抠图参数 -->
+                <WrapPanel Margin="0,0,0,2">
                     <!-- 模型选择 -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
                         <TextBlock Text="模型:" VerticalAlignment="Center" FontSize="12" Margin="0,0,4,0"/>
                         <ComboBox ItemsSource="{Binding AvailableModels}"
                                   SelectedValue="{Binding SelectedModelName}"
                                   SelectedValuePath="Name"
                                   DisplayMemberPath="DisplayText"
-                                  Width="240" Height="26" FontSize="12"
+                                  Width="180" Height="26" FontSize="12"
                                   ToolTip="选择要使用的抠图模型"/>
                     </StackPanel>
 
                     <!-- Alpha Matting 开关 -->
                     <CheckBox Content="Alpha Matting" IsChecked="{Binding AlphaMatting}"
-                              VerticalAlignment="Center" FontSize="12" Margin="0,0,12,0"
+                              VerticalAlignment="Center" FontSize="12" Margin="0,0,12,4"
                               ToolTip="启用后边缘更精细，但处理时间更长"/>
 
                     <!-- 输出格式 -->
                     <CheckBox Content="透明 PNG" IsChecked="{Binding OutputRgba}"
-                              VerticalAlignment="Center" FontSize="12" Margin="0,0,12,0"
+                              VerticalAlignment="Center" FontSize="12" Margin="0,0,12,4"
                               ToolTip="输出带透明通道的 PNG 格式（RGBA）"/>
 
                     <!-- 合成背景开关 -->
                     <CheckBox Content="合成背景" IsChecked="{Binding SynthesizeBackground}"
-                              VerticalAlignment="Center" FontSize="12" Margin="0,0,8,0"
+                              VerticalAlignment="Center" FontSize="12" Margin="0,0,8,4"
                               ToolTip="将抠图结果合成到纯色背景上"/>
+                </WrapPanel>
 
-                    <!-- 背景色预设按钮（仅在合成背景时显示） -->
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                Visibility="{Binding ShowBackgroundColorPicker, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <Button Content="白" Command="{Binding SetWhiteBackgroundCommand}"
-                                Width="28" Height="24" Margin="0,0,3,0" FontSize="11"
-                                Background="#FFFFFF" ToolTip="白色背景"/>
-                        <Button Content="红" Command="{Binding SetRedBackgroundCommand}"
-                                Width="28" Height="24" Margin="0,0,3,0" FontSize="11"
-                                Background="#FF0000" Foreground="White" ToolTip="红色背景（证件照常用）"/>
-                        <Button Content="蓝" Command="{Binding SetBlueBackgroundCommand}"
-                                Width="28" Height="24" Margin="0,0,6,0" FontSize="11"
-                                Background="#0000FF" Foreground="White" ToolTip="蓝色背景（证件照常用）"/>
+                <!-- 第3行：背景色设置（仅在"合成背景"勾选时显示） -->
+                <WrapPanel VerticalAlignment="Center"
+                            Visibility="{Binding ShowBackgroundColorPicker, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Button Content="白" Command="{Binding SetWhiteBackgroundCommand}"
+                            Width="28" Height="24" Margin="0,0,4,4" FontSize="11"
+                            Background="#FFFFFF" ToolTip="白色背景"/>
+                    <Button Content="红" Command="{Binding SetRedBackgroundCommand}"
+                            Width="28" Height="24" Margin="0,0,4,4" FontSize="11"
+                            Background="#FF0000" Foreground="White" ToolTip="红色背景（证件照常用）"/>
+                    <Button Content="蓝" Command="{Binding SetBlueBackgroundCommand}"
+                            Width="28" Height="24" Margin="0,0,8,4" FontSize="11"
+                            Background="#0000FF" Foreground="White" ToolTip="蓝色背景（证件照常用）"/>
 
-                        <!-- RGB 输入 -->
-                        <TextBlock Text="R:" VerticalAlignment="Center" FontSize="11" Margin="0,0,2,0"/>
-                        <TextBox Text="{Binding BgRed, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="36" Height="22" FontSize="11" TextAlignment="Center"
-                                 ToolTip="红色分量 (0-255)"/>
-                        <TextBlock Text="G:" VerticalAlignment="Center" FontSize="11" Margin="4,0,2,0"/>
-                        <TextBox Text="{Binding BgGreen, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="36" Height="22" FontSize="11" TextAlignment="Center"
-                                 ToolTip="绿色分量 (0-255)"/>
-                        <TextBlock Text="B:" VerticalAlignment="Center" FontSize="11" Margin="4,0,2,0"/>
-                        <TextBox Text="{Binding BgBlue, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="36" Height="22" FontSize="11" TextAlignment="Center"
-                                 ToolTip="蓝色分量 (0-255)"/>
+                    <!-- RGB 输入 -->
+                    <TextBlock Text="R:" VerticalAlignment="Center" FontSize="11" Margin="0,0,2,4"/>
+                    <TextBox Text="{Binding BgRed, UpdateSourceTrigger=PropertyChanged}"
+                             Width="36" Height="22" FontSize="11" TextAlignment="Center"
+                             ToolTip="红色分量 (0-255)" Margin="0,0,4,4"/>
+                    <TextBlock Text="G:" VerticalAlignment="Center" FontSize="11" Margin="0,0,2,4"/>
+                    <TextBox Text="{Binding BgGreen, UpdateSourceTrigger=PropertyChanged}"
+                             Width="36" Height="22" FontSize="11" TextAlignment="Center"
+                             ToolTip="绿色分量 (0-255)" Margin="0,0,4,4"/>
+                    <TextBlock Text="B:" VerticalAlignment="Center" FontSize="11" Margin="0,0,2,4"/>
+                    <TextBox Text="{Binding BgBlue, UpdateSourceTrigger=PropertyChanged}"
+                             Width="36" Height="22" FontSize="11" TextAlignment="Center"
+                             ToolTip="蓝色分量 (0-255)" Margin="0,0,4,4"/>
 
-                        <!-- 颜色预览 -->
-                        <Rectangle Width="24" Height="24" RadiusX="3" RadiusY="3" Margin="6,0,0,0"
-                                   Stroke="Gray" StrokeThickness="1">
-                            <Rectangle.Fill>
-                                <SolidColorBrush Color="{Binding BackgroundColorPreview}"/>
-                            </Rectangle.Fill>
-                        </Rectangle>
-                    </StackPanel>
-                </StackPanel>
-
-                <Button Grid.Column="4" Content="打开文件" Command="{Binding OpenOutputFileCommand}"
-                        Width="80" Height="32" Margin="4,0" FontSize="13"
-                        ToolTip="在文件资源管理器中打开选中的输出文件"/>
-                <Button Grid.Column="5" Content="清除结果" Command="{Binding ClearResultsCommand}"
-                        Width="80" Height="32" Margin="4,0" FontSize="13"
-                        ToolTip="清除所有抠图处理结果"/>
-                <Button Grid.Column="6" Content="取消" Command="{Binding CancelCommand}"
-                        Width="60" Height="32" Margin="4,0" FontSize="13">
-                    <Button.Style>
-                        <Style TargetType="Button">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding CanCancel}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-            </Grid>
+                    <!-- 颜色预览 -->
+                    <Rectangle Width="24" Height="24" RadiusX="3" RadiusY="3" Margin="0,0,0,4"
+                               Stroke="Gray" StrokeThickness="1">
+                        <Rectangle.Fill>
+                            <SolidColorBrush Color="{Binding BackgroundColorPreview}"/>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                </WrapPanel>
+            </StackPanel>
         </Border>
 
         <!-- ===== 错误提示条 ===== -->
@@ -164,103 +164,238 @@
         <!-- ===== 主内容区：左右分栏 ===== -->
         <Grid Grid.Row="2" Margin="0,8,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" MinWidth="240"/>  <!-- 结果列表 -->
+                <ColumnDefinition Width="350" MinWidth="280"/>  <!-- 文件列表 -->
                 <ColumnDefinition Width="Auto"/>                <!-- 分隔线 -->
                 <ColumnDefinition Width="*" MinWidth="400"/>    <!-- 详情预览 -->
             </Grid.ColumnDefinitions>
 
-            <!-- 左侧：结果列表 -->
+            <!-- 左侧：待处理文件 + 抠图结果（上下分区） -->
             <Border Grid.Column="0" BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
                     BorderThickness="1" CornerRadius="4">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*" MinHeight="120"/>  <!-- 待处理文件 -->
+                        <RowDefinition Height="Auto"/>               <!-- 分隔条 -->
+                        <RowDefinition Height="*" MinHeight="120"/>  <!-- 抠图结果 -->
                     </Grid.RowDefinitions>
 
-                    <!-- 结果列表标题 -->
-                    <Border Grid.Row="0" Padding="8,6"
-                            Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}">
-                        <TextBlock FontSize="14" FontWeight="SemiBold">
-                            <Run Text="抠图结果 "/>
-                            <Run Text="{Binding ResultCount, Mode=OneWay, StringFormat=({0})}" FontSize="12" Foreground="Gray"/>
+                    <!-- ===== 上半部分：待处理文件列表 ===== -->
+                    <Grid Grid.Row="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- 待处理文件标题 -->
+                        <Border Grid.Row="0" Padding="8,6"
+                                Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" FontSize="13" FontWeight="SemiBold">
+                                    <Run Text="📋 待处理 ("/>
+                                    <Run Text="{Binding PendingFiles.Count, Mode=OneWay}" FontWeight="Bold"/>
+                                    <Run Text=")"/>
+                                </TextBlock>
+                                <Button Grid.Column="1" Content="✕ 清空" FontSize="11"
+                                        Height="22" Padding="6,0"
+                                        Command="{Binding ClearPendingCommand}"
+                                        ToolTip="清空所有待处理文件"
+                                        Visibility="{Binding HasPendingFiles, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- 待处理文件列表（含缩略图） -->
+                        <ListBox Grid.Row="1" ItemsSource="{Binding PendingFiles}"
+                                 BorderThickness="0" Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="6,4" Margin="2,1" CornerRadius="4"
+                                            Background="Transparent">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- 缩略图 -->
+                                            <Border Grid.Column="0" Width="72" Height="48"
+                                                    Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                                                    CornerRadius="3" Margin="0,0,8,0"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Image Source="{Binding Thumbnail}"
+                                                       Stretch="Uniform"
+                                                       StretchDirection="Both"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"/>
+                                            </Border>
+
+                                            <!-- 文件信息 -->
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding FileName}" FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding FilePath}"/>
+                                                <TextBlock Text="{Binding FileSizeDisplay}" FontSize="10"
+                                                           Foreground="Gray" Margin="0,2,0,0"/>
+                                            </StackPanel>
+
+                                            <!-- 移除按钮 -->
+                                            <Button Grid.Column="2" Content="✕" Width="24" Height="24"
+                                                    FontSize="11" Background="Transparent"
+                                                    BorderThickness="0" Foreground="Gray"
+                                                    Cursor="Hand" VerticalAlignment="Center"
+                                                    Command="{Binding DataContext.RemovePendingFileCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="从待处理列表中移除此文件"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <!-- 无待处理文件时的提示 -->
+                        <TextBlock Grid.Row="1" Text="点击「选择图片」添加要抠图的文件"
+                                   FontSize="12" Foreground="Gray"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasPendingFiles}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
                         </TextBlock>
-                    </Border>
+                    </Grid>
 
-                    <!-- 结果列表 -->
-                    <ListBox Grid.Row="1" ItemsSource="{Binding Results}"
-                             SelectedItem="{Binding SelectedResult}"
-                             BorderThickness="0" Background="Transparent"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="8,6" Margin="2" CornerRadius="3"
-                                        Background="Transparent">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
+                    <!-- 分隔条 -->
+                    <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch"
+                                  Background="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                                  ShowsPreview="True" ResizeBehavior="PreviousAndNext"/>
 
-                                        <!-- 文件名 -->
-                                        <TextBlock Grid.Row="0" FontSize="13" FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   ToolTip="{Binding InputPath}">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                    <!-- ===== 下半部分：抠图结果列表 ===== -->
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                                        <!-- 模型和尺寸信息 -->
-                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0">
-                                            <TextBlock FontSize="11" Foreground="Gray">
-                                                <Run Text="模型: "/>
-                                                <Run Text="{Binding ModelSummary, Mode=OneWay}"/>
+                        <!-- 结果列表标题 -->
+                        <Border Grid.Row="0" Padding="8,6"
+                                Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}">
+                            <TextBlock FontSize="13" FontWeight="SemiBold">
+                                <Run Text="✨ 抠图结果 ("/>
+                                <Run Text="{Binding ResultCount, Mode=OneWay}" FontWeight="Bold"/>
+                                <Run Text=")"/>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- 结果列表 -->
+                        <ListBox Grid.Row="1" ItemsSource="{Binding Results}"
+                                 SelectedItem="{Binding SelectedResult}"
+                                 BorderThickness="0" Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="8,5" Margin="2,1" CornerRadius="4"
+                                            Background="Transparent">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- 文件名 -->
+                                            <TextBlock Grid.Row="0" FontSize="12" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding InputFileName}"
+                                                       ToolTip="{Binding InputPath}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
                                             </TextBlock>
-                                            <TextBlock FontSize="11" Foreground="Gray" Margin="8,0,0,0">
-                                                <Run Text="输出: "/>
-                                                <Run Text="{Binding OutputSizeSummary, Mode=OneWay}"/>
-                                            </TextBlock>
-                                        </StackPanel>
 
-                                        <!-- 格式和前景占比 -->
-                                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,2,0,0">
-                                            <TextBlock FontSize="11" Foreground="Gray">
-                                                <Run Text="格式: "/>
-                                                <Run Text="{Binding OutputFormatSummary, Mode=OneWay}"/>
-                                            </TextBlock>
-                                            <TextBlock FontSize="11" Foreground="{StaticResource InfoBrush}" Margin="8,0,0,0">
-                                                <Run Text="前景: "/>
-                                                <Run Text="{Binding ForegroundRatioSummary, Mode=OneWay}"/>
-                                            </TextBlock>
-                                        </StackPanel>
+                                            <!-- 成功时：模型和尺寸信息 -->
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <TextBlock FontSize="11" Foreground="Gray">
+                                                    <Run Text="模型: "/>
+                                                    <Run Text="{Binding ModelSummary, Mode=OneWay}"/>
+                                                </TextBlock>
+                                                <TextBlock FontSize="11" Foreground="Gray" Margin="10,0,0,0">
+                                                    <Run Text="输出: "/>
+                                                    <Run Text="{Binding OutputSizeSummary, Mode=OneWay}"/>
+                                                </TextBlock>
+                                                <TextBlock FontSize="11" Foreground="{StaticResource InfoBrush}" Margin="10,0,0,0">
+                                                    <Run Text="前景: "/>
+                                                    <Run Text="{Binding ForegroundRatioSummary, Mode=OneWay}"/>
+                                                </TextBlock>
+                                            </StackPanel>
 
-                                        <!-- 失败标记 -->
-                                        <TextBlock Grid.Row="1" Text="✕ 抠图失败" FontSize="12"
-                                                   Foreground="{StaticResource ErrorBrush}" Margin="0,2,0,0">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                                            <!-- 失败时：错误信息 -->
+                                            <StackPanel Grid.Row="1" Margin="0,2,0,0">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <TextBlock FontSize="11" Foreground="{StaticResource ErrorBrush}"
+                                                           Text="✕ 抠图失败" FontWeight="SemiBold"/>
+                                                <TextBlock FontSize="10" Foreground="Gray"
+                                                           Text="{Binding ErrorMessage, TargetNullValue='未知错误'}"
+                                                           TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <!-- 无结果时的提示 -->
+                        <TextBlock Grid.Row="1" FontSize="12" Foreground="Gray"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Text="处理完成后结果将显示在这里">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ResultCount}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding ResultCount}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
                 </Grid>
             </Border>
 

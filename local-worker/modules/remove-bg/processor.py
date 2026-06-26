@@ -25,6 +25,7 @@ local-worker/modules/remove-bg/processor — 智能抠图核心处理器
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -80,13 +81,15 @@ _model_cache: Dict[str, Any] = {}
 # 全局 Session 缓存：rembg 的 Session 对象
 
 
-def _get_session(model_name: str = DEFAULT_MODEL) -> Any:
+def _get_session(model_name: str = DEFAULT_MODEL, models_dir: Optional[str] = None) -> Any:
     """获取或创建 rembg Session。
 
     Session 会被缓存到模块级字典中，避免重复加载模型（模型加载耗时较长）。
 
     参数：
         model_name: 模型名称。
+        models_dir: 本地模型文件目录。如果提供且目录中存在对应 .onnx 文件，
+                    则优先从本地加载，不触发网络下载。
 
     返回：
         rembg.Session 实例。
@@ -100,7 +103,17 @@ def _get_session(model_name: str = DEFAULT_MODEL) -> Any:
             f"不支持的模型名称: {model_name}，支持: {SUPPORTED_MODELS}"
         )
 
-    if model_name not in _model_cache:
+    # 如果指定了本地模型目录且文件存在，使用本地路径（避免联网下载）
+    session_key = model_name
+    session_load_arg: Any = model_name  # 传给 new_session 的参数：名称或本地路径
+    if models_dir:
+        local_path = Path(models_dir) / f"{model_name}.onnx"
+        if local_path.exists():
+            session_key = f"local:{model_name}"  # 使用不同的缓存 key 区分本地/远程加载
+            session_load_arg = str(local_path)
+            logger.info("从本地模型文件加载: %s", local_path)
+
+    if session_key not in _model_cache:
         # 延迟导入：只在第一次使用时加载 rembg
         try:
             from rembg import new_session  # type: ignore
@@ -109,10 +122,10 @@ def _get_session(model_name: str = DEFAULT_MODEL) -> Any:
                 "rembg 未安装。请运行: pip install rembg"
             )
         logger.info("正在加载抠图模型: %s ...", model_name)
-        _model_cache[model_name] = new_session(model_name)
+        _model_cache[session_key] = new_session(session_load_arg)
         logger.info("抠图模型加载完成: %s", model_name)
 
-    return _model_cache[model_name]
+    return _model_cache[session_key]
 
 
 def clear_model_cache(model_name: Optional[str] = None) -> None:
@@ -140,6 +153,7 @@ def remove_background(
     alpha_matting_background_threshold: int = 10,
     alpha_matting_erode_size: int = 10,
     only_mask: bool = False,
+    models_dir: Optional[str] = None,
 ) -> RemoveBgResult:
     """去除图像背景，返回带透明通道的结果。
 
@@ -153,6 +167,7 @@ def remove_background(
         alpha_matting_background_threshold: Alpha Matting 背景阈值。
         alpha_matting_erode_size: Alpha Matting 腐蚀核大小。
         only_mask: 是否只返回 Alpha 遮罩（不从原图提取前景）。
+        models_dir: 本地模型文件目录，优先从该目录加载 .onnx 而不联网下载。
 
     返回：
         RemoveBgResult 对象，包含 RGBA 图像和元信息。
@@ -176,8 +191,8 @@ def remove_background(
 
     input_h, input_w = image.shape[:2]
 
-    # 获取模型 session
-    session = _get_session(model_name)
+    # 获取模型 session（优先从本地模型目录加载）
+    session = _get_session(model_name, models_dir=models_dir)
 
     # 准备输入数据（rembg 接受 PIL Image 或 numpy array）
     # rembg 内部使用 PIL 读取，可直接传 numpy array
@@ -320,6 +335,7 @@ def remove_background_from_path(
     alpha_matting: bool = False,
     output_rgba: bool = True,
     composite_color: Optional[Tuple[int, int, int]] = None,
+    models_dir: Optional[str] = None,
 ) -> RemoveBgResult:
     """从文件读取图像，去除背景后保存。
 
@@ -333,6 +349,7 @@ def remove_background_from_path(
         output_rgba: 是否输出带透明通道的 PNG。如果为 False 且未指定 composite_color，
                      默认使用白色背景合成。
         composite_color: 合成背景色 RGB 元组。如果指定，输出会合成为不透明图像。
+        models_dir: 本地模型文件目录，优先从该目录加载 .onnx 而不联网下载。
 
     返回：
         RemoveBgResult 对象。
@@ -359,6 +376,7 @@ def remove_background_from_path(
         image=image,
         model_name=model_name,
         alpha_matting=alpha_matting,
+        models_dir=models_dir,
     )
 
     # 决定输出格式
