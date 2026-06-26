@@ -138,7 +138,7 @@ public partial class MainWindow : Window
             "FormatConvert"   => new FormatConvertView { DataContext = new TTTools.FormatConvert.ViewModels.FormatConvertViewModel() },
             "PdfImageConvert" => new PdfImageConvertView { DataContext = new TTTools.PdfImageConvert.ViewModels.PdfImageConvertViewModel(new TTTools.PdfImageConvert.Services.PdfImageConvertService(), _authState, new FileSystemService()) },
             "IdPhoto"         => new IdPhotoView { DataContext = new TTTools.IdPhoto.ViewModels.IdPhotoViewModel() },
-            "RemoveBg"        => new RemoveBgView { DataContext = new TTTools.RemoveBg.ViewModels.RemoveBgViewModel() },
+            "RemoveBg"        => CreateRemoveBgView(),
 
             // 系统
             "Login"           => new LoginView { DataContext = new LoginViewModel(_authState, _apiClient) },
@@ -152,6 +152,21 @@ public partial class MainWindow : Window
         };
 
         StatusText.Text = $"当前：{GetPageName(tag)}";
+    }
+
+    /// <summary>
+    /// 创建智能抠图视图并初始化抠图引擎。
+    /// 抠图是本地免费功能，通过 LocalRuntimeClient 启动 Python worker 进程。
+    /// </summary>
+    private static RemoveBgView CreateRemoveBgView()
+    {
+        var service = new TTTools.RemoveBg.Services.RemoveBgService();
+        var viewModel = new TTTools.RemoveBg.ViewModels.RemoveBgViewModel(
+            service, new FileSystemService());
+        var view = new RemoveBgView { DataContext = viewModel };
+        // 异步初始化抠图引擎（fire-and-forget，初始化结果通过 ViewModel 状态反映到 UI）
+        _ = viewModel.InitializeAsync();
+        return view;
     }
 
     /// <summary>

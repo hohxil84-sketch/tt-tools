@@ -11,6 +11,10 @@ namespace TTTools.RemoveBg.Tests.ViewModels;
 /// </summary>
 public class RemoveBgViewModelTests
 {
+    /// <summary>创建一个测试用的 PendingFileInfo 实例</summary>
+    private static PendingFileInfo CreateTestPendingFile(string path = @"C:\test\image.png")
+        => new() { FilePath = path, FileSizeDisplay = "100 KB" };
+
     [Fact]
     public void Constructor_Default_ShouldSetInitialState()
     {
@@ -54,6 +58,8 @@ public class RemoveBgViewModelTests
         Assert.NotNull(vm.SetWhiteBackgroundCommand);
         Assert.NotNull(vm.SetRedBackgroundCommand);
         Assert.NotNull(vm.SetBlueBackgroundCommand);
+        Assert.NotNull(vm.ClearPendingCommand);
+        Assert.NotNull(vm.RemovePendingFileCommand);
     }
 
     [Fact]
@@ -71,7 +77,7 @@ public class RemoveBgViewModelTests
         vm.IsServiceAvailable = true;
         // CanStart 还依赖 PendingFiles，此时无待处理文件 → false
         Assert.False(vm.CanStart);
-        vm.PendingFiles.Add(@"C:\test\image.png");
+        vm.PendingFiles.Add(CreateTestPendingFile());
         Assert.True(vm.CanStart);
         // ServiceStatusText 属性仍然保留供内部使用
         Assert.Equal("抠图引擎就绪", vm.ServiceStatusText);
@@ -82,7 +88,7 @@ public class RemoveBgViewModelTests
     {
         var vm = new RemoveBgViewModel();
         vm.IsServiceAvailable = true;
-        vm.PendingFiles.Add(@"C:\test\image.png");
+        vm.PendingFiles.Add(CreateTestPendingFile());
         Assert.True(vm.CanStart);
 
         vm.IsRunning = true;
@@ -263,6 +269,7 @@ public class RemoveBgViewModelTests
     {
         var vm = new RemoveBgViewModel();
         vm.Results.Add(new RemoveBgResult { InputPath = "test.png", IsSuccess = true });
+        vm.PendingFiles.Add(CreateTestPendingFile());
         vm.SelectedResult = vm.Results[0];
         vm.ErrorMessage = "some error";
 
@@ -290,10 +297,13 @@ public class RemoveBgViewModelTests
     }
 
     [Fact]
-    public void AvailableModels_ShouldBeEmptyByDefault()
+    public void AvailableModels_ShouldHaveDefaultsAfterConstruction()
     {
+        // 构造时自动填充默认模型列表（硬编码兜底）
         var vm = new RemoveBgViewModel();
-        Assert.Empty(vm.AvailableModels);
+        Assert.NotEmpty(vm.AvailableModels);
+        Assert.Contains(vm.AvailableModels, m => m.Name == "u2net" && m.IsDefault);
+        Assert.Equal(5, vm.AvailableModels.Count);
     }
 
     [Fact]
@@ -308,15 +318,15 @@ public class RemoveBgViewModelTests
 
     /// <summary>ProcessDroppedFiles 只加入待处理列表，不自动触发处理</summary>
     [Fact]
-    public void ProcessDroppedFiles_ShouldOnlyAddToPending_NotTriggerProcessing()
+    public void PendingFiles_Add_ShouldNotTriggerProcessing()
     {
         var vm = new RemoveBgViewModel();
         Assert.False(vm.IsRunning);
-        Assert.Equal(0, vm.PendingFiles.Count);
+        Assert.Empty(vm.PendingFiles);
         // 验证 HasPendingFiles 随 PendingFiles 变化
-        vm.PendingFiles.Add(@"C:\test\image.png");
+        vm.PendingFiles.Add(CreateTestPendingFile());
         Assert.True(vm.HasPendingFiles);
-        Assert.Equal(1, vm.PendingFiles.Count);
+        Assert.Single(vm.PendingFiles);
         Assert.False(vm.IsRunning); // 仍在等待，未自动处理
     }
 
@@ -335,17 +345,17 @@ public class RemoveBgViewModelTests
     {
         var vm = new RemoveBgViewModel();
         vm.IsServiceAvailable = true;
-        vm.PendingFiles.Add(@"C:\test\image.png");
+        vm.PendingFiles.Add(CreateTestPendingFile());
         Assert.True(vm.CanStart);
     }
 
-    /// <summary>服务不可用时 CanStart 为 false（即使有文件）</summary>
+    /// <summary>服务不可用时 CanStart 仍为 true（服务按需初始化，不阻塞按钮）</summary>
     [Fact]
-    public void CanStart_ShouldBeFalse_WhenServiceUnavailable()
+    public void CanStart_ShouldBeTrue_WhenHasFiles_EvenIfServiceUnavailable()
     {
         var vm = new RemoveBgViewModel();
-        vm.PendingFiles.Add(@"C:\test\image.png");
-        Assert.False(vm.CanStart); // 服务不可用
+        vm.PendingFiles.Add(CreateTestPendingFile());
+        Assert.True(vm.CanStart); // 服务不可用不阻塞操作，点击时才尝试启动
     }
 
     /// <summary>取消后 StatusMessage 应反映已取消</summary>
@@ -368,8 +378,52 @@ public class RemoveBgViewModelTests
     {
         var vm = new RemoveBgViewModel();
         Assert.False(vm.HasPendingFiles);
-        vm.PendingFiles.Add(@"C:\test\image.png");
+        vm.PendingFiles.Add(CreateTestPendingFile());
         Assert.True(vm.HasPendingFiles);
         Assert.Single(vm.PendingFiles);
+    }
+
+    /// <summary>RemovePendingFile 命令应移除单个文件</summary>
+    [Fact]
+    public void RemovePendingFile_ShouldRemoveFile()
+    {
+        var vm = new RemoveBgViewModel();
+        var file = CreateTestPendingFile();
+        vm.PendingFiles.Add(file);
+        Assert.Single(vm.PendingFiles);
+
+        (vm.RemovePendingFileCommand as TTShared.UI.RelayCommand<PendingFileInfo?>)!.Execute(file);
+        Assert.Empty(vm.PendingFiles);
+    }
+
+    /// <summary>ClearPending 命令应清空待处理列表但不影响结果</summary>
+    [Fact]
+    public void ClearPending_ShouldClearPendingFilesButNotResults()
+    {
+        var vm = new RemoveBgViewModel();
+        vm.Results.Add(new RemoveBgResult { InputPath = "done.png", IsSuccess = true });
+        vm.PendingFiles.Add(CreateTestPendingFile());
+        Assert.Single(vm.Results);
+        Assert.Single(vm.PendingFiles);
+
+        vm.ClearPendingCommand.Execute(null);
+        Assert.Single(vm.Results); // 结果不受影响
+        Assert.Empty(vm.PendingFiles);
+    }
+
+    /// <summary>PendingFileInfo 属性计算应正确</summary>
+    [Fact]
+    public void PendingFileInfo_ShouldComputeFileName()
+    {
+        var file = new PendingFileInfo { FilePath = @"C:\photos\vacation.jpg" };
+        Assert.Equal("vacation.jpg", file.FileName);
+    }
+
+    /// <summary>PendingFileInfo 空路径应返回未知文件</summary>
+    [Fact]
+    public void PendingFileInfo_EmptyPath_ShouldReturnUnknownFileName()
+    {
+        var file = new PendingFileInfo { FilePath = "" };
+        Assert.Equal("未知文件", file.FileName);
     }
 }

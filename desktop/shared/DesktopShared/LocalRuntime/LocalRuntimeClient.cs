@@ -15,6 +15,7 @@ public class LocalRuntimeClient : IDisposable
     private readonly string _pythonPath;
     private readonly string _workerScriptPath;
     private readonly TimeSpan _startTimeout = TimeSpan.FromSeconds(30);
+    private readonly List<string> _stderrLines = new();  // 收集 stderr 用于诊断
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -23,6 +24,9 @@ public class LocalRuntimeClient : IDisposable
 
     /// <summary>worker 进程是否正在运行</summary>
     public bool IsRunning => _process != null && !_process.HasExited;
+
+    /// <summary>最近收集的 stderr 输出（用于诊断）</summary>
+    public string LastStderr => string.Join("\n", _stderrLines.TakeLast(20));
 
     /// <summary>进程退出事件</summary>
     public event EventHandler<int>? ProcessExited;
@@ -63,20 +67,32 @@ public class LocalRuntimeClient : IDisposable
                 RedirectStandardError = true,
                 CreateNoWindow = true,
                 StandardOutputEncoding = Encoding.UTF8,
-                StandardInputEncoding = Encoding.UTF8
+                StandardInputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
             },
             EnableRaisingEvents = true
         };
 
+        // 设置环境变量：确保 Python 子进程使用 UTF-8 编码，禁用输出缓冲
+        _process.StartInfo.Environment["PYTHONIOENCODING"] = "utf-8";
+        _process.StartInfo.Environment["PYTHONUNBUFFERED"] = "1";
+
         _process.Exited += OnProcessExited;
+        _stderrLines.Clear();
+        // 收集 stderr 用于诊断
+        _process.ErrorDataReceived += (_, args) =>
+        {
+            if (!string.IsNullOrEmpty(args.Data))
+                _stderrLines.Add(args.Data);
+        };
 
         try
         {
             _process.Start();
             _process.BeginErrorReadLine(); // 避免 stderr 缓冲区满导致阻塞
 
-            // 等待进程启动就绪（简单的超时等待）
-            await Task.Delay(500, ct);
+            // 等待进程启动就绪（给 Python 导入模块留足时间）
+            await Task.Delay(2000, ct);
             return !_process.HasExited;
         }
         catch (Exception)
@@ -115,9 +131,10 @@ public class LocalRuntimeClient : IDisposable
         await _process!.StandardInput.WriteAsync(requestLine);
         await _process.StandardInput.FlushAsync(ct);
 
-        // 通过 stdout 读取响应（单行 JSON），使用 60 秒超时
+        // 通过 stdout 读取响应（单行 JSON），使用 300 秒超时
+        // 首次运行 rembg 需下载 ONNX 模型（u2net 约 179MB），慢速网络可能需要数分钟
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(60));
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(300));
 
         string? responseJson;
         try
@@ -136,11 +153,19 @@ public class LocalRuntimeClient : IDisposable
         }
         catch (OperationCanceledException)
         {
-            throw new TimeoutException($"本地 worker 操作超时：{action}");
+            var stderrInfo = _stderrLines.Count > 0
+                ? $"\n[stderr 最近输出]: {string.Join(" | ", _stderrLines.TakeLast(5))}"
+                : "";
+            throw new TimeoutException($"本地 worker 操作超时：{action}{stderrInfo}");
         }
 
         if (string.IsNullOrEmpty(responseJson))
-            throw new InvalidOperationException("本地 worker 返回空响应");
+        {
+            var stderrInfo = _stderrLines.Count > 0
+                ? $"\n[stderr 输出]: {string.Join(" | ", _stderrLines.TakeLast(10))}"
+                : "\n[stderr 无输出，进程可能已崩溃]";
+            throw new InvalidOperationException($"本地 worker 返回空响应（进程可能已退出）{stderrInfo}");
+        }
 
         return JsonSerializer.Deserialize<TResponse>(responseJson, JsonOptions);
     }

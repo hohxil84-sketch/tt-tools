@@ -1,3 +1,6 @@
+using System.Windows.Media.Imaging;
+using TTShared.UI;
+
 namespace TTTools.RemoveBg.Models;
 
 /// <summary>
@@ -177,5 +180,64 @@ public class RemoveBgResult
         }
 
         return result;
+    }
+}
+
+/// <summary>
+/// 待处理文件信息模型
+/// 用于在 UI 待处理列表中展示缩略图、文件名、文件大小等信息。
+/// </summary>
+public class PendingFileInfo : BaseViewModel
+{
+    private BitmapImage? _thumbnail;
+
+    /// <summary>文件完整路径</summary>
+    public string FilePath { get; set; } = string.Empty;
+
+    /// <summary>文件名（用于显示）</summary>
+    public string FileName => string.IsNullOrEmpty(FilePath) ? "未知文件" : Path.GetFileName(FilePath);
+
+    /// <summary>文件大小显示文本</summary>
+    public string FileSizeDisplay { get; set; } = string.Empty;
+
+    /// <summary>缩略图（异步加载）</summary>
+    public BitmapImage? Thumbnail
+    {
+        get => _thumbnail;
+        set => SetProperty(ref _thumbnail, value);
+    }
+
+    /// <summary>
+    /// 异步加载缩略图（在后台线程解码图片，缩放到指定尺寸）
+    /// </summary>
+    /// <param name="maxWidth">缩略图最大宽度（像素）</param>
+    /// <param name="maxHeight">缩略图最大高度（像素）</param>
+    public async Task LoadThumbnailAsync(int maxWidth = 120, int maxHeight = 80)
+    {
+        if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
+            return;
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                // 创建低分辨率缩略图以减少内存占用
+                var bitmap = new BitmapImage();
+                bitmap.BeginInit();
+                bitmap.UriSource = new Uri(FilePath);
+                bitmap.DecodePixelWidth = maxWidth;
+                bitmap.DecodePixelHeight = maxHeight;
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+                bitmap.EndInit();
+                bitmap.Freeze(); // 允许跨线程访问
+
+                Thumbnail = bitmap;
+            }
+            catch
+            {
+                // 缩略图加载失败不是致命错误，保持 Thumbnail 为 null
+            }
+        });
     }
 }

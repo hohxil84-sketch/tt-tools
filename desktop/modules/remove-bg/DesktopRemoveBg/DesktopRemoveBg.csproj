@@ -34,4 +34,12 @@
     </None>
   </ItemGroup>
 
+  <!-- 将本地 ONNX 模型文件复制到输出目录（随安装包分发，避免用户首次使用时联网下载） -->
+  <ItemGroup>
+    <None Update="remove_bg_models\*.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>remove_bg_models\%(Filename)%(Extension)</Link>
+    </None>
+  </ItemGroup>
+
 </Project>

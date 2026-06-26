@@ -44,6 +44,15 @@ from processor import (
     DEFAULT_MODEL,
 )
 
+# 本地模型目录（与安装包一起分发，优先从本地加载 .onnx 文件）
+# 目录位于此脚本同级目录下的 remove_bg_models/ 中
+_MODELS_DIR = str(Path(__file__).parent / "remove_bg_models")
+if Path(_MODELS_DIR).is_dir():
+    _LOCAL_MODELS_AVAILABLE = True
+else:
+    _LOCAL_MODELS_AVAILABLE = False
+    _MODELS_DIR = None
+
 
 def send_response(
     success: bool,
@@ -180,6 +189,7 @@ def handle_remove_background(data: Dict[str, Any], request_id: Optional[str]) ->
 
     try:
         # 调用 local-worker remove-bg 引擎
+        # 优先使用安装包自带的本地模型，避免用户首次使用时联网下载
         result = remove_background_from_path(
             input_path=str(input_path),
             output_path=str(output_path),
@@ -187,6 +197,7 @@ def handle_remove_background(data: Dict[str, Any], request_id: Optional[str]) ->
             alpha_matting=alpha_matting,
             output_rgba=output_rgba,
             composite_color=composite_color_tuple,
+            models_dir=_MODELS_DIR,
         )
 
         # 构建响应数据
@@ -276,6 +287,10 @@ ACTION_HANDLERS = {
 
 def main() -> None:
     """主循环：逐行读取 stdin JSON 请求，分发到对应处理器，输出响应。"""
+    # 强制 stdout/stderr 使用 UTF-8 编码，避免 Windows 管道中文乱码
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
     for line in sys.stdin:
         line = line.strip()
         if not line:
