@@ -124,6 +124,13 @@
 ## 提交记录
 
 ```
+2026-06-26: fix(id-photo): 修复JPEG/BMP导出失败 + 默认选择1寸规格和白色底色
+  分支: fix/id-photo-jpeg-bmp-export-default-spec
+  提交哈希: 39a8a95
+  已推送到 origin
+  测试结果: Python 58/58 + C# 23/23 全部通过
+  说明: router 向 processor 传入 output_format 防止格式回退为 PNG；ViewModel 默认选中1寸和白色
+
 2026-06-21: feat(desktop-id-photo): 完成证件照换底色桌面模块
   分支: feature/desktop-id-photo
   提交哈希: 1ca1c68
