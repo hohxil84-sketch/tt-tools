@@ -63,7 +63,10 @@ _PROVIDER_RUNTIME_DIR = os.path.join(
 # 可以安全地通过 sys.path 临时切换导入。
 
 # 可能冲突的模块名（provider-runtime 内部使用）
-_PR_CONFLICT_NAMES = {"models", "mock", "router", "base", "errors", "cost"}
+_PR_CONFLICT_NAMES = {
+    "models", "mock", "router", "base", "errors", "cost",
+    "registry", "config", "deepseek", "doubao", "http_utils",
+}
 
 
 def _import_from_provider_runtime(source_name: str, *names: str):
@@ -108,11 +111,11 @@ def _import_from_provider_runtime(source_name: str, *names: str):
 ProviderCallRequest, ChatMessage = _import_from_provider_runtime(
     "models", "ProviderCallRequest", "ChatMessage",
 )
-MockProvider = _import_from_provider_runtime(
-    "mock", "MockProvider",
-)
 ProviderRouter = _import_from_provider_runtime(
     "router", "ProviderRouter",
+)
+create_default_router, IMAGE_GENERATION, CHEAP = _import_from_provider_runtime(
+    "registry", "create_default_router", "IMAGE_GENERATION", "CHEAP",
 )
 
 
@@ -130,17 +133,18 @@ _DEFAULT_CREDITS_PER_CALL = 2
 _utcnow = lambda: datetime.now(timezone.utc)
 
 # Mock 效果图文件列表（模拟 AI 生成的结果文件）
+# 注意：Mock 阶段 URL 为 null，真实图片生成 Provider 接入后替换
 _MOCK_RESULT_FILES: List[dict] = [
     {
         "file_id": "00000000-0000-0000-0000-000000000001",
-        "url": "https://mock-cdn.tt-tools.com/render/result_01.png",
+        "url": None,
         "mime_type": "image/png",
         "width": 1920,
         "height": 1080,
     },
     {
         "file_id": "00000000-0000-0000-0000-000000000002",
-        "url": "https://mock-cdn.tt-tools.com/render/result_02.png",
+        "url": None,
         "mime_type": "image/png",
         "width": 1024,
         "height": 1024,
@@ -328,7 +332,8 @@ async def create_render_task(
     )
 
     # ---- 步骤 7: 更新任务为 succeeded，写入结果 ----
-    mock_result_files = _build_mock_result_files()
+    # 优先使用 Provider 返回的真实文件列表，无文件时回退 Mock
+    result_files = _normalize_result_files(provider_result.files or [])
     await _update_task_result(
         db=db,
         task_id=task_id,
@@ -338,7 +343,7 @@ async def create_render_task(
         model=provider_result.model,
         estimated_cost=provider_result.estimated_cost,
         credits_charged=_DEFAULT_CREDITS_PER_CALL,
-        result_files=mock_result_files,
+        result_files=result_files,
     )
 
     return CreatedTaskData(
@@ -744,24 +749,46 @@ async def _call_provider(
 ):
     """调用 Provider Runtime 生成效果图。
 
-    使用 MockProvider + ProviderRouter 执行调用。
-    当前阶段全部使用 Mock Provider。
+    优先使用 create_default_router + call_by_route 走真实图片生成路由
+    （如 doubao 图片生成）。当真实 Provider 未配置时自动回退 MockProvider。
+
+    Doubao 图片生成端从 messages 中提取 user 消息作为 prompt，
+    system 消息会被忽略，因此 system_prompt 中的风格指引
+    已合并到 user_prompt 中传入。
     """
+    # 将 system prompt 的风格指引合并到 user prompt 中
+    # （图片生成 API 只用单一 prompt，不用 system/user 分离）
+    full_prompt = user_prompt
+    if system_prompt:
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+
     call_request = ProviderCallRequest(
         model=model,
         messages=[
-            ChatMessage(role="system", content=system_prompt),
-            ChatMessage(role="user", content=user_prompt),
+            ChatMessage(role="user", content=full_prompt),
         ],
         feature=feature,
+        capability="image_generation",
+        tier="cheap",
         max_tokens=2048,
         temperature=0.7,
         request_id=request_id,
     )
 
-    provider = MockProvider()
-    router = ProviderRouter()
-    result = await router.call(request=call_request, provider=provider)
+    router = create_default_router(ProviderRouter)
+
+    # 尝试走真实图片生成路由，失败时回退 MockProvider
+    try:
+        result = await router.call_by_route(
+            request=call_request,
+            capability=IMAGE_GENERATION,
+            tier=CHEAP,
+        )
+    except Exception:
+        # 真实 Provider 未配置或调用失败 → 回退 Mock
+        MockProvider = _import_from_provider_runtime("mock", "MockProvider")
+        mock = MockProvider()
+        result = await router.call(request=call_request, provider=mock)
 
     return result
 
@@ -943,6 +970,33 @@ def _build_mock_result_files() -> List[dict]:
         模拟结果文件列表
     """
     return _MOCK_RESULT_FILES
+
+
+def _normalize_result_files(provider_files: List[dict]) -> List[dict]:
+    """将 Provider 返回的文件列表规范化为 ResultFile 格式。
+
+    真实图片生成 Provider（如 DALL-E、Stable Diffusion）返回的文件
+    字段名可能不一致，本函数补齐缺失字段并生成 file_id。
+
+    Args:
+        provider_files: Provider 返回的原始文件列表
+
+    Returns:
+        规范化后的结果文件列表（provider_files 为空时回退 Mock）
+    """
+    if not provider_files:
+        return _build_mock_result_files()
+
+    normalized = []
+    for f in provider_files:
+        normalized.append({
+            "file_id": f.get("file_id") or str(uuid.uuid4()),
+            "url": f.get("url"),
+            "mime_type": f.get("mime_type", "image/png"),
+            "width": f.get("width"),
+            "height": f.get("height"),
+        })
+    return normalized
 
 
 def _parse_json_field(raw) -> dict:

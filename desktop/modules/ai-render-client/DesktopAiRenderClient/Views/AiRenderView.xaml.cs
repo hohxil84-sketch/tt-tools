@@ -61,4 +61,21 @@ public partial class AiRenderView : UserControl
             _viewModel?.SelectHistoryItemCommand.Execute(item);
         }
     }
+
+    /// <summary>
+    /// 点击预览弹窗背景 → 关闭预览
+    /// </summary>
+    private void OnPreviewBackgroundClick(object sender, MouseButtonEventArgs e)
+    {
+        _viewModel?.ClosePreviewCommand.Execute(null);
+    }
+
+    /// <summary>
+    /// 点击预览大图本身 → 关闭预览（阻止事件冒泡已由背景处理）
+    /// </summary>
+    private void OnPreviewImageClick(object sender, MouseButtonEventArgs e)
+    {
+        _viewModel?.ClosePreviewCommand.Execute(null);
+        e.Handled = true;  // 阻止事件冒泡到背景，避免重复触发
+    }
 }

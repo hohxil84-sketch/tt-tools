@@ -11,6 +11,11 @@ using Timer = System.Timers.Timer;
 namespace TTTools.AiRenderClient.ViewModels;
 
 /// <summary>
+/// 下拉选项条目（WPF 绑定需要真实属性，不能用 named ValueTuple）
+/// </summary>
+public record ComboOption(string Value, string Display);
+
+/// <summary>
 /// 云端效果图生成模块主 ViewModel
 /// 管理效果图生成任务的创建、状态轮询、结果展示和历史记录。
 /// 本模块不直接调用第三方 AI，全部通过云端 provider-runtime 完成。
@@ -20,6 +25,12 @@ public class AiRenderViewModel : BaseViewModel
     private readonly CloudApiClient? _cloudApiClient;
     private readonly AuthState? _authState;
     private readonly AppLogger? _logger;
+    private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
+
+    /// <summary>图片本地存储目录</summary>
+    private static readonly string OutputDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "TTTools", "ai-render-output");
 
     private bool _isRunning;
     private string _statusMessage = "就绪 - 填写效果图需求后点击创建任务";
@@ -43,8 +54,36 @@ public class AiRenderViewModel : BaseViewModel
     private int _creditsCharged;
     private string _providerCallId = string.Empty;
 
-    /// <summary>当前任务的生成结果文件列表</summary>
+    // ---- 大图预览 ----
+    private string? _previewImageUrl;
+    private bool _isPreviewOpen;
+
+    /// <summary>当前预览的大图 URL</summary>
+    public string? PreviewImageUrl
+    {
+        get => _previewImageUrl;
+        set
+        {
+            if (SetProperty(ref _previewImageUrl, value))
+                OnPropertyChanged(nameof(HasPreviewImage));
+        }
+    }
+
+    /// <summary>大图预览弹窗是否打开</summary>
+    public bool IsPreviewOpen
+    {
+        get => _isPreviewOpen;
+        set => SetProperty(ref _isPreviewOpen, value);
+    }
+
+    /// <summary>是否有可预览的图片</summary>
+    public bool HasPreviewImage => !string.IsNullOrEmpty(PreviewImageUrl);
+
+    /// <summary>当前任务的生成结果文件列表（URL 已替换为本地路径）</summary>
     public ObservableCollection<ResultFileDto> ResultFiles { get; } = new();
+
+    /// <summary>图片本地缓存：file_id → 本地文件路径</summary>
+    private readonly Dictionary<string, string> _localFileCache = new();
 
     /// <summary>任务历史记录列表</summary>
     public ObservableCollection<AiRenderHistoryItem> HistoryItems { get; } = new();
@@ -52,42 +91,41 @@ public class AiRenderViewModel : BaseViewModel
     // ---- 预设数据 ----
 
     /// <summary>可用的场景类型列表（中文名称）</summary>
-    public static List<(string Value, string Display)> SceneTypeList { get; } = new()
+    public static List<ComboOption> SceneTypeList { get; } = new()
     {
-        ("poster_design", "海报设计"),
-        ("interior_design", "室内设计"),
-        ("product_showcase", "产品展示"),
-        ("packaging_design", "包装设计"),
-        ("banner_design", "横幅 / 展板"),
-        ("flyer_design", "传单 / 折页"),
-        ("business_card", "名片设计"),
-        ("social_media", "社交媒体配图"),
+        new("poster_design", "海报设计"),
+        new("interior_design", "室内设计"),
+        new("product_showcase", "产品展示"),
+        new("packaging_design", "包装设计"),
+        new("banner_design", "横幅 / 展板"),
+        new("flyer_design", "传单 / 折页"),
+        new("business_card", "名片设计"),
+        new("social_media", "社交媒体配图"),
     };
 
     /// <summary>可用的风格列表（中文名称）</summary>
-    public static List<(string Value, string Display)> StyleList { get; } = new()
+    public static List<ComboOption> StyleList { get; } = new()
     {
-        ("modern", "现代风格"),
-        ("minimalist", "极简风格"),
-        ("chinese", "中式风格"),
-        ("european", "欧式风格"),
-        ("japanese", "日式风格"),
-        ("vintage", "复古风格"),
-        ("tech", "科技感"),
-        ("natural", "自然清新"),
+        new("modern", "现代风格"),
+        new("minimalist", "极简风格"),
+        new("chinese", "中式风格"),
+        new("european", "欧式风格"),
+        new("japanese", "日式风格"),
+        new("vintage", "复古风格"),
+        new("tech", "科技感"),
+        new("natural", "自然清新"),
     };
 
     /// <summary>可用的输出尺寸列表</summary>
-    public static List<(string Value, string Display)> SizeList { get; } = new()
+    public static List<ComboOption> SizeList { get; } = new()
     {
-        ("1024x1024", "1024 × 1024 (方形)"),
-        ("1920x1080", "1920 × 1080 (横版)"),
-        ("1080x1920", "1080 × 1920 (竖版)"),
-        ("2048x2048", "2048 × 2048 (高清方形)"),
-        ("1280x720", "1280 × 720 (宽屏)"),
-        ("800x1200", "800 × 1200 (竖版小)"),
+        new("1024x1024", "1024 × 1024 (方形)"),
+        new("1920x1080", "1920 × 1080 (横版)"),
+        new("1080x1920", "1080 × 1920 (竖版)"),
+        new("2048x2048", "2048 × 2048 (高清方形)"),
+        new("1280x720", "1280 × 720 (宽屏)"),
+        new("800x1200", "800 × 1200 (竖版小)"),
     };
-
     // ========== 输入属性 ==========
 
     /// <summary>当前选择的场景类型</summary>
@@ -264,6 +302,9 @@ public class AiRenderViewModel : BaseViewModel
     public ICommand ClearCommand { get; }
     public ICommand SelectHistoryItemCommand { get; }
     public ICommand OpenResultFileCommand { get; }
+    public ICommand ClosePreviewCommand { get; }
+    public ICommand SaveResultFileCommand { get; }
+    public ICommand OpenOutputFolderCommand { get; }
 
     public AiRenderViewModel(
         CloudApiClient? cloudApiClient,
@@ -280,6 +321,9 @@ public class AiRenderViewModel : BaseViewModel
         ClearCommand = new RelayCommand(Clear);
         SelectHistoryItemCommand = new RelayCommand<AiRenderHistoryItem?>(SelectHistoryItem);
         OpenResultFileCommand = new RelayCommand<ResultFileDto?>(OpenResultFile);
+        ClosePreviewCommand = new RelayCommand(ClosePreview);
+        SaveResultFileCommand = new RelayCommand<ResultFileDto?>(SaveResultFile);
+        OpenOutputFolderCommand = new RelayCommand(OpenOutputFolder);
 
         // 监听属性变更以刷新命令状态
         PropertyChanged += (_, e) =>
@@ -361,10 +405,9 @@ public class AiRenderViewModel : BaseViewModel
             {
                 var data = response.Data;
 
-                // 更新当前任务状态
+                // 更新当前任务状态（不清空旧结果，等新结果回来再替换）
                 CurrentTaskId = data.TaskId;
                 TaskStatus = data.Status;
-                ResultFiles.Clear();
 
                 // 添加到历史记录
                 var historyItem = new AiRenderHistoryItem
@@ -454,12 +497,20 @@ public class AiRenderViewModel : BaseViewModel
                 var previousStatus = TaskStatus;
                 TaskStatus = data.Status;
 
-                // 更新结果文件
+                // 更新结果文件（下载到本地后替换 URL 为本地路径）
                 ResultFiles.Clear();
                 if (data.ResultFiles != null)
                 {
                     foreach (var file in data.ResultFiles)
+                    {
+                        // 下载图片到本地存储
+                        var localFile = await DownloadToLocalAsync(file);
+                        if (localFile != null)
+                        {
+                            file.Url = localFile;  // 替换为本地路径
+                        }
                         ResultFiles.Add(file);
+                    }
                 }
 
                 // 更新 Provider 信息
@@ -615,36 +666,148 @@ public class AiRenderViewModel : BaseViewModel
         Provider = item.Provider;
         Model = item.Model;
         CreditsCharged = item.CreditsCharged;
-        ResultFiles.Clear();
 
         StatusMessage = $"已加载历史任务 - {item.SceneTypeDisplay} / {item.TaskId[..8]}...";
 
-        // 如果历史任务仍处于进行中状态，可继续轮询
+        // 总是重新查询任务以恢复结果文件（进行中任务会启动轮询）
+        _ = QueryAndUpdateTaskStatus(item.TaskId);
         if (item.Status is "queued" or "running")
         {
-            _ = QueryAndUpdateTaskStatus(item.TaskId);
+            StartPolling();
         }
     }
 
     /// <summary>
-    /// 在系统默认浏览器中打开结果文件的 URL
+    /// 在客户端内预览结果大图（弹出预览窗口）
     /// </summary>
     private void OpenResultFile(ResultFileDto? file)
+    {
+        if (file == null || string.IsNullOrWhiteSpace(file.Url))
+        {
+            StatusMessage = "该文件暂无预览链接";
+            return;
+        }
+
+        PreviewImageUrl = file.Url;
+        IsPreviewOpen = true;
+        StatusMessage = $"正在预览: {file.FileId}";
+    }
+
+    /// <summary>
+    /// 关闭大图预览弹窗
+    /// </summary>
+    private void ClosePreview()
+    {
+        IsPreviewOpen = false;
+        PreviewImageUrl = null;
+    }
+
+    /// <summary>
+    /// 将结果图片另存为用户指定路径
+    /// </summary>
+    private void SaveResultFile(ResultFileDto? file)
     {
         if (file == null || string.IsNullOrWhiteSpace(file.Url)) return;
 
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            var dialog = new Microsoft.Win32.SaveFileDialog
             {
-                FileName = file.Url,
-                UseShellExecute = true
-            });
-            StatusMessage = $"正在打开结果文件: {file.FileId}";
+                FileName = $"{file.FileId}",
+                DefaultExt = file.MimeType switch
+                {
+                    "image/jpeg" or "image/jpg" => ".jpg",
+                    "image/webp" => ".webp",
+                    _ => ".png"
+                },
+                Filter = "图片文件|*.png;*.jpg;*.jpeg;*.webp|所有文件|*.*"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                File.Copy(file.Url, dialog.FileName, overwrite: true);
+                StatusMessage = $"已保存到: {dialog.FileName}";
+            }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"打开文件失败: {ex.Message}";
+            StatusMessage = $"保存失败: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// 在资源管理器中打开图片本地存储目录
+    /// </summary>
+    private void OpenOutputFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(OutputDir);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = OutputDir,
+                UseShellExecute = true
+            });
+            StatusMessage = $"已打开目录: {OutputDir}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"打开目录失败: {ex.Message}";
+        }
+    }
+
+    // ========== 图片本地存储 ==========
+
+    /// <summary>
+    /// 将结果文件从远程 URL 下载到本地存储目录，返回本地文件路径。
+    /// 已缓存的文件不再重复下载；URL 为空时返回 null。
+    /// </summary>
+    private async Task<string?> DownloadToLocalAsync(ResultFileDto file)
+    {
+        if (string.IsNullOrWhiteSpace(file.Url)) return null;
+
+        // 检查缓存
+        if (_localFileCache.TryGetValue(file.FileId, out var cached))
+        {
+            if (File.Exists(cached)) return cached;
+            _localFileCache.Remove(file.FileId);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(OutputDir);
+
+            // 从 URL 或本地文件 ID 生成文件名
+            var ext = file.MimeType switch
+            {
+                "image/jpeg" or "image/jpg" => ".jpg",
+                "image/webp" => ".webp",
+                _ => ".png"
+            };
+            var localPath = Path.Combine(OutputDir, $"{file.FileId}{ext}");
+
+            // 如果 URL 已经是本地路径，直接使用
+            if (File.Exists(file.Url))
+            {
+                _localFileCache[file.FileId] = file.Url;
+                return file.Url;
+            }
+
+            // 下载到本地
+            var imageBytes = await _httpClient.GetByteArrayAsync(file.Url);
+            await File.WriteAllBytesAsync(localPath, imageBytes);
+
+            _localFileCache[file.FileId] = localPath;
+            _logger?.Info($"图片已保存到本地: {localPath}", "desktop-ai-render-client");
+            return localPath;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning($"图片下载失败: {file.FileId}, url={file.Url}, error={ex.Message}",
+                "desktop-ai-render-client");
+            // 下载失败时保留原始 URL（可能仍然可以直接显示）
+            return file.Url;
         }
     }
 

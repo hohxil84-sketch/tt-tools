@@ -131,6 +131,9 @@ def create_app() -> FastAPI:
     _ai_render_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "ai-render")
     if _ai_render_dir not in sys.path:
         sys.path.insert(0, _ai_render_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
     from router import router as ai_render_router  # noqa: E402
     app.include_router(ai_render_router, prefix="/api/v1")
 

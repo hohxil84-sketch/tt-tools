@@ -8,6 +8,7 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <local:UrlToBitmapConverter x:Key="UrlToBitmapConverter" />
     </UserControl.Resources>
 
     <Grid Margin="12">
@@ -114,12 +115,14 @@
                                  VerticalScrollBarVisibility="Auto"
                                  ToolTip="描述你期望的效果图画面，例如：一张现代风格的海报，以蓝色为主色调，突出科技感" />
 
-                        <!-- 输入文件 ID -->
-                        <TextBlock Text="输入文件 ID（可选）" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
+                        <!-- 输入文件 ID（后续接入文件上传模块后启用） -->
+                        <TextBlock Text="输入文件 ID（可选 · 暂未开放）" FontSize="12"
+                                   Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
                         <TextBox Text="{Binding InputFileIdsText, UpdateSourceTrigger=PropertyChanged}"
                                  Height="50" Margin="0,0,0,8" TextWrapping="Wrap" AcceptsReturn="True"
+                                 IsEnabled="False"
                                  VerticalScrollBarVisibility="Auto"
-                                 ToolTip="输入已上传到云端的文件 UUID，多个 ID 用逗号或换行分隔" />
+                                 ToolTip="文件上传功能尚未开放，此处预留用于指定已上传到云端的参考文件 UUID。多个 ID 用逗号或换行分隔。" />
 
                         <!-- 风格选择 -->
                         <TextBlock Text="风格参考" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,2" />
@@ -215,45 +218,74 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- 结果文件列表 -->
+                        <!-- 结果文件缩略图列表 -->
                         <Border Grid.Row="2" Margin="0,0,0,8"
                                 Visibility="{Binding IsTaskCompleted, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel>
-                                <TextBlock Text="生成结果" FontSize="12" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4" />
+                                <!-- 标题行 + 打开目录按钮 -->
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="生成结果" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondaryBrush}"
+                                               VerticalAlignment="Center" />
+                                    <Button Grid.Column="2" Width="Auto" Height="26"
+                                            Padding="8,0" FontSize="11"
+                                            Background="Transparent" BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1" Cursor="Hand"
+                                            Command="{Binding DataContext.OpenOutputFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            ToolTip="在资源管理器中打开图片保存目录">
+                                        <TextBlock Text="📁 打开目录" />
+                                    </Button>
+                                </Grid>
 
                                 <ItemsControl ItemsSource="{Binding ResultFiles}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Background="{DynamicResource BackgroundBrush}" CornerRadius="4"
-                                                    Padding="8,6" Margin="0,0,0,4" Cursor="Hand"
-                                                    MouseLeftButtonDown="OnResultFileClick">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <Border Grid.Column="0" Background="#EDE9FE" CornerRadius="3"
-                                                            Padding="4,2" Margin="0,0,8,0">
-                                                        <TextBlock FontSize="10" Foreground="#6D28D9"
-                                                                   Text="{Binding MimeType}" />
+                                            <Border Width="144" Margin="0,0,6,6"
+                                                    Background="{DynamicResource BackgroundBrush}"
+                                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                    CornerRadius="4">
+                                                <StackPanel>
+                                                    <!-- 缩略图区域（点击查看大图） -->
+                                                    <Border Height="130" Margin="2,2,2,0"
+                                                            Background="Transparent" Cursor="Hand"
+                                                            MouseLeftButtonDown="OnResultFileClick"
+                                                            ToolTip="点击查看大图">
+                                                        <Image Source="{Binding Url, Converter={StaticResource UrlToBitmapConverter}, IsAsync=True}"
+                                                               Stretch="UniformToFill" />
                                                     </Border>
 
-                                                    <StackPanel Grid.Column="1">
-                                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextPrimaryBrush}"
-                                                                   Text="{Binding FileId, StringFormat='文件: {0}'}"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock FontSize="10" Foreground="{DynamicResource TextTertiaryBrush}">
+                                                    <!-- 底部信息栏：尺寸 + 保存按钮 -->
+                                                    <Grid Margin="3,3,3,4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" FontSize="9"
+                                                                   Foreground="{DynamicResource TextTertiaryBrush}"
+                                                                   VerticalAlignment="Center">
                                                             <Run Text="{Binding Width, Mode=OneWay, StringFormat='{}{0}×'}" />
                                                             <Run Text="{Binding Height, Mode=OneWay}" />
                                                         </TextBlock>
-                                                    </StackPanel>
-
-                                                    <TextBlock Grid.Column="2" Text="🔗 打开" FontSize="10"
-                                                               Foreground="#7C3AED" VerticalAlignment="Center" />
-                                                </Grid>
+                                                        <Button Grid.Column="1" Width="26" Height="22"
+                                                                FontSize="11" Padding="0"
+                                                                Background="Transparent" BorderThickness="0"
+                                                                Cursor="Hand" ToolTip="另存为..."
+                                                                Command="{Binding DataContext.SaveResultFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}">
+                                                            <TextBlock Text="💾" />
+                                                        </Button>
+                                                    </Grid>
+                                                </StackPanel>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
@@ -364,6 +396,50 @@
                     <Run Text="Provider Call ID: " />
                     <Run Text="{Binding ProviderCallId, Mode=OneWay}" />
                 </TextBlock>
+            </Grid>
+        </Border>
+
+        <!-- ===== 大图预览弹窗（覆盖全部区域） ===== -->
+        <Border Grid.Row="0" Grid.RowSpan="4" Grid.ColumnSpan="3"
+                Background="#CC000000"
+                Visibility="{Binding IsPreviewOpen, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}"
+                MouseLeftButtonDown="OnPreviewBackgroundClick"
+                Cursor="Hand">
+            <Grid Margin="40">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- 顶部操作栏 -->
+                <Border Grid.Row="0" Background="#1A1A2E" CornerRadius="6,6,0,0" Padding="12,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="图片预览" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="White" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Width="32" Height="32"
+                                FontSize="16" Background="#E53E3E" Foreground="White"
+                                BorderThickness="0" Cursor="Hand"
+                                Command="{Binding ClosePreviewCommand}"
+                                Content="✕" />
+                    </Grid>
+                </Border>
+
+                <!-- 大图 -->
+                <Image Grid.Row="1"
+                       Source="{Binding PreviewImageUrl, Converter={StaticResource UrlToBitmapConverter}, IsAsync=True}"
+                       Stretch="Uniform" Margin="0"
+                       MouseLeftButtonDown="OnPreviewImageClick" />
+
+                <!-- 底部提示 -->
+                <Border Grid.Row="2" Background="#1A1A2E" CornerRadius="0,0,6,6" Padding="12,6">
+                    <TextBlock Text="点击图片或背景关闭预览" FontSize="11"
+                               Foreground="#A0A0B0" HorizontalAlignment="Center" />
+                </Border>
             </Grid>
         </Border>
     </Grid>
