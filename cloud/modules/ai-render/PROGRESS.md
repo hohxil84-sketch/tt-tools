@@ -88,7 +88,25 @@
 
 ## Bug 记录
 
-暂无。
+### 2026-06-26：路由错位 + 真实图片生成路由
+
+- **分支**：`fix/ai-render-client-multi-fix`
+- **提交**：31b5bc6
+- **现象**：
+  1. 效果图生成报 `[unknown] 未知错误`
+  2. 返回的 Mock 图片 URL 打不开
+  3. 真实图片生成 Provider 未被调用
+- **根因**：
+  1. main.py 注册 ai-render 路由前缺少 sys.modules 清理，导入到 provider-log 的 router
+  2. Mock URL 指向假域名 `mock-cdn.tt-tools.com`
+  3. `_call_provider` 硬编码 MockProvider()，未走真实路由
+- **修复**：
+  1. main.py 补充 sys.modules 清理（3行）
+  2. Mock URL 改为 null
+  3. `_call_provider` 改用 `create_default_router()` + `call_by_route(IMAGE_GENERATION, CHEAP)`，失败回退 Mock
+  4. 新增 `_normalize_result_files()` 透传 Provider 真实文件
+  5. `_PR_CONFLICT_NAMES` 扩展 registry/config/deepseek/doubao/http_utils
+- **测试**：22 项测试全部通过
 
 ## 提交记录
 
