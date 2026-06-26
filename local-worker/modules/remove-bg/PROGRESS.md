@@ -31,7 +31,13 @@
 
 ## Bug 记录
 
-暂无。
+### 2026-06-27: processor.py 支持本地模型目录加载
+
+**分支**: `fix/remove-bg-init-and-layout`
+
+`_get_session()` 新增 `models_dir` 参数，若目录中存在对应 `.onnx` 文件则优先从本地加载，不触发 `rembg` 自动联网下载。`remove_background()` 和 `remove_background_from_path()` 同步增加 `models_dir` 参数。
+
+**提交**: `5232f45` — fix(remove-bg): 修复引擎启动、超时、乱码、输出目录选择、失败结果显示、缩略图缺失、按钮灰色、模型下拉空白、本地模型打包
 
 ## 提交记录
 
