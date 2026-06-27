@@ -113,7 +113,7 @@ def admin_token_data():
         user_id="admin-test-uuid",
         device_id=None,
         role="admin",
-        plan_code="free",
+        plan_id="plan-free",
     )
 
 

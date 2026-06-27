@@ -54,7 +54,6 @@ from sqlalchemy import text
 from cloud.shared.database import init_db, _get_engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
-ADMIN_ID = "admin-seed-0000-0000-000000000001"
 _now = lambda: datetime.now(timezone.utc).replace(tzinfo=None)
 
 
@@ -63,6 +62,15 @@ async def seed():
     engine = _get_engine()
 
     async with AsyncSession(engine) as db:
+        # 0. 查找种子管理员用户（用于审计日志和角色分配）
+        admin_row = (await db.execute(
+            text("SELECT id, account, display_name FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1")
+        )).first()
+        admin_id = admin_row[0] if admin_row else None
+        admin_account = admin_row[1] if admin_row else "admin@tttools.com"
+        admin_display = admin_row[2] if admin_row and admin_row[2] else "系统管理员"
+        print(f"[INFO] seed admin: id={admin_id} account={admin_account} display={admin_display}")
+
         # ============================================================
         # 1. admin_audit_logs — 10 条审计日志
         # ============================================================
@@ -80,12 +88,13 @@ async def seed():
         ]
         for i, (action, target_type, summary) in enumerate(actions):
             await db.execute(text(
-                "INSERT INTO admin_audit_logs (id, admin_user_id, admin_account, action, target_type, target_id, summary, details_json, ip_address, created_at) "
-                "VALUES (:id, :uid, :acct, :action, :ttype, :tid, :summary, :details, :ip, :ts)"
+                "INSERT INTO admin_audit_logs (id, admin_user_id, admin_account, admin_display_name, action, target_type, target_id, summary, details_json, ip_address, created_at) "
+                "VALUES (:id, :uid, :acct, :display_name, :action, :ttype, :tid, :summary, :details, :ip, :ts)"
             ), {
                 "id": str(uuid.uuid4()),
-                "uid": ADMIN_ID,
-                "acct": "admin@tttools.com",
+                "uid": admin_id or "00000000-0000-0000-0000-000000000000",
+                "acct": admin_account,
+                "display_name": admin_display,
                 "action": action,
                 "ttype": target_type,
                 "tid": str(uuid.uuid4())[:8],
@@ -145,7 +154,8 @@ async def seed():
         for code, name, cat, desc in fc_data:
             await db.execute(text(
                 "INSERT INTO feature_codes (id, code, name, category, description, is_active, created_at) "
-                "VALUES (:id, :code, :name, :cat, :desc, :active, :ts)"
+                "VALUES (:id, :code, :name, :cat, :desc, :active, :ts) "
+                "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, description = EXCLUDED.description"
             ), {
                 "id": str(uuid.uuid4()),
                 "code": code,
@@ -173,7 +183,8 @@ async def seed():
             role_ids[code] = rid
             await db.execute(text(
                 "INSERT INTO roles (id, name, code, description, is_system, created_at) "
-                "VALUES (:id, :name, :code, :desc, :is_sys, :ts)"
+                "VALUES (:id, :name, :code, :desc, :is_sys, :ts) "
+                "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description"
             ), {"id": rid, "name": name, "code": code, "desc": desc, "is_sys": is_sys, "ts": _now()})
         print("[OK] roles: 5 rows")
 
@@ -227,7 +238,8 @@ async def seed():
             perm_ids[code] = pid
             await db.execute(text(
                 "INSERT INTO permissions (id, code, name, resource, action, description, created_at) "
-                "VALUES (:id, :code, :name, :res, :act, :desc, :ts)"
+                "VALUES (:id, :code, :name, :res, :act, :desc, :ts) "
+                "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description"
             ), {"id": pid, "code": code, "name": name, "res": res, "act": act, "desc": f"允许{act}操作{res}", "ts": _now()})
         print("[OK] permissions: 27 rows")
 
@@ -258,6 +270,16 @@ async def seed():
                 ), {"rid": rid, "pid": pid})
                 count += 1
         print(f"[OK] role_permissions: {count} rows")
+
+        # ============================================================
+        # 7. user_roles — 将管理员用户赋予超级管理员角色
+        # ============================================================
+        if admin_id and "admin" in role_ids:
+            await db.execute(text(
+                "INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid) "
+                "ON CONFLICT DO NOTHING"
+            ), {"uid": admin_id, "rid": role_ids["admin"]})
+            print(f"[OK] user_roles: {admin_account} → super admin role")
 
         await db.commit()
         print("\nAll seed data inserted!")

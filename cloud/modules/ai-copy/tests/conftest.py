@@ -241,7 +241,6 @@ async def standard_user(db_session: AsyncSession, seed_plans_fixture):
         display_name="标准用户",
         role="user",
         status="active",
-        plan_code="standard",
     )
     db_session.add(user)
     await db_session.flush()
@@ -265,7 +264,6 @@ async def free_user(db_session: AsyncSession, seed_plans_fixture):
         display_name="免费用户",
         role="user",
         status="active",
-        plan_code="free",
     )
     db_session.add(user)
     await db_session.flush()
@@ -286,7 +284,6 @@ async def pro_user(db_session: AsyncSession, seed_plans_fixture):
         display_name="专业用户",
         role="user",
         status="active",
-        plan_code="pro",
     )
     db_session.add(user)
     await db_session.flush()
@@ -306,7 +303,6 @@ async def standard_auth_headers(standard_user):
         user_id=standard_user.id,
         device_id=None,
         role=standard_user.role,
-        plan_code=standard_user.plan_code,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -319,7 +315,6 @@ async def free_auth_headers(free_user):
         user_id=free_user.id,
         device_id=None,
         role=free_user.role,
-        plan_code=free_user.plan_code,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -332,7 +327,6 @@ async def pro_auth_headers(pro_user):
         user_id=pro_user.id,
         device_id=None,
         role=pro_user.role,
-        plan_code=pro_user.plan_code,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -346,7 +340,6 @@ async def low_balance_user(db_session: AsyncSession, seed_plans_fixture):
         display_name="额度不足用户",
         role="user",
         status="active",
-        plan_code="standard",
     )
     db_session.add(user)
     await db_session.flush()
@@ -367,7 +360,6 @@ async def low_balance_auth_headers(low_balance_user):
         user_id=low_balance_user.id,
         device_id=None,
         role=low_balance_user.role,
-        plan_code=low_balance_user.plan_code,
     )
     return {"Authorization": f"Bearer {token}"}
 

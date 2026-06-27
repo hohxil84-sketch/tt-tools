@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, Badge, LBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS } from '../components/shared';
+import { Card, Tbl, Badge, LBtn, Pager, Sheet, DetailRows, Modal, priBtn, secBtn, inpS, selS } from '../components/shared';
 
 interface Ord { id: string; order_no: string; order_type: string; product_code: string; amount_cents: number; credit_amount: number | null; currency: string; status: string; paid_at: string | null; user_id: string; user_account: string | null; created_at: string; updated_at: string; user_display_name?: string | null; }
 interface List { items: Ord[]; total: number; limit: number; offset: number; }
@@ -11,6 +11,8 @@ export default function Orders() {
   const [d, setD] = useState<List | null>(null);
   const [uid, setUid] = useState(''); const [ot, setOt] = useState(''); const [sf, setSf] = useState('');
   const [pg, setPg] = useState(0); const [err, setErr] = useState(''); const [detail, setDetail] = useState<Ord | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Ord | null>(null);
+  const [refundTarget, setRefundTarget] = useState<Ord | null>(null);
 
   const load = useCallback(async () => {
     setErr('');
@@ -19,6 +21,17 @@ export default function Orders() {
   }, [pg, uid, ot, sf]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / PAGE) : 0;
+
+  const doCancel = async () => {
+    if (!cancelTarget) return;
+    await apiRequest(`/admin/orders/${cancelTarget.id}/cancel`, { method: 'POST' });
+    setCancelTarget(null); setDetail(null); load();
+  };
+  const doRefund = async () => {
+    if (!refundTarget) return;
+    await apiRequest(`/admin/orders/${refundTarget.id}/refund`, { method: 'POST' });
+    setRefundTarget(null); setDetail(null); load();
+  };
 
   return (
     <div>
@@ -45,9 +58,39 @@ export default function Orders() {
         ))}
       </Tbl></Card>
       <Pager pg={pg} tp={TP} total={d?.total || 0} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+
+      {/* 详情 Sheet */}
       {detail && <Sheet title="订单详情" close={() => setDetail(null)}>
-        <DetailRows rows={[['订单号', detail.order_no], ['类型', detail.order_type], ['产品', detail.product_code], ['金额', `¥${(detail.amount_cents / 100).toFixed(2)}`], ['额度', detail.credit_amount], ['币种', detail.currency], ['状态', detail.status], ['支付时间', detail.paid_at ? new Date(detail.paid_at).toLocaleString('zh-CN') : '—'], ['用户', detail.user_account], ['用户名称', detail.user_display_name], ['创建', new Date(detail.created_at).toLocaleString('zh-CN')], ['更新', new Date(detail.updated_at).toLocaleString('zh-CN')]]} />
+        <DetailRows rows={[
+          ['订单号', detail.order_no], ['类型', detail.order_type],
+          ['产品', detail.product_code], ['金额', `¥${(detail.amount_cents / 100).toFixed(2)}`],
+          ['额度', detail.credit_amount], ['币种', detail.currency],
+          ['状态', detail.status],
+          ['支付时间', detail.paid_at ? new Date(detail.paid_at).toLocaleString('zh-CN') : '—'],
+          ['用户', detail.user_account], ['用户名称', detail.user_display_name],
+          ['创建', new Date(detail.created_at).toLocaleString('zh-CN')],
+          ['更新', new Date(detail.updated_at).toLocaleString('zh-CN')],
+        ]} />
+        {/* 操作按钮 */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          {detail.status !== 'closed' && detail.status !== 'refunded' && (
+            <button onClick={() => setCancelTarget(detail)} style={{ ...secBtn, color: '#ff9500', borderColor: '#ff9500' }}>取消订单</button>
+          )}
+          {detail.status === 'paid' && (
+            <button onClick={() => setRefundTarget(detail)} style={{ ...secBtn, color: '#ff3b30', borderColor: '#ff3b30' }}>退款</button>
+          )}
+        </div>
       </Sheet>}
+
+      {/* 取消确认 */}
+      {cancelTarget && <Modal title="取消订单" close={() => setCancelTarget(null)} action={doCancel} danger>
+        <p>确认取消订单 <b>{cancelTarget.order_no}</b>？</p>
+      </Modal>}
+
+      {/* 退款确认 */}
+      {refundTarget && <Modal title="退款" close={() => setRefundTarget(null)} action={doRefund} danger>
+        <p>确认对订单 <b>{refundTarget.order_no}</b> 执行退款？</p>
+      </Modal>}
     </div>
   );
 }

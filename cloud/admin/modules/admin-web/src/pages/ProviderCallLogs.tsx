@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, LBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS } from '../components/shared';
 
-interface Log { id: string; request_id: string; user_id: string; user_account: string | null; feature: string; provider: string; model: string; status: string; error_code: string | null; input_tokens: number; output_tokens: number; total_tokens: number; estimated_cost: number; credits_charged: number; latency_ms: number | null; created_at: string; user_display_name?: string | null; }
+interface Log { id: string; request_id: string; user_id: string; user_account: string | null; feature: string; feature_name?: string | null; provider: string; model: string; status: string; error_code: string | null; input_tokens: number; output_tokens: number; total_tokens: number; estimated_cost: number; credits_charged: number; latency_ms: number | null; created_at: string; user_display_name?: string | null; }
 interface List { items: Log[]; total: number; limit: number; offset: number; }
 const PAGE = 20;
 
@@ -34,7 +34,13 @@ export default function ProviderCallLogs() {
         {d?.items.map(l => (
           <tr key={l.id}>
             <td style={{ fontWeight: 500, fontSize: 12 }}>{l.user_account || l.user_id.substring(0, 8)}</td>
-            <td><code style={{ fontSize: 11, color: 'var(--blue)' }}>{l.feature}</code></td>
+            <td style={{ fontSize: 12 }}>
+              {l.feature_name ? (
+                <><span style={{ fontWeight: 500 }}>{l.feature_name}</span><br /><code style={{ fontSize: 10, color: 'var(--gray-400)' }}>{l.feature}</code></>
+              ) : (
+                <code style={{ fontSize: 11, color: 'var(--blue)' }}>{l.feature}</code>
+              )}
+            </td>
             <td>{l.provider}</td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{l.model}</td>
             <td><Badge t={l.status} c={l.status === 'success' ? '#34c759' : '#ff3b30'} /></td>

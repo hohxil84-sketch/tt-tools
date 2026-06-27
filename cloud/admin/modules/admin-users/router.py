@@ -35,6 +35,7 @@ from cloud.shared import (
 from schemas import (
     CreateUserRequest,
     UpdateUserRequest,
+    ResetPasswordRequest,
     UpdateUserStatusRequest,
     UpdateDeviceStatusRequest,
 )
@@ -121,7 +122,7 @@ async def admin_create_user(
             password=body.password,
             display_name=body.display_name,
             role=body.role,
-            plan_code=body.plan_code,
+            plan_id=body.plan_id,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
@@ -155,7 +156,7 @@ async def admin_update_user(
             db=db,
             user_id=user_id,
             display_name=body.display_name,
-            plan_code=body.plan_code,
+            plan_id=body.plan_id,
             role=body.role,
         )
         return success_response(data.model_dump(mode="json"), request_id)
@@ -261,17 +262,20 @@ async def admin_update_user_status(
 @router.post("/admin/users/{user_id}/reset-password")
 async def admin_reset_user_password(
     user_id: str,
+    body: ResetPasswordRequest,
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("users.manage")),
     db: AsyncSession = Depends(get_db),
 ):
-    """管理员强制重置用户密码。
+    """管理员重置用户密码。
 
-    生成新随机密码并返回。用户将被强制登出（所有会话撤销）。
+    使用管理员指定的新密码替换旧密码，用户将被强制登出（所有会话撤销）。
     需要管理员权限。
+
+    对齐 admin-users.yaml POST /admin/users/{user_id}/reset-password。
     """
     try:
-        data = await force_reset_password(db=db, user_id=user_id)
+        data = await force_reset_password(db=db, user_id=user_id, new_password=body.new_password)
         return success_response(data, request_id)
     except AppError as e:
         return JSONResponse(

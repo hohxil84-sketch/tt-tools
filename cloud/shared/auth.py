@@ -35,7 +35,7 @@ class TokenData(BaseModel):
     user_id: str = Field(..., description="用户 ID（UUID）")
     device_id: Optional[str] = Field(default=None, description="设备 ID（UUID）")
     role: str = Field(default="user", description="用户角色")
-    plan_code: str = Field(default="free", description="当前套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
 
 
 # ============================================================
@@ -46,7 +46,7 @@ def create_access_token(
     user_id: str,
     device_id: Optional[str] = None,
     role: str = "user",
-    plan_code: str = "free",
+    plan_id: Optional[str] = None,
 ) -> str:
     """签发短期 access_token。
 
@@ -54,7 +54,7 @@ def create_access_token(
         user_id: 用户 UUID
         device_id: 设备 UUID（可选）
         role: 用户角色
-        plan_code: 套餐编码
+        plan_id: 套餐 ID（UUID）
 
     Returns:
         JWT 字符串
@@ -68,7 +68,7 @@ def create_access_token(
         "sub": user_id,
         "device_id": device_id,
         "role": role,
-        "plan_code": plan_code,
+        "plan_id": plan_id,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "access",
@@ -109,7 +109,7 @@ def decode_token(token: str) -> TokenData:
         user_id=user_id,
         device_id=payload.get("device_id"),
         role=payload.get("role", "user"),
-        plan_code=payload.get("plan_code", "free"),
+        plan_id=payload.get("plan_id"),
     )
 
 

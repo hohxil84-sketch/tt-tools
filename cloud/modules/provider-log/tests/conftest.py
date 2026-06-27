@@ -165,7 +165,6 @@ async def test_user(db_session: AsyncSession):
         display_name="测试用户",
         role="user",
         status="active",
-        plan_code="standard",
     )
     db_session.add(user)
     await db_session.flush()
@@ -184,7 +183,6 @@ async def test_user_2(db_session: AsyncSession):
         display_name="其他用户",
         role="user",
         status="active",
-        plan_code="free",
     )
     db_session.add(user)
     await db_session.flush()
@@ -202,7 +200,6 @@ async def auth_headers(test_user):
         user_id=test_user.id,
         device_id=None,
         role=test_user.role,
-        plan_code=test_user.plan_code,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -215,6 +212,5 @@ async def auth_headers_user_2(test_user_2):
         user_id=test_user_2.id,
         device_id=None,
         role=test_user_2.role,
-        plan_code=test_user_2.plan_code,
     )
     return {"Authorization": f"Bearer {token}"}

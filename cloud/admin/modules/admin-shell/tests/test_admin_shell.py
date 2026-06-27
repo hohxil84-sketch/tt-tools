@@ -84,11 +84,10 @@ class TestMenu:
             for field in required_fields:
                 assert field in item, f"Menu item missing field {field}"
 
-        # 验证菜单项 ID（含拆分后的系统用户/客户端用户/设备管理）
+        # 验证菜单项 ID（用户管理已合并为一级菜单）
         menu_ids = [item["id"] for item in menu]
         assert "dashboard" in menu_ids
-        assert "system-users" in menu_ids
-        assert "client-users" in menu_ids
+        assert "users" in menu_ids
         assert "devices" in menu_ids
         assert "billing" in menu_ids
         assert "ops" in menu_ids

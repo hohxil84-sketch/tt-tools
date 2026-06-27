@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, Badge, LBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS, priBtn } from '../components/shared';
+import { Card, Tbl, Badge, LBtn, Pager, Sheet, secBtn, inpS, selS, priBtn } from '../components/shared';
 
 interface FC { id: string; code: string; name: string; category: string; is_active: boolean; description?: string | null; created_at: string; }
 interface List { items: FC[]; total: number; limit: number; offset: number; }
@@ -11,6 +11,7 @@ export default function FeatureCodes() {
   const [d, setD] = useState<List | null>(null);
   const [cat, setCat] = useState(''); const [pg, setPg] = useState(0); const [err, setErr] = useState('');
   const [create, setCreate] = useState(false);
+  const [edit, setEdit] = useState<FC | null>(null);
   const [form, setForm] = useState({ code: '', name: '', category: 'cloud_ai', description: '' });
 
   const load = useCallback(async () => {
@@ -26,6 +27,14 @@ export default function FeatureCodes() {
       await apiRequest('/admin/feature-codes', { method: 'POST', body: { code: form.code, name: form.name, category: form.category, description: form.description || undefined } });
       setCreate(false); setForm({ code: '', name: '', category: 'cloud_ai', description: '' }); load();
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : '创建失败'); }
+  };
+
+  const doEdit = async () => {
+    if (!edit) return;
+    try {
+      await apiRequest(`/admin/feature-codes/${edit.id}`, { method: 'PATCH', body: { name: form.name, category: form.category, description: form.description || undefined } });
+      setEdit(null); load();
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : '编辑失败'); }
   };
 
   const doDelete = async (id: string) => {
@@ -61,12 +70,16 @@ export default function FeatureCodes() {
             <td><span style={{ fontSize: 12, fontWeight: 500, color: fc.is_active ? '#34c759' : 'var(--gray-400)', cursor: 'pointer' }} onClick={() => doToggle(fc)}>{fc.is_active ? '启用' : '禁用'}</span></td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{fc.description || '—'}</td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(fc.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ textAlign: 'right' }}><LBtn onClick={() => doDelete(fc.id)}>删除</LBtn></td>
+            <td style={{ textAlign: 'right' }}>
+              <LBtn onClick={() => { setEdit(fc); setForm({ code: fc.code, name: fc.name, category: fc.category, description: fc.description || '' }); }}>编辑</LBtn>
+              <LBtn onClick={() => doDelete(fc.id)}>删除</LBtn>
+            </td>
           </tr>
         ))}
       </Tbl></Card>
       <Pager pg={pg} tp={TP} total={d?.total || 0} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
 
+      {/* 新建 Sheet */}
       {create && <Sheet title="新增功能码" close={() => setCreate(false)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <input placeholder="功能码 (如 my_new_feature_cloud)" value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} style={inpS} />
@@ -78,6 +91,31 @@ export default function FeatureCodes() {
           <button onClick={doCreate} style={priBtn}>创建</button>
         </div>
       </Sheet>}
+
+      {/* 编辑 Sheet */}
+      {edit && <Sheet title={`编辑: ${edit.code}`} close={() => setEdit(null)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Fld label="功能码"><code style={{ fontSize: 12, color: 'var(--blue)' }}>{edit.code}</code></Fld>
+          <Fld label="名称"><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inpS} /></Fld>
+          <Fld label="分类">
+            <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} style={{ ...inpS, width: '100%' }}>
+              <option value="cloud_ai">云端AI</option><option value="local_paid">本地付费</option><option value="local_free">本地免费</option>
+            </select>
+          </Fld>
+          <Fld label="说明"><input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={inpS} placeholder="说明（可选）" /></Fld>
+          <button onClick={doEdit} style={priBtn}>保存</button>
+        </div>
+      </Sheet>}
+    </div>
+  );
+}
+
+/** 简单表单项 */
+function Fld({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--gray-600)', marginBottom: 4 }}>{label}</label>
+      {children}
     </div>
   );
 }

@@ -243,19 +243,19 @@ async def admin_get_risk_log_detail(
 
 @router.get("/admin/feature-flags")
 async def admin_get_feature_flags(
-    plan_code: str | None = Query(default=None, description="按套餐编码筛选"),
+    plan_id: str | None = Query(default=None, description="按套餐 ID 筛选"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询功能开关配置。
 
-    返回各套餐的功能开关配置，可按 plan_code 筛选。需要管理员权限。
+    返回各套餐的功能开关配置，可按 plan_id 筛选。需要管理员权限。
 
     对齐 admin-ops.yaml GET /admin/feature-flags。
     """
     try:
-        data = await get_feature_flags(db=db, plan_code=plan_code)
+        data = await get_feature_flags(db=db, plan_id=plan_id)
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
         return JSONResponse(

@@ -46,8 +46,6 @@ class Plan(Base):
 
     # 主键
     id = Column(String(36), primary_key=True, default=_new_uuid)
-    # 套餐编码（唯一）：free / standard / pro
-    code = Column(String(50), unique=True, nullable=False)
     # 套餐名称（中文）
     name = Column(String(100), nullable=False)
     # 每周期赠送 AI 额度
@@ -63,7 +61,7 @@ class Plan(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Plan(id={self.id}, code={self.code}, name={self.name})>"
+        return f"<Plan(id={self.id}, name={self.name})>"
 
 
 class CreditAccount(Base):
@@ -81,8 +79,10 @@ class CreditAccount(Base):
     user_id = Column(
         String(36), ForeignKey("users.id"), unique=True, nullable=False, index=True
     )
-    # 当前套餐编码
-    plan_code = Column(String(50), nullable=False)
+    # 套餐外键 ID（→ plans.id）
+    plan_id = Column(
+        String(36), ForeignKey("plans.id"), nullable=True, index=True
+    )
     # 当前 AI 额度余额（单位：次/点数，整数）
     balance = Column(Integer, nullable=False, default=0)
     # 周期赠送额度
@@ -174,8 +174,12 @@ class UsageEvent(Base):
     )
     # 设备 ID（可选）
     device_id = Column(String(36), ForeignKey("devices.id"), nullable=True)
-    # 功能码
-    feature = Column(String(100), nullable=False)
+    # 功能码（字符串冗余缓存，过渡期保留，新代码优先使用 feature_code_id）
+    feature = Column(String(100), nullable=True)
+    # 功能码外键 ID（→ feature_codes.id）
+    feature_code_id = Column(
+        String(36), ForeignKey("feature_codes.id"), nullable=True, index=True
+    )
     # 事件类型
     event_type = Column(String(100), nullable=False)
     # 请求 ID（可选）

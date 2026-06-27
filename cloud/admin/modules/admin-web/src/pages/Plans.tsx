@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, LBtn, Sheet, Modal, Fld, priBtn, secBtn, finpS } from '../components/shared';
 
-interface Plan { id: string; code: string; name: string; monthly_grant: number; status: string; created_at: string; enabled_features_json?: Record<string, unknown>; updated_at?: string; }
+interface Plan { id: string; name: string; monthly_grant: number; status: string; created_at: string; enabled_features_json?: Record<string, unknown>; updated_at?: string; }
 interface FeatureCode { id: string; code: string; name: string; category: string; is_active: boolean; description?: string | null; }
 
 /** 功能开关条目（可视化用） */
@@ -41,10 +41,9 @@ export default function Plans() {
         <button onClick={() => setShowNew(true)} style={priBtn}>+ 新建套餐</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['编码', '名称', '月赠额度', '状态', '创建时间', '']}>
+      <Card><Tbl heads={['名称', '月赠额度', '状态', '创建时间', '']}>
         {items.map(p => (
           <tr key={p.id}>
-            <td><code style={{ fontSize: 12, fontWeight: 600, color: 'var(--blue)' }}>{p.code}</code></td>
             <td style={{ fontWeight: 500 }}>{p.name}</td>
             <td>{p.monthly_grant.toLocaleString()}</td>
             <td><span style={{ fontSize: 12, fontWeight: 500, color: p.status === 'active' ? '#34c759' : 'var(--gray-500)' }}>{p.status === 'active' ? '启用' : '停用'}</span></td>
@@ -58,7 +57,7 @@ export default function Plans() {
         ))}
       </Tbl></Card>
       {ct && <Modal title="确认" close={() => setCt(null)} action={() => toggle(ct.id, ct.status === 'active' ? 'disabled' : 'active')} danger><p>{ct.status === 'active' ? '停用' : '启用'}套餐 <b>{ct.name}</b>？</p></Modal>}
-      {cd && <Modal title="删除套餐" close={() => setCd(null)} action={del} danger><p>永久删除 <b>{cd.name}</b> ({cd.code})？</p></Modal>}
+      {cd && <Modal title="删除套餐" close={() => setCd(null)} action={del} danger><p>永久删除 <b>{cd.name}</b>？</p></Modal>}
       {(edit || showNew) && <PlanForm plan={edit} close={() => { setEdit(null); setShowNew(false); }} done={() => { setEdit(null); setShowNew(false); load(); }} />}
     </div>
   );
@@ -70,7 +69,6 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   const isEdit = !!plan;
 
   // 基本字段
-  const [code, setCode] = useState(plan?.code || '');
   const [name, setName] = useState(plan?.name || '');
   const [mg, setMg] = useState(plan?.monthly_grant || 0);
 
@@ -160,7 +158,7 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
       if (isEdit) {
         await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body: { name, monthly_grant: mg, enabled_features_json: featuresJson } });
       } else {
-        await apiRequest('/admin/plans', { method: 'POST', body: { code, name, monthly_grant: mg, enabled_features_json: featuresJson } });
+        await apiRequest('/admin/plans', { method: 'POST', body: { name, monthly_grant: mg, enabled_features_json: featuresJson } });
       }
       done();
     } catch (e: unknown) { alert(e instanceof Error ? e.message : '保存失败'); }
@@ -178,7 +176,6 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
 
   return <Sheet title={isEdit ? `编辑: ${plan!.name}` : '新建套餐'} close={close}>
     <form onSubmit={submit}>
-      {!isEdit && <Fld label="编码 *"><input value={code} onChange={e => setCode(e.target.value)} required style={finpS} /></Fld>}
       <Fld label="名称"><input value={name} onChange={e => setName(e.target.value)} required style={finpS} /></Fld>
       <Fld label="月赠额度"><input type="number" value={mg} onChange={e => setMg(Number(e.target.value))} min={0} style={finpS} /></Fld>
 

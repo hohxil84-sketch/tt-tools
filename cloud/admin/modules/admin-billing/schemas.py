@@ -21,7 +21,6 @@ class PlanItem(BaseModel):
     """套餐列表项（摘要信息），对齐 admin-billing.yaml PlanItem。"""
 
     id: str = Field(..., description="套餐 ID（UUID）")
-    code: str = Field(..., description="套餐编码（free / standard / pro）")
     name: str = Field(..., description="套餐名称（中文）")
     monthly_grant: int = Field(..., description="每周期赠送 AI 额度")
     status: str = Field(..., description="套餐状态：active / disabled")
@@ -32,7 +31,6 @@ class PlanDetail(BaseModel):
     """套餐详细信息，对齐 admin-billing.yaml PlanDetail。"""
 
     id: str = Field(..., description="套餐 ID（UUID）")
-    code: str = Field(..., description="套餐编码")
     name: str = Field(..., description="套餐名称")
     monthly_grant: int = Field(..., description="每周期赠送 AI 额度")
     enabled_features_json: dict[str, Any] = Field(
@@ -52,7 +50,6 @@ class PlanListData(BaseModel):
 class CreatePlanRequest(BaseModel):
     """创建套餐请求，对齐 admin-billing.yaml CreatePlanRequest。"""
 
-    code: str = Field(..., description="套餐编码（唯一）")
     name: str = Field(..., description="套餐名称（中文）")
     monthly_grant: int = Field(default=0, ge=0, description="每周期赠送 AI 额度")
     enabled_features_json: dict[str, Any] = Field(
@@ -78,6 +75,19 @@ class UpdatePlanStatusRequest(BaseModel):
         description="目标状态：active / disabled",
         pattern="^(active|disabled)$",
     )
+
+
+class PlanOption(BaseModel):
+    """套餐选项（下拉框用），对齐 admin-billing.yaml PlanOption。"""
+
+    id: str = Field(..., description="套餐 ID（UUID）")
+    name: str = Field(..., description="套餐中文名")
+
+
+class PlanOptionsData(BaseModel):
+    """套餐选项列表，对齐 admin-billing.yaml PlanOptionsData。"""
+
+    items: list[PlanOption] = Field(default_factory=list, description="套餐选项列表")
 
 
 # ============================================================
@@ -142,7 +152,8 @@ class AdminCreditAccountItem(BaseModel):
     id: str = Field(..., description="额度账户 ID（UUID）")
     user_id: str = Field(..., description="用户 ID")
     user_account: Optional[str] = Field(default=None, description="用户账号")
-    plan_code: str = Field(..., description="当前套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
+    plan_name: Optional[str] = Field(default=None, description="当前套餐中文名（从 plans 表关联查询）")
     balance: int = Field(..., description="当前 AI 额度余额")
     monthly_grant: int = Field(..., description="每周期赠送额度")
     status: str = Field(..., description="账户状态：active / frozen")
@@ -158,7 +169,8 @@ class AdminCreditAccountDetail(BaseModel):
     user_id: str = Field(..., description="用户 ID")
     user_account: Optional[str] = Field(default=None, description="用户账号")
     user_display_name: Optional[str] = Field(default=None, description="用户展示名称")
-    plan_code: str = Field(..., description="当前套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
+    plan_name: Optional[str] = Field(default=None, description="当前套餐中文名（从 plans 表关联查询）")
     balance: int = Field(..., description="当前 AI 额度余额")
     monthly_grant: int = Field(..., description="每周期赠送额度")
     status: str = Field(..., description="账户状态")

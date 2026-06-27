@@ -56,7 +56,7 @@ ADMIN_TOKEN_DATA = TokenData(
     user_id="admin-uuid-001",
     device_id="admin-device-001",
     role="admin",
-    plan_code="pro",
+    plan_id="plan-pro",
 )
 
 # Simulated normal user identity
@@ -64,7 +64,7 @@ USER_TOKEN_DATA = TokenData(
     user_id="user-uuid-001",
     device_id="user-device-001",
     role="user",
-    plan_code="free",
+    plan_id="plan-free",
 )
 
 

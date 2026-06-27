@@ -17,7 +17,7 @@ class TestCheckEntitlement:
     async def test_always_returns_true_in_skeleton(self) -> None:
         """骨架阶段所有套餐都应返回 True。"""
         result = await check_entitlement(
-            plan_code="free",
+            plan_id="plan-free",
             feature_code="resize_image_local_paid",
         )
         assert result is True
@@ -27,7 +27,7 @@ class TestCheckEntitlement:
         """任意套餐都应返回 True。"""
         for plan in ["free", "standard", "pro"]:
             result = await check_entitlement(
-                plan_code=plan,
+                plan_id=f"plan-{plan}",
                 feature_code="ai_copy_cloud",
             )
             assert result is True, f"plan={plan} 应返回 True"
@@ -42,7 +42,7 @@ class TestCheckEntitlement:
             "ai_copy_cloud",
         ]:
             result = await check_entitlement(
-                plan_code="free",
+                plan_id="plan-free",
                 feature_code=feature,
             )
             assert result is True, f"feature={feature} 应返回 True"

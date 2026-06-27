@@ -262,7 +262,6 @@ async def test_user(db_session: AsyncSession, seed_plans):
         display_name="测试用户",
         role="user",
         status="active",
-        plan_code="standard",
     )
     db_session.add(user)
     await db_session.flush()
@@ -278,7 +277,6 @@ async def user_b(db_session: AsyncSession, seed_plans):
         display_name="用户B",
         role="user",
         status="active",
-        plan_code="free",
     )
     db_session.add(user)
     await db_session.flush()
@@ -315,7 +313,6 @@ async def auth_headers(test_user, test_credit_account):
         user_id=test_user.id,
         device_id=None,
         role=test_user.role,
-        plan_code=test_user.plan_code,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -328,7 +325,6 @@ async def user_b_auth_headers(user_b, user_b_credit_account):
         user_id=user_b.id,
         device_id=None,
         role=user_b.role,
-        plan_code=user_b.plan_code,
     )
     return {"Authorization": f"Bearer {token}"}
 

@@ -42,14 +42,6 @@ async def _count_ledger_by_source(db_session, source_id: str) -> int:
     return result.scalar()
 
 
-async def _get_user_plan_code(db_session, user_id: str) -> str:
-    """查询用户的 plan_code。"""
-    result = await db_session.execute(
-        text("SELECT plan_code FROM users WHERE id = :uid"),
-        {"uid": user_id},
-    )
-    row = result.fetchone()
-    return row[0] if row else ""
 
 
 # ============================================================
@@ -140,7 +132,6 @@ class TestCreateOrder:
             "client_request_id": "req_extra",
             "user_id": "attacker_user_id",       # 客户端不应提交，应被忽略
             "final_price": 1,                      # 客户端不应提交，应被忽略
-            "plan_code": "pro",                    # 客户端不应提交，应被忽略
         }, headers=auth_headers)
         assert resp.status_code == 200
         body = resp.json()
@@ -150,10 +141,10 @@ class TestCreateOrder:
         assert data["amount_cents"] == 1000
         assert data["product_code"] == "credits_100"
 
-    async def test_create_order_invalid_plan_code(
+    async def test_create_plan_order_invalid_product_code(
         self, client: AsyncClient, test_user, auth_headers
     ):
-        """创建订单时无效 plan code 被拒绝。"""
+        """创建 plan 订单时无效 product_code 被拒绝。"""
         resp = await client.post("/api/v1/orders", json={
             "order_type": "plan",
             "product_code": "enterprise",
@@ -309,12 +300,8 @@ class TestConfirmOrder:
         self, client: AsyncClient, test_user, auth_headers,
         pending_plan_order, db_session
     ):
-        """确认 plan 套餐购买订单：更新用户 plan_code。"""
+        """确认 plan 套餐购买订单。"""
         order_id = pending_plan_order.id
-
-        # 验证确认前 plan_code 为 standard
-        plan_before = await _get_user_plan_code(db_session, test_user.id)
-        assert plan_before == "standard"
 
         # 确认支付
         resp = await client.post(
@@ -324,10 +311,6 @@ class TestConfirmOrder:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["status"] == "paid"
-
-        # 验证 plan_code 已更新为 pro
-        plan_after = await _get_user_plan_code(db_session, test_user.id)
-        assert plan_after == "pro"
 
     # --- 负例：幂等 ---
 
@@ -577,10 +560,6 @@ class TestFullFlow:
         )
         assert confirm_resp.status_code == 200
         assert confirm_resp.json()["data"]["status"] == "paid"
-
-        # 3. 验证 plan_code 已更新
-        plan_after = await _get_user_plan_code(db_session, test_user.id)
-        assert plan_after == "pro"
 
         # 4. 验证额度不受影响（plan 订单不改变额度）
         balance = await _get_balance(db_session, test_user.id)

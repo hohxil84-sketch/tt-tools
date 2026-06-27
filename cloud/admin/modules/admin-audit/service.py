@@ -127,7 +127,7 @@ async def list_audit_logs(
 
     # 查询列表
     query_sql = (
-        f"SELECT id, admin_user_id, admin_account, action, target_type, "
+        f"SELECT id, admin_user_id, admin_account, admin_display_name, action, target_type, "
         f"target_id, summary, ip_address, created_at "
         f"FROM admin_audit_logs {where_clause} "
         f"ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
@@ -142,12 +142,13 @@ async def list_audit_logs(
             id=row[0],
             admin_user_id=row[1],
             admin_account=row[2],
-            action=row[3],
-            target_type=row[4],
-            target_id=row[5],
-            summary=row[6],
-            ip_address=row[7],
-            created_at=_fmt_ts(row[8]),
+            admin_display_name=row[3],
+            action=row[4],
+            target_type=row[5],
+            target_id=row[6],
+            summary=row[7],
+            ip_address=row[8],
+            created_at=_fmt_ts(row[9]),
         )
         for row in rows
     ]
@@ -180,7 +181,7 @@ async def get_audit_log_detail(
 
     result = await db.execute(
         text(
-            "SELECT id, admin_user_id, admin_account, action, target_type, "
+            "SELECT id, admin_user_id, admin_account, admin_display_name, action, target_type, "
             "target_id, summary, details_json, ip_address, created_at "
             "FROM admin_audit_logs WHERE id = :log_id"
         ),
@@ -198,11 +199,12 @@ async def get_audit_log_detail(
         id=row[0],
         admin_user_id=row[1],
         admin_account=row[2],
-        action=row[3],
-        target_type=row[4],
-        target_id=row[5],
-        summary=row[6],
-        details_json=row[7] if row[7] else None,
-        ip_address=row[8],
-        created_at=_fmt_ts(row[9]),
+        admin_display_name=row[3],
+        action=row[4],
+        target_type=row[5],
+        target_id=row[6],
+        summary=row[7],
+        details_json=row[8] if row[8] else None,
+        ip_address=row[9],
+        created_at=_fmt_ts(row[10]),
     )

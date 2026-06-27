@@ -167,6 +167,58 @@ finally:
     sys.path.clear()
     sys.path.extend(_orig_path4)
 
+# 3.6 加载 admin-feature-codes 模型（UsageEvent.feature_code_id FK 需要）
+_afc_models_path = os.path.join(
+    _PROJECT_ROOT, "cloud", "admin", "modules", "admin-feature-codes", "models.py"
+)
+_afc_dir = os.path.dirname(_afc_models_path)
+_orig_path5 = list(sys.path)
+if _afc_dir in sys.path:
+    sys.path.remove(_afc_dir)
+sys.path.insert(0, _afc_dir)
+_saved_modules5 = {}
+for _k in ("models", "service", "schemas", "router"):
+    if _k in sys.modules:
+        _saved_modules5[_k] = sys.modules.pop(_k)
+try:
+    _spec5 = _iu.spec_from_file_location("admin_feature_codes_models", _afc_models_path)
+    _afc_mod = _iu.module_from_spec(_spec5)
+    sys.modules["admin_feature_codes_models"] = _afc_mod
+    _spec5.loader.exec_module(_afc_mod)
+finally:
+    for _k in ("models", "service", "schemas", "router"):
+        sys.modules.pop(_k, None)
+    for _k, _v in _saved_modules5.items():
+        sys.modules[_k] = _v
+    sys.path.clear()
+    sys.path.extend(_orig_path5)
+
+# 3.7 加载 admin-providers 模型（CreditAccount FK 链路可能需要）
+_apr_models_path = os.path.join(
+    _PROJECT_ROOT, "cloud", "admin", "modules", "admin-providers", "models.py"
+)
+_apr_dir = os.path.dirname(_apr_models_path)
+_orig_path6 = list(sys.path)
+if _apr_dir in sys.path:
+    sys.path.remove(_apr_dir)
+sys.path.insert(0, _apr_dir)
+_saved_modules6 = {}
+for _k in ("models", "service", "schemas", "router"):
+    if _k in sys.modules:
+        _saved_modules6[_k] = sys.modules.pop(_k)
+try:
+    _spec6 = _iu.spec_from_file_location("admin_providers_models", _apr_models_path)
+    _apr_mod = _iu.module_from_spec(_spec6)
+    sys.modules["admin_providers_models"] = _apr_mod
+    _spec6.loader.exec_module(_apr_mod)
+finally:
+    for _k in ("models", "service", "schemas", "router"):
+        sys.modules.pop(_k, None)
+    for _k, _v in _saved_modules6.items():
+        sys.modules[_k] = _v
+    sys.path.clear()
+    sys.path.extend(_orig_path6)
+
 # 4. 清理模块缓存，确保 admin-billing 的 router/service/schemas 重新导入
 for _key in list(sys.modules.keys()):
     if _key in ("router", "service", "schemas", "models") or _key.startswith(
@@ -193,14 +245,14 @@ ADMIN_TOKEN_DATA = TokenData(
     user_id="admin-uuid-001",
     device_id="admin-device-001",
     role="admin",
-    plan_code="pro",
+    plan_id="plan-pro",
 )
 
 USER_TOKEN_DATA = TokenData(
     user_id="user-uuid-001",
     device_id="user-device-001",
     role="user",
-    plan_code="free",
+    plan_id="plan-free",
 )
 
 
@@ -270,7 +322,6 @@ async def _seed_test_data(session_factory) -> None:
         # === 套餐数据 ===
         plan_free = Plan(
             id="plan-free",
-            code="free",
             name="免费套餐",
             monthly_grant=10,
             enabled_features_json={
@@ -282,7 +333,6 @@ async def _seed_test_data(session_factory) -> None:
         )
         plan_standard = Plan(
             id="plan-standard",
-            code="standard",
             name="标准套餐",
             monthly_grant=500,
             enabled_features_json={
@@ -294,7 +344,6 @@ async def _seed_test_data(session_factory) -> None:
         )
         plan_pro = Plan(
             id="plan-pro",
-            code="pro",
             name="专业套餐",
             monthly_grant=2000,
             enabled_features_json={
@@ -315,7 +364,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="Alice",
             role="user",
             status="active",
-            plan_code="standard",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -326,7 +375,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="Bob",
             role="user",
             status="blocked",
-            plan_code="free",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -337,7 +386,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="管理员",
             role="admin",
             status="active",
-            plan_code="pro",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -347,7 +396,7 @@ async def _seed_test_data(session_factory) -> None:
         acct1 = CreditAccount(
             id="acct-001",
             user_id="user-001",
-            plan_code="standard",
+            plan_id="plan-standard",
             balance=450,
             monthly_grant=500,
             period_start=_now(),
@@ -359,7 +408,7 @@ async def _seed_test_data(session_factory) -> None:
         acct2 = CreditAccount(
             id="acct-002",
             user_id="user-002",
-            plan_code="free",
+            plan_id="plan-free",
             balance=5,
             monthly_grant=10,
             period_start=_now(),
@@ -371,7 +420,7 @@ async def _seed_test_data(session_factory) -> None:
         acct3 = CreditAccount(
             id="acct-003",
             user_id="admin-001",
-            plan_code="pro",
+            plan_id="plan-pro",
             balance=2000,
             monthly_grant=2000,
             period_start=_now(),

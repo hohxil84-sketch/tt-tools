@@ -141,7 +141,7 @@ async def seed_all():
                 display_name=f"测试用户{i+1:02d}",
                 role="user" if i < 8 else "admin",
                 status="active" if i < 9 else "blocked",
-                plan_code=["free", "free", "standard", "standard", "pro", "free", "standard", "pro", "free", "standard"][i],
+                plan_id=None,
                 created_at=_days_ago(30 - i * 2),
                 updated_at=_now(),
             )
@@ -156,7 +156,7 @@ async def seed_all():
             display_name="系统管理员",
             role="admin",
             status="active",
-            plan_code="pro",
+            plan_id=None,
             created_at=_days_ago(60),
             updated_at=_now(),
         ))
@@ -221,14 +221,13 @@ async def seed_all():
 
         # ========== 4. credit_accounts (10) ==========
         print("   [credit_accounts] 插入中...")
-        plan_codes = ["free", "standard", "pro", "enterprise", "starter", "designer", "free", "standard", "pro", "free"]
         grants = [10, 500, 2000, 10000, 50, 800, 10, 500, 2000, 10]
         acct_ids = [_rand_str("acct-") for _ in range(10)]
         accounts = [
             CreditAccount(
                 id=acct_ids[i],
                 user_id=user_ids[i],
-                plan_code=plan_codes[i],
+                plan_id=None,
                 balance=random.randint(5, 5000),
                 monthly_grant=grants[i],
                 period_start=_days_ago(30),

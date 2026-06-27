@@ -135,7 +135,7 @@ async def test_user(db_session: AsyncSession):
         display_name="测试用户",
         role="user",
         status="active",
-        plan_code="standard",
+        plan_id=None,
     )
     db_session.add(user)
     await db_session.flush()

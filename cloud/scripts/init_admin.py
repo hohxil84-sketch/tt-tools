@@ -101,7 +101,7 @@ async def create_admin_user():
             display_name="管理员",
             role="admin",
             status="active",
-            plan_code="pro",
+            plan_id=None,
         )
         session.add(admin)
         await session.commit()

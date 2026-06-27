@@ -219,7 +219,7 @@ async function tryRefreshToken(): Promise<boolean> {
   return _refreshPromise;
 }
 
-export function setUser(user: { id: string; account: string; display_name?: string; plan_code?: string; permissions?: string[] }) {
+export function setUser(user: { id: string; account: string; display_name?: string; permissions?: string[] }) {
   localStorage.setItem('admin_user', JSON.stringify(user));
   // 同时单独存储权限列表，方便快速读取
   if (user.permissions) {
@@ -227,7 +227,7 @@ export function setUser(user: { id: string; account: string; display_name?: stri
   }
 }
 
-export function getUser(): { id: string; account: string; display_name?: string; plan_code?: string; permissions?: string[] } | null {
+export function getUser(): { id: string; account: string; display_name?: string; permissions?: string[] } | null {
   try {
     const raw = localStorage.getItem('admin_user');
     return raw ? JSON.parse(raw) : null;

@@ -15,6 +15,7 @@ class AdminAuditLog(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     admin_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     admin_account: Mapped[str] = mapped_column(String(255), nullable=False)
+    admin_display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     action: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     target_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     target_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

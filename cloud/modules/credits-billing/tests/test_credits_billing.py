@@ -34,7 +34,7 @@ class TestCreditsBalance:
 
         data = body["data"]
         assert data["user_id"] == test_user.id
-        assert data["plan_code"] == "standard"
+        assert data["plan_id"] is None
         assert data["monthly_grant"] == 500
         assert data["balance"] == 500  # 新账户获得初始赠送
         assert data["status"] == "active"
@@ -54,7 +54,7 @@ class TestCreditsBalance:
 
         data = body["data"]
         assert data["user_id"] == test_user.id
-        assert data["plan_code"] == "standard"
+        assert data["plan_id"] is None
         assert data["balance"] == 500  # 自动创建，获得初始赠送
 
     async def test_get_balance_no_auth(self, client: AsyncClient):
@@ -70,7 +70,7 @@ class TestCreditsBalance:
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
-        assert body["data"]["plan_code"] == "free"
+        assert body["data"]["plan_id"] is None
         assert body["data"]["monthly_grant"] == 10
         assert body["data"]["balance"] == 10
 
@@ -82,7 +82,7 @@ class TestCreditsBalance:
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
-        assert body["data"]["plan_code"] == "pro"
+        assert body["data"]["plan_id"] is None
         assert body["data"]["monthly_grant"] == 2000
         assert body["data"]["balance"] == 2000
 
@@ -197,7 +197,7 @@ class TestEntitlementsCheck:
         assert body["success"] is True
         assert body["data"]["allowed"] is True
         assert body["data"]["feature"] == "resize_image_local_paid"
-        assert body["data"]["plan_code"] == "standard"
+        assert body["data"]["plan_id"] == "standard"
         assert body["data"]["remaining_free_quota"] is None
         assert body["data"]["reason"] is None
 
@@ -213,7 +213,7 @@ class TestEntitlementsCheck:
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["allowed"] is True
-        assert body["data"]["plan_code"] == "pro"
+        assert body["data"]["plan_id"] is None
 
     async def test_check_entitlement_free_user_with_quota(
         self, client: AsyncClient, free_user, free_credit_account, free_auth_headers
@@ -228,7 +228,7 @@ class TestEntitlementsCheck:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["allowed"] is True
-        assert body["data"]["plan_code"] == "free"
+        assert body["data"]["plan_id"] is None
         # 首次使用，剩余配额应为 daily_limit - 1 = 2
         assert body["data"]["remaining_free_quota"] == 2
 
@@ -453,8 +453,8 @@ class TestSeedPlans:
         from service import seed_plans
         plans = await seed_plans(db_session)
         assert len(plans) == 3
-        codes = {p.code for p in plans}
-        assert codes == {"free", "standard", "pro"}
+        names = {p.name for p in plans}
+        assert names == {"免费套餐", "标准套餐", "专业套餐"}
 
     async def test_seed_plans_idempotent(self, db_session):
         """重复调用 seed_plans 不会重复插入。"""
@@ -478,7 +478,7 @@ class TestSeedPlans:
         await seed_plans(db_session)
 
         result = await db_session.execute(
-            select(Plan).where(Plan.code == "free")
+            select(Plan).where(Plan.name == "免费套餐")
         )
         plan = result.scalar_one()
         features = plan.enabled_features_json
@@ -496,7 +496,7 @@ class TestSeedPlans:
         await seed_plans(db_session)
 
         result = await db_session.execute(
-            select(Plan).where(Plan.code == "standard")
+            select(Plan).where(Plan.name == "标准套餐")
         )
         plan = result.scalar_one()
         features = plan.enabled_features_json

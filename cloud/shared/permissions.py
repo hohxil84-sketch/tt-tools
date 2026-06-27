@@ -12,7 +12,7 @@ from typing import Optional
 
 
 async def check_entitlement(
-    plan_code: str,
+    plan_id: str,
     feature_code: str,
 ) -> bool:
     """检查给定套餐是否有权限使用指定功能码（骨架实现）。
@@ -21,7 +21,7 @@ async def check_entitlement(
     权限判断由 cloud/modules/credits-billing 实现。
 
     Args:
-        plan_code: 用户当前套餐编码（如 free / standard / pro）
+        plan_id: 用户当前套餐 ID（UUID）
         feature_code: 功能码（如 resize_image_local_paid）
 
     Returns:
@@ -29,7 +29,7 @@ async def check_entitlement(
     """
     # 骨架实现：所有本地功能默认允许。
     # 付费功能权限在 credits-billing 模块中细化。
-    _ = plan_code  # 预留参数位，待 credits-billing 模块实现
+    _ = plan_id  # 预留参数位，待 credits-billing 模块实现
     _ = feature_code
     return True
 

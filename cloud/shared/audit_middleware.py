@@ -166,6 +166,116 @@ class AuditMiddleware:
                     logger.error(f"Audit write failed:\n{traceback.format_exc()}")
 
 
+async def _query_target_identity(session, target_type: str, target_id: str) -> str:
+    """查询目标实体的身份标识（用于生成具体摘要）。
+
+    Args:
+        session: 数据库会话
+        target_type: 目标类型
+        target_id: 目标实体 ID
+
+    Returns:
+        目标实体的身份标识字符串（如用户账号、设备名、订单号等）
+    """
+    from sqlalchemy import text
+    try:
+        if target_type == "user":
+            r = await session.execute(
+                text("SELECT account FROM users WHERE id = :tid"), {"tid": target_id}
+            )
+            row = r.first()
+            return row[0] if row else target_id[:8] + "..."
+        elif target_type == "device":
+            r = await session.execute(
+                text("SELECT device_name FROM devices WHERE id = :tid"), {"tid": target_id}
+            )
+            row = r.first()
+            return row[0] if row and row[0] else target_id[:8] + "..."
+        elif target_type == "order":
+            r = await session.execute(
+                text("SELECT order_no FROM orders WHERE id = :tid"), {"tid": target_id}
+            )
+            row = r.first()
+            return row[0] if row else target_id[:8] + "..."
+        elif target_type == "plan":
+            r = await session.execute(
+                text("SELECT name FROM plans WHERE id = :tid"), {"tid": target_id}
+            )
+            row = r.first()
+            return row[0] if row else target_id[:8] + "..."
+        elif target_type == "credits":
+            r = await session.execute(
+                text("SELECT u.account FROM credit_accounts ca JOIN users u ON ca.user_id = u.id WHERE ca.id = :tid"),
+                {"tid": target_id}
+            )
+            row = r.first()
+            return f"用户{row[0]}" if row else target_id[:8] + "..."
+        elif target_type in ("feature_flag", "feature_code"):
+            r = await session.execute(
+                text("SELECT name FROM feature_codes WHERE id = :tid"), {"tid": target_id}
+            )
+            row = r.first()
+            return row[0] if row else target_id[:8] + "..."
+        elif target_type == "provider":
+            r = await session.execute(
+                text("SELECT name FROM providers WHERE id = :tid"), {"tid": target_id}
+            )
+            row = r.first()
+            return row[0] if row else target_id[:8] + "..."
+        elif target_type == "role":
+            r = await session.execute(
+                text("SELECT name FROM roles WHERE id = :tid"), {"tid": target_id}
+            )
+            row = r.first()
+            return row[0] if row else target_id[:8] + "..."
+    except Exception:
+        pass
+    return target_id[:8] + "..." if target_id else "—"
+
+
+def _build_specific_summary(action: str, target_type: str, target_identity: str,
+                             response_status: int) -> str:
+    """生成具体的中文操作摘要。
+
+    相比之前的笼统格式（如"修改状态 成功"），新格式包含目标实体身份：
+    - "创建用户 zhangsan@tt.com"
+    - "封禁用户 lisi@tt.com"
+    - "更新套餐 enterprise"
+    - "退款订单 ORD-20260625-abc"
+
+    Args:
+        action: 操作类型
+        target_type: 目标类型
+        target_identity: 目标实体身份标识
+        response_status: HTTP 响应状态码
+
+    Returns:
+        具体的中文摘要字符串
+    """
+    target_label = _TARGET_LABELS.get(target_type, target_type)
+    result_text = "成功" if 200 <= response_status < 300 else f"失败({response_status})"
+
+    # 针对每种操作类型生成更具体的摘要
+    if action == "create":
+        return f"创建{target_label}「{target_identity}」{result_text}"
+    elif action == "delete":
+        return f"删除{target_label}「{target_identity}」{result_text}"
+    elif action == "update":
+        return f"编辑{target_label}「{target_identity}」{result_text}"
+    elif action == "status_change":
+        return f"修改{target_label}「{target_identity}」状态 {result_text}"
+    elif action == "adjust":
+        return f"调整{target_label}「{target_identity}」额度 {result_text}"
+    elif action == "refund":
+        return f"退款{target_label}「{target_identity}」{result_text}"
+    elif action == "cancel":
+        return f"取消{target_label}「{target_identity}」{result_text}"
+    elif action == "batch":
+        return f"批量操作{target_label} {result_text}"
+    else:
+        return f"{action} {target_label}「{target_identity}」{result_text}"
+
+
 async def _write_audit_entry(
     admin_user_id: str,
     action: str,
@@ -174,9 +284,8 @@ async def _write_audit_entry(
     response_status: int,
     ip_address: Optional[str],
 ) -> None:
-    """异步写入一条审计日志到数据库。"""
+    """异步写入一条审计日志到数据库（含操作人姓名和具体操作摘要）。"""
     import uuid
-    from datetime import datetime, timezone
 
     try:
         from cloud.shared.database import _get_engine
@@ -194,38 +303,43 @@ async def _write_audit_entry(
 
         log_id = str(uuid.uuid4())
 
-        # 查询管理员账号
-        admin_account = "unknown"
         async with AsyncSession(engine) as session:
+            # 查询操作人的账号和姓名
+            admin_account = "unknown"
+            admin_display_name = None
             try:
                 user_result = await session.execute(
-                    text("SELECT account FROM users WHERE id = :uid"),
+                    text("SELECT account, display_name FROM users WHERE id = :uid"),
                     {"uid": admin_user_id},
                 )
                 user_row = user_result.first()
                 if user_row:
                     admin_account = user_row[0]
+                    admin_display_name = user_row[1]
             except Exception:
                 pass
 
-            result_text = "成功" if 200 <= response_status < 300 else f"失败({response_status})"
-            action_label = _ACTION_LABELS.get(action, action)
-            target_label = _TARGET_LABELS.get(target_type, target_type)
-            summary = f"{action_label}{target_label} {result_text}"
+            # 查询目标实体身份，生成具体摘要
+            target_identity = ""
+            if target_id:
+                target_identity = await _query_target_identity(session, target_type, target_id)
+
+            summary = _build_specific_summary(action, target_type, target_identity, response_status)
 
             # 使用数据库 NOW() 而非 Python datetime，避免客户端/服务端时区偏差
             await session.execute(
                 text(
                     "INSERT INTO admin_audit_logs "
-                    "(id, admin_user_id, admin_account, action, target_type, "
+                    "(id, admin_user_id, admin_account, admin_display_name, action, target_type, "
                     "target_id, summary, details_json, ip_address, created_at) "
-                    "VALUES (:id, :uid, :account, :action, :target_type, "
+                    "VALUES (:id, :uid, :account, :display_name, :action, :target_type, "
                     ":target_id, :summary, :details, :ip, NOW())"
                 ),
                 {
                     "id": log_id,
                     "uid": admin_user_id,
                     "account": admin_account,
+                    "display_name": admin_display_name,
                     "action": action,
                     "target_type": target_type,
                     "target_id": target_id,
@@ -235,6 +349,6 @@ async def _write_audit_entry(
                 },
             )
             await session.commit()
-            logger.info(f"Audit: {summary} by {admin_account}")
+            logger.info(f"Audit: {summary} by {admin_account}({admin_display_name or ''})")
     except Exception:
         logger.error(f"Audit DB write failed:\n{traceback.format_exc()}")

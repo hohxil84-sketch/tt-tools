@@ -55,8 +55,10 @@ class UserAdmin(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="user")
     # 用户状态：active / blocked / deleted
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
-    # 当前套餐编码
-    plan_code: Mapped[str] = mapped_column(String(50), nullable=False, default="free")
+    # 套餐外键 ID（→ plans.id）
+    plan_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("plans.id"), nullable=True
+    )
     # 创建时间
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     # 更新时间

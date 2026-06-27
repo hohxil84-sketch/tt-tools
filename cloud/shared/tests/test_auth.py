@@ -31,7 +31,7 @@ async def get_me(user: TokenData = Depends(require_auth)) -> dict:
     return {
         "user_id": user.user_id,
         "role": user.role,
-        "plan_code": user.plan_code,
+        "plan_id": user.plan_id,
     }
 
 
@@ -84,7 +84,7 @@ class TestTokenData:
         assert td.user_id == "uuid-001"
         assert td.device_id is None
         assert td.role == "user"
-        assert td.plan_code == "free"
+        assert td.plan_id is None
 
     def test_create_full(self) -> None:
         """完整 TokenData。"""
@@ -92,11 +92,11 @@ class TestTokenData:
             user_id="uuid-002",
             device_id="dev-001",
             role="admin",
-            plan_code="pro",
+            plan_id="plan-pro",
         )
         assert td.device_id == "dev-001"
         assert td.role == "admin"
-        assert td.plan_code == "pro"
+        assert td.plan_id == "plan-pro"
 
 
 # ============================================================
@@ -112,13 +112,13 @@ class TestJwtCreateAndDecode:
             user_id="user-abc",
             device_id="dev-xyz",
             role="user",
-            plan_code="standard",
+            plan_id="plan-standard",
         )
         data = decode_token(token)
         assert data.user_id == "user-abc"
         assert data.device_id == "dev-xyz"
         assert data.role == "user"
-        assert data.plan_code == "standard"
+        assert data.plan_id == "plan-standard"
 
     def test_token_is_string(self) -> None:
         """签发的 token 应为字符串。"""
@@ -133,11 +133,11 @@ class TestJwtCreateAndDecode:
             decode_token("invalid-token-string")
 
     def test_create_token_with_defaults(self) -> None:
-        """默认 role 和 plan_code 应为 user / free。"""
+        """默认 role 和 plan_id 应为 user / None。"""
         token = create_access_token(user_id="u-default")
         data = decode_token(token)
         assert data.role == "user"
-        assert data.plan_code == "free"
+        assert data.plan_id is None
         assert data.device_id is None
 
 
@@ -168,7 +168,7 @@ class TestRequireAuth:
         token = create_access_token(
             user_id="test-user-id",
             role="user",
-            plan_code="standard",
+            plan_id="plan-standard",
         )
         response = await auth_client.get(
             "/me", headers={"Authorization": f"Bearer {token}"}
@@ -177,7 +177,7 @@ class TestRequireAuth:
         body = response.json()
         assert body["user_id"] == "test-user-id"
         assert body["role"] == "user"
-        assert body["plan_code"] == "standard"
+        assert body["plan_id"] == "plan-standard"
 
 
 class TestRequireAdmin:

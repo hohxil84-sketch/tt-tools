@@ -66,6 +66,34 @@ if os.path.exists(_roles_models_path):
         sys.modules["admin_roles_models"] = _mod
         _spec.loader.exec_module(_mod)
 
+# 导入 admin-feature-codes 模型（UsageEvent.feature_code_id FK 需要）
+_fc_models_path = os.path.join(_PROJECT_ROOT, "cloud", "admin", "modules", "admin-feature-codes", "models.py")
+if os.path.exists(_fc_models_path):
+    _fc_spec = _iu.spec_from_file_location("admin_feature_codes_models", _fc_models_path)
+    if _fc_spec and _fc_spec.loader:
+        _fc_mod = _iu.module_from_spec(_fc_spec)
+        sys.modules["admin_feature_codes_models"] = _fc_mod
+        _fc_spec.loader.exec_module(_fc_mod)
+
+# 导入 admin-providers 模型（provider_call_log.provider_id FK 需要）
+_pr_models_path = os.path.join(_PROJECT_ROOT, "cloud", "admin", "modules", "admin-providers", "models.py")
+if os.path.exists(_pr_models_path):
+    _pr_spec = _iu.spec_from_file_location("admin_providers_models", _pr_models_path)
+    if _pr_spec and _pr_spec.loader:
+        _pr_mod = _iu.module_from_spec(_pr_spec)
+        sys.modules["admin_providers_models"] = _pr_mod
+        _pr_spec.loader.exec_module(_pr_mod)
+
+# 导入 credits-billing 模型（Plan），确保 plans 表在测试数据库中存在
+# users.plan_id FK → plans.id 需要 plans 表先创建
+_plans_models_path = os.path.join(_PROJECT_ROOT, "cloud", "modules", "credits-billing", "models.py")
+if os.path.exists(_plans_models_path):
+    _pl_spec = _iu.spec_from_file_location("credits_billing_models", _plans_models_path)
+    if _pl_spec and _pl_spec.loader:
+        _pl_mod = _iu.module_from_spec(_pl_spec)
+        sys.modules["credits_billing_models"] = _pl_mod
+        _pl_spec.loader.exec_module(_pl_mod)
+
 # 直接从 admin-users 模块目录导入路由
 from router import router as admin_users_router  # noqa: E402
 
@@ -79,7 +107,7 @@ ADMIN_TOKEN_DATA = TokenData(
     user_id="admin-uuid-001",
     device_id="admin-device-001",
     role="admin",
-    plan_code="pro",
+    plan_id="plan-pro",
 )
 
 # 模拟普通用户身份
@@ -87,7 +115,7 @@ USER_TOKEN_DATA = TokenData(
     user_id="user-uuid-001",
     device_id="user-device-001",
     role="user",
-    plan_code="free",
+    plan_id="plan-free",
 )
 
 
@@ -156,7 +184,45 @@ async def _seed_test_data(session_factory) -> None:
     def _now():
         return datetime.now(timezone.utc).replace(tzinfo=None)
 
+    # 获取 Plan 模型引用
+    from importlib import import_module
+    try:
+        _plan_mod = import_module("credits_billing_models")
+    except ImportError:
+        _plan_mod = sys.modules.get("credits_billing_models")
+    Plan = _plan_mod.Plan
+
     async with session_factory() as session:
+        # === 套餐数据（plan_id → plan_name 关联查询需要） ===
+        plan_free = Plan(
+            id="plan-free",
+            name="免费套餐",
+            monthly_grant=10,
+            enabled_features_json={},
+            status="active",
+            created_at=_now(),
+            updated_at=_now(),
+        )
+        plan_standard = Plan(
+            id="plan-standard",
+            name="标准套餐",
+            monthly_grant=500,
+            enabled_features_json={"ai_copy_cloud": True},
+            status="active",
+            created_at=_now(),
+            updated_at=_now(),
+        )
+        plan_pro = Plan(
+            id="plan-pro",
+            name="专业套餐",
+            monthly_grant=2000,
+            enabled_features_json={"ai_copy_cloud": True, "ai_render_cloud": True},
+            status="active",
+            created_at=_now(),
+            updated_at=_now(),
+        )
+        session.add_all([plan_free, plan_standard, plan_pro])
+
         # 用户 1：正常活跃用户
         user1 = UserAdmin(
             id="user-001",
@@ -165,7 +231,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="Alice",
             role="user",
             status="active",
-            plan_code="standard",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -177,7 +243,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="Bob",
             role="user",
             status="blocked",
-            plan_code="free",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -189,7 +255,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="管理员",
             role="admin",
             status="active",
-            plan_code="pro",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )

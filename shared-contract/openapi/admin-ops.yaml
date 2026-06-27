@@ -364,6 +364,10 @@ components:
         feature:
           type: string
           description: 功能码
+        feature_name:
+          type: string
+          nullable: true
+          description: 功能中文名（从 feature_codes 表关联查询）
         provider:
           type: string
           description: Provider 名称
@@ -441,6 +445,10 @@ components:
         feature:
           type: string
           description: 功能码
+        feature_name:
+          type: string
+          nullable: true
+          description: 功能中文名（从 feature_codes 表关联查询）
         provider:
           type: string
           description: Provider 名称
@@ -527,6 +535,10 @@ components:
         key:
           type: string
           description: 维度值（如功能码 ai_copy_cloud 或 Provider 名称 deepseek）
+        key_name:
+          type: string
+          nullable: true
+          description: 维度值中文名（仅 by_feature 时有值，从 feature_codes 表关联查询）
         calls:
           type: integer
           description: 调用次数
@@ -606,6 +618,10 @@ components:
           format: uuid
           nullable: true
           description: 设备 ID
+        device_name:
+          type: string
+          nullable: true
+          description: 设备名称（从 devices 表关联查询）
         risk_type:
           type: string
           description: 风险类型
@@ -648,6 +664,10 @@ components:
           format: uuid
           nullable: true
           description: 设备 ID
+        device_name:
+          type: string
+          nullable: true
+          description: 设备名称（从 devices 表关联查询）
         risk_type:
           type: string
           description: 风险类型

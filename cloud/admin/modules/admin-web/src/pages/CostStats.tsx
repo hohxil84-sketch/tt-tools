@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api/client';
 
-interface Brk { key: string; calls: number; total_tokens: number; total_cost: number; total_credits: number; }
+interface Brk { key: string; key_name?: string | null; calls: number; total_tokens: number; total_cost: number; total_credits: number; }
 interface Stats { total_calls: number; total_tokens: number; total_cost: number; total_credits_charged: number; by_feature: Brk[]; by_provider: Brk[]; }
 
 export default function CostStats() {
@@ -46,7 +46,13 @@ function Section({ title, items }: { title: string; items: Brk[] }) {
           <th style={{ textAlign: 'right' }}>额度</th>
         </tr></thead>
         <tbody>{items.map(i => <tr key={i.key}>
-          <td><code style={{ fontSize: 12, color: 'var(--blue)' }}>{i.key}</code></td>
+          <td>
+            {i.key_name ? (
+              <><span style={{ fontSize: 13, fontWeight: 500 }}>{i.key_name}</span><br /><code style={{ fontSize: 10, color: 'var(--gray-400)' }}>{i.key}</code></>
+            ) : (
+              <code style={{ fontSize: 12, color: 'var(--blue)' }}>{i.key}</code>
+            )}
+          </td>
           <td style={{ textAlign: 'right' }}>{i.calls.toLocaleString()}</td>
           <td style={{ textAlign: 'right' }}>{i.total_tokens.toLocaleString()}</td>
           <td style={{ textAlign: 'right' }}>${i.total_cost.toFixed(4)}</td>

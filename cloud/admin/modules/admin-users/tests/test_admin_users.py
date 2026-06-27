@@ -165,7 +165,7 @@ class TestGetUserDetail:
         assert data["display_name"] == "Alice"
         assert data["role"] == "user"
         assert data["status"] == "active"
-        assert data["plan_code"] == "standard"
+        assert data["plan_id"] is None
         assert "created_at" in data
         assert "updated_at" in data
         # password_hash 不应返回

@@ -44,9 +44,13 @@ class AiTask(Base):
         String(36), ForeignKey("devices.id"), nullable=True,
         comment="设备 ID"
     )
-    feature: Mapped[str] = mapped_column(
-        String(100), nullable=False,
-        comment="功能码"
+    feature: Mapped[str | None] = mapped_column(
+        String(100), nullable=True,
+        comment="功能码（字符串冗余缓存，过渡期保留）"
+    )
+    feature_code_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("feature_codes.id"), nullable=True,
+        comment="功能码外键 ID"
     )
     status: Mapped[str] = mapped_column(
         String(50), nullable=False,

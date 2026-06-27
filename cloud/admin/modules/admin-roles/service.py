@@ -93,11 +93,11 @@ async def assign_permissions_to_role(db: AsyncSession, role_id: str, permission_
 
 async def get_user_roles(db: AsyncSession, user_id: str) -> list[UserRoleItem]:
     result = await db.execute(
-        text("SELECT ur.user_id, ur.role_id, r.name FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = :uid"),
+        text("SELECT r.id, r.name, r.code, r.is_system FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = :uid"),
         {"uid": user_id},
     )
     rows = result.all()
-    return [UserRoleItem(user_id=r[0], role_id=r[1], role_name=r[2]) for r in rows]
+    return [UserRoleItem(id=r[0], name=r[1], code=r[2], is_system=r[3]) for r in rows]
 
 
 async def assign_roles_to_user(db: AsyncSession, user_id: str, role_ids: list[str]) -> list[UserRoleItem]:

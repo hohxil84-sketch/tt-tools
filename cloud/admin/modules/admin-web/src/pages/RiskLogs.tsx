@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, LBtn, Pager, Sheet, secBtn, inpS, selS } from '../components/shared';
 
-interface Risk { id: string; user_id: string | null; user_account: string | null; device_id: string | null; risk_type: string; severity: string; created_at: string; user_display_name?: string | null; details_json?: Record<string, unknown>; }
+interface Risk { id: string; user_id: string | null; user_account: string | null; device_id: string | null; device_name?: string | null; risk_type: string; severity: string; created_at: string; user_display_name?: string | null; details_json?: Record<string, unknown>; }
 interface List { items: Risk[]; total: number; limit: number; offset: number; }
 const PAGE = 20;
 const SC: Record<string, string> = { low: '#34c759', medium: '#ff9500', high: '#ff3b30' };
@@ -36,7 +36,7 @@ export default function RiskLogs() {
             <td style={{ fontWeight: 500 }}>{r.risk_type}</td>
             <td><Badge t={r.severity.toUpperCase()} c={SC[r.severity] || 'var(--gray-500)'} /></td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{r.user_account || r.user_id?.substring(0, 8) || '—'}</td>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{r.device_id ? r.device_id.substring(0, 10) + '…' : '—'}</td>
+            <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{r.device_name || (r.device_id ? r.device_id.substring(0, 8) + '…' : '—')}</td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(r.created_at).toLocaleString('zh-CN')}</td>
             <td style={{ textAlign: 'right' }}><LBtn onClick={() => setDetail(r)}>详情</LBtn></td>
           </tr>
@@ -45,7 +45,7 @@ export default function RiskLogs() {
       <Pager pg={pg} tp={TP} total={d?.total || 0} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
       {detail && <Sheet title="风控详情" close={() => setDetail(null)}>
         <div>
-          {[['类型', detail.risk_type], ['级别', detail.severity], ['用户', detail.user_account || detail.user_id], ['名称', detail.user_display_name], ['设备', detail.device_id], ['时间', new Date(detail.created_at).toLocaleString('zh-CN')]].map(([l, v]) => <div key={l} style={{ display: 'flex', padding: '6px 0', borderBottom: '1px solid var(--gray-200)' }}><span style={{ width: 80, fontSize: 12, color: 'var(--gray-500)' }}>{l}</span><span style={{ fontSize: 13 }}>{v || '—'}</span></div>)}
+          {[['类型', detail.risk_type], ['级别', detail.severity], ['用户', detail.user_account || detail.user_id], ['名称', detail.user_display_name], ['设备', detail.device_name || detail.device_id], ['时间', new Date(detail.created_at).toLocaleString('zh-CN')]].map(([l, v]) => <div key={l} style={{ display: 'flex', padding: '6px 0', borderBottom: '1px solid var(--gray-200)' }}><span style={{ width: 80, fontSize: 12, color: 'var(--gray-500)' }}>{l}</span><span style={{ fontSize: 13 }}>{v || '—'}</span></div>)}
         </div>
         {detail.details_json && <div style={{ marginTop: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--gray-500)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.02em' }}>详情</div>

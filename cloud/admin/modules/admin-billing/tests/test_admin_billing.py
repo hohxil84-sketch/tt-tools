@@ -66,8 +66,8 @@ class TestListPlans:
 
         data = _assert_success_response(resp.json())
         assert len(data["items"]) == 3
-        codes = {item["code"] for item in data["items"]}
-        assert codes == {"free", "standard", "pro"}
+        names = {item["name"] for item in data["items"]}
+        assert names == {"免费套餐", "标准套餐", "专业套餐"}
 
     async def test_plan_items_have_required_fields(self, admin_client: AsyncClient):
         """套餐列表项应包含所有必填字段。"""
@@ -76,7 +76,6 @@ class TestListPlans:
 
         for item in data["items"]:
             assert "id" in item
-            assert "code" in item
             assert "name" in item
             assert "monthly_grant" in item
             assert "status" in item
@@ -112,7 +111,6 @@ class TestGetPlanDetail:
 
         data = _assert_success_response(resp.json())
         assert data["id"] == "plan-standard"
-        assert data["code"] == "standard"
         assert data["name"] == "标准套餐"
         assert data["monthly_grant"] == 500
         assert data["status"] == "active"
@@ -153,7 +151,6 @@ class TestCreatePlan:
         resp = await admin_client.post(
             "/api/v1/admin/plans",
             json={
-                "code": "enterprise",
                 "name": "企业套餐",
                 "monthly_grant": 5000,
                 "enabled_features_json": {"ai_copy_cloud": True, "ai_render_cloud": True},
@@ -162,27 +159,26 @@ class TestCreatePlan:
         assert resp.status_code == 200
 
         data = _assert_success_response(resp.json())
-        assert data["code"] == "enterprise"
         assert data["name"] == "企业套餐"
         assert data["monthly_grant"] == 5000
         assert data["status"] == "active"
         assert data["enabled_features_json"]["ai_copy_cloud"] is True
 
-    async def test_create_plan_duplicate_code(self, admin_client: AsyncClient):
-        """创建重复编码的套餐应返回 409。"""
+    async def test_create_plan_duplicate_name(self, admin_client: AsyncClient):
+        """创建同名 active 套餐应返回 409。"""
         resp = await admin_client.post(
             "/api/v1/admin/plans",
-            json={"code": "free", "name": "重复免费"},
+            json={"name": "免费套餐", "monthly_grant": 10},
         )
         assert resp.status_code == 409
         body = resp.json()
-        assert body["error"]["code"] == "PLAN_CODE_EXISTS"
+        assert body["error"]["code"] == "PLAN_NAME_EXISTS"
 
     async def test_create_plan_defaults(self, admin_client: AsyncClient):
         """创建套餐时使用默认值。"""
         resp = await admin_client.post(
             "/api/v1/admin/plans",
-            json={"code": "basic", "name": "基础套餐"},
+            json={"name": "基础套餐"},
         )
         assert resp.status_code == 200
         data = _assert_success_response(resp.json())
@@ -193,7 +189,7 @@ class TestCreatePlan:
         """普通用户无权创建套餐。"""
         resp = await user_client.post(
             "/api/v1/admin/plans",
-            json={"code": "hack", "name": "Hack"},
+            json={"name": "Hack"},
         )
         assert resp.status_code == 403
 
@@ -201,7 +197,7 @@ class TestCreatePlan:
         """无鉴权创建套餐应返回 401。"""
         resp = await no_auth_client.post(
             "/api/v1/admin/plans",
-            json={"code": "hack", "name": "Hack"},
+            json={"name": "Hack"},
         )
         assert resp.status_code == 401
 
@@ -224,8 +220,6 @@ class TestUpdatePlan:
 
         data = _assert_success_response(resp.json())
         assert data["name"] == "免费套餐（新版）"
-        # code 不应改变
-        assert data["code"] == "free"
 
     async def test_update_monthly_grant(self, admin_client: AsyncClient):
         """更新月赠额度应成功。"""
@@ -478,14 +472,14 @@ class TestListCreditAccounts:
         for item in data["items"]:
             assert item["status"] == "active"
 
-    async def test_filter_by_plan_code(self, admin_client: AsyncClient):
-        """按套餐编码筛选。"""
-        resp = await admin_client.get("/api/v1/admin/credits/accounts?plan_code=free")
+    async def test_filter_by_plan_id(self, admin_client: AsyncClient):
+        """按套餐ID筛选。"""
+        resp = await admin_client.get("/api/v1/admin/credits/accounts?plan_id=plan-free")
         assert resp.status_code == 200
 
         data = _assert_success_response(resp.json())
         assert data["total"] == 1
-        assert data["items"][0]["plan_code"] == "free"
+        assert data["items"][0]["plan_id"] == "plan-free"
 
     async def test_accounts_contain_user_account(self, admin_client: AsyncClient):
         """额度账户列表应包含用户账号。"""
@@ -533,7 +527,7 @@ class TestGetCreditAccountDetail:
         assert data["user_id"] == "user-001"
         assert data["user_account"] == "alice@example.com"
         assert data["user_display_name"] == "Alice"
-        assert data["plan_code"] == "standard"
+        assert data["plan_id"] == "plan-standard"
         assert data["balance"] == 450
         assert data["monthly_grant"] == 500
         assert data["status"] == "active"

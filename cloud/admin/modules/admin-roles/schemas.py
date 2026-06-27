@@ -29,10 +29,14 @@ class UpdateRoleRequest(BaseModel):
     name: Optional[str] = None; description: Optional[str] = None
 
 class AssignPermissionsRequest(BaseModel):
-    permission_ids: List[str] = Field(..., min_length=1)
+    permission_ids: List[str] = Field(default_factory=list, description="权限 ID 列表（允许空数组，表示清空角色权限）")
 
 class AssignRolesRequest(BaseModel):
-    role_ids: List[str] = Field(..., min_length=1)
+    role_ids: List[str] = Field(default_factory=list, description="角色 ID 列表（允许空数组，表示清空用户角色）")
 
 class UserRoleItem(BaseModel):
-    user_id: str; role_id: str; role_name: str
+    """用户拥有的角色信息（供前端角色分配弹窗使用）。"""
+    id: str = Field(..., description="角色 ID")
+    name: str = Field(..., description="角色名称")
+    code: str = Field(..., description="角色编码")
+    is_system: bool = Field(default=False, description="是否系统内置角色")

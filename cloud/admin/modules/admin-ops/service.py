@@ -32,6 +32,7 @@ from sqlalchemy import select, func, and_, cast, Integer, Numeric
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloud.shared import ErrorCode, AppError
+from cloud.shared.database import Base
 
 from models import RiskLog
 
@@ -62,6 +63,8 @@ MAX_LIMIT = 100
 _ProviderCallLog = None
 _Plan = None
 _User = None
+_FeatureCode = None
+_Device = None
 
 
 def _get_project_root() -> str:
@@ -120,6 +123,60 @@ def _import_model_file(module_dir_parts: list[str], module_dir_name: str,
         sys.path.extend(_orig_path)
 
 
+def _find_model_class_in_modules(table_name: str, class_name: str):
+    """在 sys.modules 中搜索已注册的 ORM 模型类。
+
+    当表已在 Base.metadata 中注册但无法通过预期别名找到时使用。
+    遍历 sys.modules 查找具有指定类名且 __tablename__ 匹配的类。
+
+    Args:
+        table_name: 数据库表名（如 feature_codes、plans）
+        class_name: 模型类名（如 FeatureCode、Plan）
+
+    Returns:
+        找到的 ORM 模型类，找不到返回 None
+    """
+    for mod in sys.modules.values():
+        cls = getattr(mod, class_name, None)
+        if cls is not None and getattr(cls, "__tablename__", "") == table_name:
+            return cls
+    return None
+
+
+def _safe_load_model(table_name: str, class_name: str, alias: str,
+                      module_dir_parts: list[str], module_dir_name: str):
+    """安全加载跨模块 ORM 模型类，避免重复注册表。
+
+    加载顺序：
+    1. 从 sys.modules 别名获取
+    2. 从 Base.metadata 确认表已注册 → 搜索 sys.modules 获取类
+    3. 回退到 importlib 文件加载
+
+    Args:
+        table_name: 数据库表名
+        class_name: 模型类名
+        alias: sys.modules 别名
+        module_dir_parts: 模块目录路径段列表
+        module_dir_name: 模块目录名
+
+    Returns:
+        ORM 模型类
+    """
+    # 1) 从预期别名获取
+    if alias in sys.modules:
+        return getattr(sys.modules[alias], class_name)
+
+    # 2) 表已在 Base.metadata 中注册（app-shell 启动时已加载）→ 全局搜索
+    if table_name in Base.metadata.tables:
+        cls = _find_model_class_in_modules(table_name, class_name)
+        if cls is not None:
+            return cls
+
+    # 3) 回退：importlib 文件加载
+    mod = _import_model_file(module_dir_parts, module_dir_name, "models", alias)
+    return getattr(mod, class_name)
+
+
 def _load_module_models():
     """惰性加载所有跨模块模型类引用。
 
@@ -127,41 +184,38 @@ def _load_module_models():
     - "provider_log_models" → provider-log 的 models 模块
     - "credits_billing_models" → credits-billing 的 models 模块
     - "admin_users_models" → admin-users 的 models 模块
+    - "admin_feature_codes_models" → admin-feature-codes 的 models 模块
 
     如果 sys.modules 中不存在，则回退到文件级 importlib 加载。
+    如果表已在 Base.metadata 中注册（被 app-shell 启动时加载），则从已注册元数据中获取类。
     """
-    global _ProviderCallLog, _Plan, _User
+    global _ProviderCallLog, _Plan, _User, _FeatureCode, _Device
 
     if _ProviderCallLog is not None:
         return  # 已加载
 
     # 加载 ProviderCallLog（provider-log 模型）
-    if "provider_log_models" in sys.modules:
-        _ProviderCallLog = sys.modules["provider_log_models"].ProviderCallLog
-    else:
-        _pl_mod = _import_model_file(
-            ["cloud", "modules", "provider-log"],
-            "provider-log",
-            "models",
-            "provider_log_models",
-        )
-        _ProviderCallLog = _pl_mod.ProviderCallLog
+    _ProviderCallLog = _safe_load_model(
+        "provider_call_log", "ProviderCallLog", "provider_log_models",
+        ["cloud", "modules", "provider-log"], "provider-log",
+    )
 
     # 加载 Plan（credits-billing 模型）
-    if "credits_billing_models" in sys.modules:
-        _Plan = sys.modules["credits_billing_models"].Plan
-    else:
-        _cb_mod = _import_model_file(
-            ["cloud", "modules", "credits-billing"],
-            "credits-billing",
-            "models",
-            "credits_billing_models",
-        )
-        _Plan = _cb_mod.Plan
+    _Plan = _safe_load_model(
+        "plans", "Plan", "credits_billing_models",
+        ["cloud", "modules", "credits-billing"], "credits-billing",
+    )
 
-    # 加载 User（admin-users 模型）
+    # 加载 User 和 Device（admin-users 模型）
     if "admin_users_models" in sys.modules:
         _User = sys.modules["admin_users_models"].UserAdmin
+        _Device = sys.modules["admin_users_models"].DeviceAdmin
+
+    # 加载 FeatureCode（admin-feature-codes 模型）
+    _FeatureCode = _safe_load_model(
+        "feature_codes", "FeatureCode", "admin_feature_codes_models",
+        ["cloud", "admin", "modules", "admin-feature-codes"], "admin-feature-codes",
+    )
 
 
 # ============================================================
@@ -234,6 +288,10 @@ async def list_provider_call_logs(
     user_ids = list({log.user_id for log in logs})
     user_map = await _get_user_account_map(db, user_ids)
 
+    # 批量查询功能码中文名
+    feature_codes_set = list({log.feature for log in logs if log.feature})
+    feature_name_map = await _get_feature_name_map(db, feature_codes_set)
+
     items = [
         AdminProviderCallLogItem(
             id=log.id,
@@ -241,6 +299,7 @@ async def list_provider_call_logs(
             user_id=log.user_id,
             user_account=user_map.get(log.user_id),
             feature=log.feature,
+            feature_name=feature_name_map.get(log.feature),
             provider=log.provider,
             model=log.model,
             status=log.status,
@@ -304,6 +363,12 @@ async def get_provider_call_log_detail(
             user_account = user_row[0]
             user_display_name = user_row[1]
 
+    # 查询关联功能码中文名
+    feature_name = None
+    if log.feature:
+        feature_name_map = await _get_feature_name_map(db, [log.feature])
+        feature_name = feature_name_map.get(log.feature)
+
     return AdminProviderCallLogDetail(
         id=log.id,
         request_id=log.request_id,
@@ -311,6 +376,7 @@ async def get_provider_call_log_detail(
         user_account=user_account,
         user_display_name=user_display_name,
         feature=log.feature,
+        feature_name=feature_name,
         provider=log.provider,
         model=log.model,
         status=log.status,
@@ -376,9 +442,14 @@ async def get_cost_stats(db: AsyncSession) -> CostStatsData:
     )
     feature_rows = feature_result.all()
 
+    # 批量查询功能码中文名
+    feature_keys = [row[0] for row in feature_rows if row[0]]
+    feature_name_map = await _get_feature_name_map(db, feature_keys)
+
     by_feature = [
         CostBreakdownItem(
             key=row[0] or "unknown",
+            key_name=feature_name_map.get(row[0]),
             calls=row[1],
             total_tokens=row[2] if row[2] is not None else 0,
             total_cost=float(row[3]) if row[3] is not None else 0.0,
@@ -487,12 +558,17 @@ async def list_risk_logs(
         user_ids = list({log.user_id for log in logs if log.user_id})
         user_map = await _get_user_account_map(db, user_ids)
 
+    # 批量查询关联设备名称
+    device_ids = list({log.device_id for log in logs if log.device_id})
+    device_name_map = await _get_device_name_map(db, device_ids)
+
     items = [
         RiskLogItem(
             id=log.id,
             user_id=log.user_id,
             user_account=user_map.get(log.user_id) if log.user_id else None,
             device_id=log.device_id,
+            device_name=device_name_map.get(log.device_id) if log.device_id else None,
             risk_type=log.risk_type,
             severity=log.severity,
             created_at=log.created_at,
@@ -540,12 +616,19 @@ async def get_risk_log_detail(db: AsyncSession, log_id: str) -> RiskLogDetail:
             user_account = user_row[0]
             user_display_name = user_row[1]
 
+    # 查询关联设备名称
+    device_name = None
+    if log.device_id:
+        device_name_map = await _get_device_name_map(db, [log.device_id])
+        device_name = device_name_map.get(log.device_id)
+
     return RiskLogDetail(
         id=log.id,
         user_id=log.user_id,
         user_account=user_account,
         user_display_name=user_display_name,
         device_id=log.device_id,
+        device_name=device_name,
         risk_type=log.risk_type,
         severity=log.severity,
         details_json=log.details_json or {},
@@ -559,13 +642,13 @@ async def get_risk_log_detail(db: AsyncSession, log_id: str) -> RiskLogDetail:
 
 
 async def get_feature_flags(
-    db: AsyncSession, plan_code: Optional[str] = None
+    db: AsyncSession, plan_id: Optional[str] = None
 ) -> FeatureFlagsListData:
     """查询各套餐的功能开关配置。
 
     Args:
         db: 数据库异步会话
-        plan_code: 按套餐编码筛选（可选，不传返回所有套餐）
+        plan_id: 按套餐 ID 筛选（可选，不传返回所有套餐）
 
     Returns:
         FeatureFlagsListData 各套餐功能开关配置列表
@@ -573,8 +656,8 @@ async def get_feature_flags(
     _load_module_models()
 
     conditions = []
-    if plan_code:
-        conditions.append(_Plan.code == plan_code)
+    if plan_id:
+        conditions.append(_Plan.id == plan_id)
 
     query = (
         select(_Plan)
@@ -587,7 +670,6 @@ async def get_feature_flags(
     items = [
         PlanFeatureFlagsItem(
             plan_id=p.id,
-            plan_code=p.code,
             plan_name=p.name,
             enabled_features_json=p.enabled_features_json or {},
             plan_status=p.status,
@@ -641,7 +723,6 @@ async def update_feature_flags(
 
     return PlanFeatureFlagsItem(
         plan_id=plan.id,
-        plan_code=plan.code,
         plan_name=plan.name,
         enabled_features_json=plan.enabled_features_json or {},
         plan_status=plan.status,
@@ -670,6 +751,54 @@ async def _get_user_account_map(
 
     result = await db.execute(
         select(_User.id, _User.account).where(_User.id.in_(user_ids))
+    )
+    rows = result.all()
+    return {row[0]: row[1] for row in rows}
+
+
+async def _get_feature_name_map(
+    db: AsyncSession, feature_codes: list[str]
+) -> dict[str, Optional[str]]:
+    """批量查询功能码 → 中文名称的映射，避免 N+1 查询。
+
+    Args:
+        db: 数据库异步会话
+        feature_codes: 功能码字符串列表
+
+    Returns:
+        dict: feature_code → feature_name 映射
+    """
+    if not feature_codes or _FeatureCode is None:
+        return {}
+
+    result = await db.execute(
+        select(_FeatureCode.code, _FeatureCode.name).where(
+            _FeatureCode.code.in_(feature_codes)
+        )
+    )
+    rows = result.all()
+    return {row[0]: row[1] for row in rows}
+
+
+async def _get_device_name_map(
+    db: AsyncSession, device_ids: list[str]
+) -> dict[str, Optional[str]]:
+    """批量查询设备 ID → 设备名称的映射，避免 N+1 查询。
+
+    Args:
+        db: 数据库异步会话
+        device_ids: 设备 ID 列表
+
+    Returns:
+        dict: device_id → device_name 映射
+    """
+    if not device_ids or _Device is None:
+        return {}
+
+    result = await db.execute(
+        select(_Device.id, _Device.device_name).where(
+            _Device.id.in_(device_ids)
+        )
     )
     rows = result.all()
     return {row[0]: row[1] for row in rows}

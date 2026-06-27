@@ -41,7 +41,7 @@ class CreditBalanceData(BaseModel):
     """额度余额数据，对齐 credits-billing.yaml #/components/schemas/CreditBalance。"""
 
     user_id: str = Field(..., description="用户 ID（UUID）")
-    plan_code: str = Field(..., description="当前套餐编码")
+    plan_id: str = Field(..., description="当前套餐 ID（UUID）")
     monthly_grant: int = Field(..., description="周期赠送额度")
     balance: int = Field(..., description="当前 AI 额度余额")
     period_start: Optional[datetime] = Field(default=None, description="周期开始时间")
@@ -77,7 +77,7 @@ class EntitlementCheckData(BaseModel):
 
     allowed: bool = Field(..., description="是否允许使用指定功能")
     feature: str = Field(..., description="检查的功能码")
-    plan_code: str = Field(..., description="用户当前套餐编码")
+    plan_id: str = Field(..., description="用户当前套餐 ID（UUID）")
     remaining_free_quota: Optional[int] = Field(
         default=None, description="免费套餐剩余免费使用次数（仅 free 套餐返回）"
     )

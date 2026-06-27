@@ -110,7 +110,7 @@ _cb_mod = _load_module_file(
     "credits-billing",
 )
 
-# 3. 加载 admin-users 模型（User）
+# 3. 加载 admin-users 模型（User、Device）
 _au_mod = _load_module_file(
     ["cloud", "admin", "modules", "admin-users", "models.py"],
     "admin_users_models",
@@ -124,6 +124,20 @@ _ar_mod = _load_module_file(
     "admin-roles",
 )
 
+# 3.6 加载 admin-feature-codes 模型（_get_feature_name_map 需要 feature_codes 表）
+_afc_mod = _load_module_file(
+    ["cloud", "admin", "modules", "admin-feature-codes", "models.py"],
+    "admin_feature_codes_models",
+    "admin-feature-codes",
+)
+
+# 3.7 加载 admin-providers 模型（provider_call_log.provider_id FK 需要 providers 表）
+_ap_mod = _load_module_file(
+    ["cloud", "admin", "modules", "admin-providers", "models.py"],
+    "admin_providers_models",
+    "admin-providers",
+)
+
 # 4. 清理模块缓存，确保 admin-ops 的 router/service/schemas/models 重新导入
 for _key in list(sys.modules.keys()):
     if _key in ("router", "service", "schemas", "models") or _key.startswith(
@@ -135,6 +149,7 @@ for _key in list(sys.modules.keys()):
 ProviderCallLog = _pl_mod.ProviderCallLog
 Plan = _cb_mod.Plan
 User = _au_mod.UserAdmin
+FeatureCode = _afc_mod.FeatureCode
 
 # 导入 admin-ops 路由和 RiskLog 模型
 from models import RiskLog  # noqa: E402
@@ -149,14 +164,14 @@ ADMIN_TOKEN_DATA = TokenData(
     user_id="admin-uuid-001",
     device_id="admin-device-001",
     role="admin",
-    plan_code="pro",
+    plan_id="plan-pro",
 )
 
 USER_TOKEN_DATA = TokenData(
     user_id="user-uuid-001",
     device_id="user-device-001",
     role="user",
-    plan_code="free",
+    plan_id="plan-free",
 )
 
 
@@ -231,7 +246,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="Alice",
             role="user",
             status="active",
-            plan_code="standard",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -242,7 +257,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="Bob",
             role="user",
             status="active",
-            plan_code="free",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -253,7 +268,7 @@ async def _seed_test_data(session_factory) -> None:
             display_name="管理员",
             role="admin",
             status="active",
-            plan_code="pro",
+            plan_id=None,
             created_at=_now(),
             updated_at=_now(),
         )
@@ -262,7 +277,6 @@ async def _seed_test_data(session_factory) -> None:
         # === 套餐数据 ===
         plan_free = Plan(
             id="plan-free",
-            code="free",
             name="免费套餐",
             monthly_grant=10,
             enabled_features_json={
@@ -274,7 +288,6 @@ async def _seed_test_data(session_factory) -> None:
         )
         plan_standard = Plan(
             id="plan-standard",
-            code="standard",
             name="标准套餐",
             monthly_grant=500,
             enabled_features_json={
@@ -286,7 +299,6 @@ async def _seed_test_data(session_factory) -> None:
         )
         plan_pro = Plan(
             id="plan-pro",
-            code="pro",
             name="专业套餐",
             monthly_grant=2000,
             enabled_features_json={
@@ -298,6 +310,47 @@ async def _seed_test_data(session_factory) -> None:
             updated_at=_now(),
         )
         session.add_all([plan_free, plan_standard, plan_pro])
+
+        # === 功能码数据 ===
+        fc1 = FeatureCode(
+            id="fc-ai-copy",
+            code="ai_copy_cloud",
+            name="AI 文案生成",
+            category="cloud_ai",
+            description="云端 AI 生成营销文案",
+            is_active=True,
+            created_at=_now(),  # SQLite 不支持 server_default=NOW()
+        )
+        fc2 = FeatureCode(
+            id="fc-ai-render",
+            code="ai_render_cloud",
+            name="AI 效果图生成",
+            category="cloud_ai",
+            description="云端 AI 生成产品效果图",
+            is_active=True,
+            created_at=_now(),
+        )
+        session.add_all([fc1, fc2])
+
+        # === 设备数据（风控日志关联用） ===
+        DeviceAdmin = _au_mod.DeviceAdmin
+        dev1 = DeviceAdmin(
+            id="device-001",
+            user_id="user-001",
+            device_fingerprint_hash="fp-hash-1",
+            device_name="iPhone 15 Pro",
+            status="active",
+            bound_at=_now(),
+        )
+        dev2 = DeviceAdmin(
+            id="device-002",
+            user_id="user-002",
+            device_fingerprint_hash="fp-hash-2",
+            device_name="MacBook Pro",
+            status="active",
+            bound_at=_now(),
+        )
+        session.add_all([dev1, dev2])
 
         # === Provider 调用日志数据 ===
         pcl1 = ProviderCallLog(
@@ -355,6 +408,7 @@ async def _seed_test_data(session_factory) -> None:
         risk1 = RiskLog(
             id="risk-001",
             user_id="user-001",
+            device_id="device-001",
             risk_type="suspicious_login",
             severity="medium",
             details_json={"ip": "203.0.113.1", "reason": "异地登录"},

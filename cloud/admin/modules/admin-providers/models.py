@@ -3,12 +3,13 @@ admin-providers ORM 模型。
 """
 from __future__ import annotations
 import uuid
-from datetime import datetime
-from sqlalchemy import String, DateTime, JSON, Boolean, text
+from datetime import datetime, timezone
+from sqlalchemy import String, DateTime, JSON, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from cloud.shared.database import Base
 
 def _new_uuid(): return str(uuid.uuid4())
+def _utcnow(): return datetime.now(timezone.utc)
 
 
 class Provider(Base):
@@ -23,8 +24,8 @@ class Provider(Base):
     models_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()")
+        DateTime(timezone=True), default=_utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("NOW()")
+        DateTime(timezone=True), default=_utcnow
     )

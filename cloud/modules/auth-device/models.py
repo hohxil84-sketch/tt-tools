@@ -53,8 +53,10 @@ class User(Base):
     role = Column(String(50), nullable=False, default="user")
     # 用户状态：active / blocked / deleted
     status = Column(String(50), nullable=False, default="active", index=True)
-    # 当前套餐编码
-    plan_code = Column(String(50), nullable=False, default="free", index=True)
+    # 套餐外键 ID（→ plans.id）
+    plan_id = Column(
+        String(36), ForeignKey("plans.id"), nullable=True, index=True
+    )
     # 时间戳
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
     updated_at = Column(

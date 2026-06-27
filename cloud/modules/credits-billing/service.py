@@ -6,7 +6,7 @@ cloud-credits-billing 业务逻辑层。
 
 关键规则：
 - credit_ledger 只能由本模块写入（DATABASE_SCHEMA.md 写入边界）。
-- 客户端不得提交 user_id、plan_code、permission_granted 等字段。
+- 客户端不得提交 user_id、plan_id、permission_granted 等字段。
 - 本地付费功能不消耗 AI 额度，不计入 credit_ledger。
 - 免费套餐每日配额通过 usage_events 表统计。
 """
@@ -80,9 +80,9 @@ _PRO_FEATURES = {
 
 # 默认套餐定义
 _DEFAULT_PLANS = [
-    {"code": "free", "name": "免费套餐", "monthly_grant": 10, "features": _FREE_FEATURES},
-    {"code": "standard", "name": "标准套餐", "monthly_grant": 500, "features": _STANDARD_FEATURES},
-    {"code": "pro", "name": "专业套餐", "monthly_grant": 2000, "features": _PRO_FEATURES},
+    {"name": "免费套餐", "monthly_grant": 10, "features": _FREE_FEATURES},
+    {"name": "标准套餐", "monthly_grant": 500, "features": _STANDARD_FEATURES},
+    {"name": "专业套餐", "monthly_grant": 2000, "features": _PRO_FEATURES},
 ]
 
 
@@ -115,7 +115,6 @@ async def seed_plans(db: AsyncSession) -> List[Plan]:
     plans = []
     for p in _DEFAULT_PLANS:
         plan = Plan(
-            code=p["code"],
             name=p["name"],
             monthly_grant=p["monthly_grant"],
             enabled_features_json=p["features"],
@@ -136,18 +135,18 @@ async def seed_plans(db: AsyncSession) -> List[Plan]:
 async def get_or_create_credit_account(
     db: AsyncSession,
     user_id: str,
-    plan_code: str = "",
+    plan_id: str = "",
 ) -> CreditAccount:
     """获取或创建用户的额度账户。
 
     如果用户已有额度账户则返回已有记录，否则创建新的额度账户。
     新账户自动获得当前周期的赠送额度。
-    如果未提供 plan_code，则从 users 表中查询用户实际的套餐编码。
+    如果未提供 plan_id，则从 users 表中查询用户实际的套餐 ID。
 
     Args:
         db: 数据库异步会话
         user_id: 用户 ID
-        plan_code: 套餐编码（可选，为空时从 users 表查询）
+        plan_id: 套餐 ID（UUID，可选，为空时从 users 表查询）
 
     Returns:
         CreditAccount ORM 对象
@@ -169,26 +168,27 @@ async def get_or_create_credit_account(
             )
         return account
 
-    # 如果未指定 plan_code，从 users 表查询用户实际套餐
-    if not plan_code:
-        # 使用 text() 查询避免直接导入 auth-device 的 User 模型
+    # 如果未指定 plan_id，从 users 表查询用户实际套餐 ID
+    if not plan_id:
         from sqlalchemy import text
         user_result = await db.execute(
-            text("SELECT plan_code FROM users WHERE id = :uid"),
+            text("SELECT plan_id FROM users WHERE id = :uid"),
             {"uid": user_id},
         )
         row = user_result.fetchone()
         if row is not None:
-            plan_code = row[0] or "free"
+            plan_id = row[0] or ""
         else:
-            plan_code = "free"
+            plan_id = ""
 
-    # 创建新账户：查询套餐信息以获取 monthly_grant
-    plan_result = await db.execute(
-        select(Plan).where(Plan.code == plan_code)
-    )
-    plan = plan_result.scalar_one_or_none()
-    monthly_grant = plan.monthly_grant if plan else 0
+    # 查询套餐信息以获取 monthly_grant
+    monthly_grant = 0
+    if plan_id:
+        plan_result = await db.execute(
+            select(Plan).where(Plan.id == plan_id)
+        )
+        plan = plan_result.scalar_one_or_none()
+        monthly_grant = plan.monthly_grant if plan else 0
 
     now = datetime.now(timezone.utc)
     # 计费周期：当前月第一天到下月第一天
@@ -200,7 +200,7 @@ async def get_or_create_credit_account(
 
     account = CreditAccount(
         user_id=user_id,
-        plan_code=plan_code,
+        plan_id=plan_id or None,
         balance=monthly_grant,  # 新账户获得初始赠送额度
         monthly_grant=monthly_grant,
         period_start=period_start,
@@ -246,7 +246,7 @@ async def get_credit_balance(
     Returns:
         CreditBalanceData（包含余额、套餐、周期等信息）
     """
-    # 获取或创建额度账户（通过 JWT 中的 plan_code 创建默认账户）
+    # 获取或创建额度账户
     account = await get_or_create_credit_account(db, user_id)
 
     # 检查是否需要跨周期刷新赠送额度
@@ -254,7 +254,7 @@ async def get_credit_balance(
 
     return CreditBalanceData(
         user_id=account.user_id,
-        plan_code=account.plan_code,
+        plan_id=account.plan_id,
         monthly_grant=account.monthly_grant,
         balance=account.balance,
         period_start=account.period_start,
@@ -344,7 +344,7 @@ async def list_credit_ledger(
 async def check_entitlement(
     db: AsyncSession,
     user_id: str,
-    plan_code: str,
+    plan_id: str,
     feature: str,
     operation: str,
     client_request_id: str,
@@ -361,17 +361,17 @@ async def check_entitlement(
     Args:
         db: 数据库异步会话
         user_id: 用户 ID（来自 JWT）
-        plan_code: 当前套餐编码（来自 JWT）
+        plan_id: 当前套餐 ID（UUID，来自 JWT）
         feature: 功能码（如 resize_image_local_paid）
         operation: 操作类型（single / batch）
         client_request_id: 客户端请求 ID
 
     Returns:
-        EntitlementCheckData（allowed、feature、plan_code、remaining_free_quota、reason）
+        EntitlementCheckData（allowed、feature、plan_id、remaining_free_quota、reason）
     """
     # 1. 查询套餐信息
     plan_result = await db.execute(
-        select(Plan).where(Plan.code == plan_code, Plan.status == "active")
+        select(Plan).where(Plan.id == plan_id, Plan.status == "active")
     )
     plan = plan_result.scalar_one_or_none()
 
@@ -379,7 +379,7 @@ async def check_entitlement(
         return EntitlementCheckData(
             allowed=False,
             feature=feature,
-            plan_code=plan_code,
+            plan_id=plan_id,
             reason="套餐不存在或已停用",
         )
 
@@ -393,7 +393,7 @@ async def check_entitlement(
         return EntitlementCheckData(
             allowed=False,
             feature=feature,
-            plan_code=plan_code,
+            plan_id=plan_id,
             reason="账户已被冻结，请联系客服",
         )
 
@@ -406,12 +406,13 @@ async def check_entitlement(
         return EntitlementCheckData(
             allowed=False,
             feature=feature,
-            plan_code=plan_code,
+            plan_id=plan_id,
             reason=f"当前套餐不支持此功能：{feature}",
         )
 
-    # 4. 免费套餐：检查每日配额
-    if plan_code == "free" and isinstance(feature_config, dict):
+    # 4. 免费套餐（monthly_grant <= 10 判定为免费套餐）：检查每日配额
+    is_free_plan = plan.monthly_grant <= 10
+    if is_free_plan and isinstance(feature_config, dict):
         daily_limit = feature_config.get("daily_limit", 0)
         if daily_limit > 0:
             # 统计今天已使用的次数
@@ -435,7 +436,7 @@ async def check_entitlement(
                 return EntitlementCheckData(
                     allowed=False,
                     feature=feature,
-                    plan_code=plan_code,
+                    plan_id=plan_id,
                     remaining_free_quota=0,
                     reason="免费套餐当日使用次数已用完，请升级套餐",
                 )
@@ -454,7 +455,7 @@ async def check_entitlement(
             return EntitlementCheckData(
                 allowed=True,
                 feature=feature,
-                plan_code=plan_code,
+                plan_id=plan_id,
                 remaining_free_quota=remaining - 1,
             )
 
@@ -462,7 +463,7 @@ async def check_entitlement(
     return EntitlementCheckData(
         allowed=True,
         feature=feature,
-        plan_code=plan_code,
+        plan_id=plan_id,
     )
 
 

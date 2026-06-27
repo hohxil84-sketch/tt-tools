@@ -32,11 +32,14 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloud.shared import ErrorCode, AppError
+from cloud.shared.database import Base
 
 from schemas import (
     PlanItem,
     PlanDetail,
     PlanListData,
+    PlanOption,
+    PlanOptionsData,
     AdminOrderItem,
     AdminOrderDetail,
     AdminOrderListData,
@@ -75,6 +78,31 @@ def _get_project_root() -> str:
     )
 
 
+def _find_model_class_in_modules(table_name: str, class_name: str):
+    """在 sys.modules 中搜索已注册的 ORM 模型类。"""
+    for mod in sys.modules.values():
+        cls = getattr(mod, class_name, None)
+        if cls is not None and getattr(cls, "__tablename__", "") == table_name:
+            return cls
+    return None
+
+
+def _safe_load_model(table_name: str, class_name: str, alias: str,
+                      module_dir_name: str):
+    """安全加载跨模块 ORM 模型类，避免重复注册表。"""
+    # 1) 从预期别名获取
+    if alias in sys.modules:
+        return getattr(sys.modules[alias], class_name)
+    # 2) 表已在 Base.metadata 中注册 → 全局搜索
+    if table_name in Base.metadata.tables:
+        cls = _find_model_class_in_modules(table_name, class_name)
+        if cls is not None:
+            return cls
+    # 3) 回退：importlib 文件加载
+    mod = _import_model_file(module_dir_name, "models", alias)
+    return getattr(mod, class_name)
+
+
 def _load_module_models():
     """惰性加载所有跨模块模型类和函数引用。
 
@@ -82,6 +110,8 @@ def _load_module_models():
     - "credits_billing_models" → credits-billing 的 models 模块
     - "orders_recharge_models" → orders-recharge 的 models 模块
     - "admin_users_models" → admin-users 的 models 模块
+
+    如果表已在 Base.metadata 中注册（被 app-shell 启动时加载），则从已注册元数据中获取类。
     """
     global _Plan, _CreditAccount, _CreditLedger, _Order, _User
     global _grant_credits, _consume_credits
@@ -89,14 +119,18 @@ def _load_module_models():
     if _Plan is not None:
         return  # 已加载
 
-    # 加载 credits-billing 模型
+    # 加载 credits-billing 模型（Plan / CreditAccount / CreditLedger）
     if "credits_billing_models" in sys.modules:
         cb_models = sys.modules["credits_billing_models"]
         _Plan = cb_models.Plan
         _CreditAccount = cb_models.CreditAccount
         _CreditLedger = cb_models.CreditLedger
+    elif "plans" in Base.metadata.tables or "credit_accounts" in Base.metadata.tables:
+        # 表已注册但别名不在 sys.modules → 全局搜索
+        _Plan = _find_model_class_in_modules("plans", "Plan")
+        _CreditAccount = _find_model_class_in_modules("credit_accounts", "CreditAccount")
+        _CreditLedger = _find_model_class_in_modules("credit_ledger", "CreditLedger")
     else:
-        # 回退：直接通过 importlib 加载
         _plan_tmp = _import_model_file("credits-billing", "models", "credits_billing_models")
         _Plan = _plan_tmp.Plan
         _CreditAccount = _plan_tmp.CreditAccount
@@ -106,11 +140,8 @@ def _load_module_models():
     _grant_credits, _consume_credits = _load_billing_functions()
 
     # 加载订单模型
-    if "orders_recharge_models" in sys.modules:
-        _Order = sys.modules["orders_recharge_models"].Order
-    else:
-        _order_tmp = _import_model_file("orders_recharge", "models", "orders_recharge_models")
-        _Order = _order_tmp.Order
+    _Order = _safe_load_model("orders", "Order", "orders_recharge_models",
+                               "orders_recharge")
 
     # 加载用户模型
     if "admin_users_models" in sys.modules:
@@ -224,7 +255,6 @@ async def list_plans(db: AsyncSession) -> PlanListData:
     items = [
         PlanItem(
             id=p.id,
-            code=p.code,
             name=p.name,
             monthly_grant=p.monthly_grant,
             status=p.status,
@@ -263,7 +293,6 @@ async def get_plan_detail(db: AsyncSession, plan_id: str) -> PlanDetail:
 
     return PlanDetail(
         id=plan.id,
-        code=plan.code,
         name=plan.name,
         monthly_grant=plan.monthly_grant,
         enabled_features_json=plan.enabled_features_json or {},
@@ -275,16 +304,16 @@ async def get_plan_detail(db: AsyncSession, plan_id: str) -> PlanDetail:
 
 async def create_plan(
     db: AsyncSession,
-    code: str,
     name: str,
     monthly_grant: int = 0,
     enabled_features_json: Optional[dict] = None,
 ) -> PlanDetail:
     """创建新套餐。
 
+    使用套餐名称作为唯一标识。创建前检查同名 active 套餐是否已存在。
+
     Args:
         db: 数据库异步会话
-        code: 套餐编码（必须唯一）
         name: 套餐名称
         monthly_grant: 每周期赠送额度
         enabled_features_json: 功能开关配置
@@ -293,22 +322,23 @@ async def create_plan(
         PlanDetail 创建的套餐信息
 
     Raises:
-        AppError: 套餐编码已存在时抛出 409
+        AppError: 套餐名称已存在时抛出 409
     """
     _load_module_models()
 
-    # 检查编码是否已存在
-    existing = await db.execute(select(_Plan).where(_Plan.code == code))
+    # 检查同名 active 套餐是否已存在
+    existing = await db.execute(
+        select(_Plan).where(_Plan.name == name, _Plan.status == "active")
+    )
     if existing.scalar_one_or_none() is not None:
         raise AppError(
-            code="PLAN_CODE_EXISTS",
-            message=f"套餐编码 {code} 已存在",
+            code="PLAN_NAME_EXISTS",
+            message=f"套餐名称 {name} 已存在",
             status_code=409,
         )
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     plan = _Plan(
-        code=code,
         name=name,
         monthly_grant=monthly_grant,
         enabled_features_json=enabled_features_json or {},
@@ -321,7 +351,6 @@ async def create_plan(
 
     return PlanDetail(
         id=plan.id,
-        code=plan.code,
         name=plan.name,
         monthly_grant=plan.monthly_grant,
         enabled_features_json=plan.enabled_features_json or {},
@@ -380,7 +409,6 @@ async def update_plan(
 
     return PlanDetail(
         id=plan.id,
-        code=plan.code,
         name=plan.name,
         monthly_grant=plan.monthly_grant,
         enabled_features_json=plan.enabled_features_json or {},
@@ -431,7 +459,6 @@ async def update_plan_status(
 
     return PlanDetail(
         id=plan.id,
-        code=plan.code,
         name=plan.name,
         monthly_grant=plan.monthly_grant,
         enabled_features_json=plan.enabled_features_json or {},
@@ -439,6 +466,33 @@ async def update_plan_status(
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )
+
+
+async def list_plan_options(db: AsyncSession) -> PlanOptionsData:
+    """查询套餐选项列表（供下拉框使用）。
+
+    仅返回 active 状态的套餐，字段精简为 id/name。
+
+    Args:
+        db: 数据库异步会话
+
+    Returns:
+        PlanOptionsData 套餐选项列表
+    """
+    _load_module_models()
+
+    result = await db.execute(
+        select(_Plan.id, _Plan.name)
+        .where(_Plan.status == "active")
+        .order_by(_Plan.monthly_grant.asc())
+    )
+    rows = result.all()
+
+    items = [
+        PlanOption(id=row[0], name=row[1])
+        for row in rows
+    ]
+    return PlanOptionsData(items=items)
 
 
 # ============================================================
@@ -618,13 +672,13 @@ async def delete_plan(db: AsyncSession, plan_id: str) -> dict:
     # 检查是否有关联用户
     if _User is not None:
         user_count_result = await db.execute(
-            select(func.count()).select_from(_User).where(_User.plan_code == plan.code)
+            select(func.count()).select_from(_User).where(_User.plan_id == plan_id)
         )
         user_count = user_count_result.scalar_one()
         if user_count > 0:
             raise AppError(
                 code="PLAN_HAS_USERS",
-                message=f"套餐 {plan.code} 仍有 {user_count} 个用户在使用，无法删除",
+                message=f"套餐 {plan.name} 仍有 {user_count} 个用户在使用，无法删除",
                 status_code=409,
             )
 
@@ -639,18 +693,20 @@ async def list_credit_accounts(
     limit: int = 20,
     offset: int = 0,
     status: Optional[str] = None,
-    plan_code: Optional[str] = None,
+    plan_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> AdminCreditAccountListData:
     """查询所有额度账户列表（管理员视角，跨用户）。
 
-    支持按状态和套餐编码筛选。关联 users 表获取用户账号。
+    支持按状态、套餐ID和用户ID筛选。关联 users 表获取用户账号。
 
     Args:
         db: 数据库异步会话
         limit: 每页条数
         offset: 偏移量
         status: 按账户状态筛选
-        plan_code: 按套餐编码筛选
+        plan_id: 按套餐 ID 筛选
+        user_id: 按用户 ID 筛选
 
     Returns:
         AdminCreditAccountListData 额度账户列表
@@ -663,8 +719,10 @@ async def list_credit_accounts(
     conditions = []
     if status:
         conditions.append(_CreditAccount.status == status)
-    if plan_code:
-        conditions.append(_CreditAccount.plan_code == plan_code)
+    if plan_id:
+        conditions.append(_CreditAccount.plan_id == plan_id)
+    if user_id:
+        conditions.append(_CreditAccount.user_id == user_id)
 
     # 查询总数
     count_query = select(func.count()).select_from(_CreditAccount)
@@ -688,12 +746,23 @@ async def list_credit_accounts(
     user_ids = list({a.user_id for a in accounts})
     user_map = await _get_user_account_map(db, user_ids)
 
+    # 批量查询套餐中文名（通过 plan_id 关联 plans 表）
+    plan_ids = list({a.plan_id for a in accounts if a.plan_id})
+    plan_name_map: dict[str, str] = {}
+    if plan_ids and _Plan is not None:
+        result = await db.execute(
+            select(_Plan.id, _Plan.name).where(_Plan.id.in_(plan_ids))
+        )
+        rows = result.all()
+        plan_name_map = {row[0]: row[1] for row in rows}
+
     items = [
         AdminCreditAccountItem(
             id=a.id,
             user_id=a.user_id,
             user_account=user_map.get(a.user_id),
-            plan_code=a.plan_code,
+            plan_id=a.plan_id,
+            plan_name=plan_name_map.get(a.plan_id),
             balance=a.balance,
             monthly_grant=a.monthly_grant,
             status=a.status,
@@ -750,12 +819,23 @@ async def get_credit_account_detail(
             user_account = user_row[0]
             user_display_name = user_row[1]
 
+    # 查询套餐中文名
+    plan_name = None
+    if account.plan_id and _Plan is not None:
+        result = await db.execute(
+            select(_Plan.name).where(_Plan.id == account.plan_id)
+        )
+        row = result.one_or_none()
+        if row:
+            plan_name = row[0]
+
     return AdminCreditAccountDetail(
         id=account.id,
         user_id=account.user_id,
         user_account=user_account,
         user_display_name=user_display_name,
-        plan_code=account.plan_code,
+        plan_id=account.plan_id,
+        plan_name=plan_name,
         balance=account.balance,
         monthly_grant=account.monthly_grant,
         status=account.status,
@@ -922,7 +1002,8 @@ async def adjust_credits(
         user_id=account.user_id,
         user_account=user.account,
         user_display_name=user.display_name,
-        plan_code=account.plan_code,
+        plan_id=account.plan_id,
+        plan_name=None,
         balance=account.balance,
         monthly_grant=account.monthly_grant,
         status=account.status,
@@ -955,6 +1036,28 @@ async def _get_user_account_map(
 
     result = await db.execute(
         select(_User.id, _User.account).where(_User.id.in_(user_ids))
+    )
+    rows = result.all()
+    return {row[0]: row[1] for row in rows}
+
+
+async def _get_plan_name_map(
+    db: AsyncSession, plan_ids: list[str]
+) -> dict[str, Optional[str]]:
+    """批量查询 plan_id → plan_name 映射。
+
+    Args:
+        db: 数据库异步会话
+        plan_ids: plan_id 字符串列表
+
+    Returns:
+        dict: plan_id → plan_name 映射
+    """
+    if not plan_ids or _Plan is None:
+        return {}
+
+    result = await db.execute(
+        select(_Plan.id, _Plan.name).where(_Plan.id.in_(plan_ids))
     )
     rows = result.all()
     return {row[0]: row[1] for row in rows}

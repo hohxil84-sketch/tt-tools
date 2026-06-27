@@ -125,7 +125,7 @@ async def entitlements_check(
         data = await check_entitlement(
             db,
             user_id=current_user.user_id,
-            plan_code=current_user.plan_code,
+            plan_id=current_user.plan_id,
             feature=req.feature,
             operation=req.operation,
             client_request_id=req.client_request_id,

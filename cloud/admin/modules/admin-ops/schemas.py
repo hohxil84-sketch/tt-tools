@@ -34,6 +34,7 @@ class AdminProviderCallLogItem(BaseModel):
     user_id: str = Field(..., description="用户 ID")
     user_account: Optional[str] = Field(default=None, description="用户账号")
     feature: str = Field(..., description="功能码")
+    feature_name: Optional[str] = Field(default=None, description="功能中文名（从 feature_codes 表关联查询）")
     provider: str = Field(..., description="Provider 名称")
     model: str = Field(..., description="模型名称")
     status: str = Field(..., description="调用状态：success / failed / timeout")
@@ -59,6 +60,7 @@ class AdminProviderCallLogDetail(BaseModel):
     user_account: Optional[str] = Field(default=None, description="用户账号")
     user_display_name: Optional[str] = Field(default=None, description="用户展示名称")
     feature: str = Field(..., description="功能码")
+    feature_name: Optional[str] = Field(default=None, description="功能中文名（从 feature_codes 表关联查询）")
     provider: str = Field(..., description="Provider 名称")
     model: str = Field(..., description="模型名称")
     status: str = Field(..., description="调用状态")
@@ -98,6 +100,7 @@ class CostBreakdownItem(BaseModel):
     """
 
     key: str = Field(..., description="维度值（功能码或 Provider 名称）")
+    key_name: Optional[str] = Field(default=None, description="维度值的中文名（仅 by_feature 时有值）")
     calls: int = Field(..., description="调用次数")
     total_tokens: int = Field(..., description="总 token 数")
     total_cost: float = Field(..., description="总估算成本")
@@ -137,6 +140,7 @@ class RiskLogItem(BaseModel):
     user_id: Optional[str] = Field(default=None, description="用户 ID")
     user_account: Optional[str] = Field(default=None, description="用户账号")
     device_id: Optional[str] = Field(default=None, description="设备 ID")
+    device_name: Optional[str] = Field(default=None, description="设备名称（从 devices 表关联查询）")
     risk_type: str = Field(..., description="风险类型")
     severity: str = Field(..., description="严重程度：low / medium / high")
     created_at: datetime = Field(..., description="记录时间")
@@ -153,6 +157,7 @@ class RiskLogDetail(BaseModel):
     user_account: Optional[str] = Field(default=None, description="用户账号")
     user_display_name: Optional[str] = Field(default=None, description="用户展示名称")
     device_id: Optional[str] = Field(default=None, description="设备 ID")
+    device_name: Optional[str] = Field(default=None, description="设备名称（从 devices 表关联查询）")
     risk_type: str = Field(..., description="风险类型")
     severity: str = Field(..., description="严重程度")
     details_json: dict[str, Any] = Field(
@@ -187,7 +192,6 @@ class PlanFeatureFlagsItem(BaseModel):
     """
 
     plan_id: str = Field(..., description="套餐 ID（UUID）")
-    plan_code: str = Field(..., description="套餐编码")
     plan_name: str = Field(..., description="套餐名称")
     enabled_features_json: dict[str, Any] = Field(
         default_factory=dict, description="功能开关配置"

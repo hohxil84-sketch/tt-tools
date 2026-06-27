@@ -424,8 +424,8 @@ class TestGetFeatureFlags:
 
         data = _assert_success_response(resp.json())
         assert len(data["items"]) == 3
-        codes = {item["plan_code"] for item in data["items"]}
-        assert codes == {"free", "standard", "pro"}
+        codes = {item["plan_id"] for item in data["items"]}
+        assert codes == {"plan-free", "plan-standard", "plan-pro"}
 
     async def test_items_have_required_fields(self, admin_client: AsyncClient):
         """列表项应包含所有必填字段。"""
@@ -434,25 +434,25 @@ class TestGetFeatureFlags:
 
         for item in data["items"]:
             assert "plan_id" in item
-            assert "plan_code" in item
+            assert "plan_id" in item
             assert "plan_name" in item
             assert "enabled_features_json" in item
             assert "plan_status" in item
 
-    async def test_filter_by_plan_code(self, admin_client: AsyncClient):
-        """按 plan_code 筛选应只返回匹配的套餐。"""
+    async def test_filter_by_plan_id(self, admin_client: AsyncClient):
+        """按 plan_id 筛选应只返回匹配的套餐。"""
         resp = await admin_client.get(
-            "/api/v1/admin/feature-flags", params={"plan_code": "free"}
+            "/api/v1/admin/feature-flags", params={"plan_id": "plan-free"}
         )
         data = _assert_success_response(resp.json())
         assert len(data["items"]) == 1
-        assert data["items"][0]["plan_code"] == "free"
+        assert data["items"][0]["plan_id"] == "plan-free"
         assert data["items"][0]["plan_name"] == "免费套餐"
 
     async def test_filter_nonexistent_plan(self, admin_client: AsyncClient):
         """筛选不存在的套餐应返回空列表。"""
         resp = await admin_client.get(
-            "/api/v1/admin/feature-flags", params={"plan_code": "nonexistent"}
+            "/api/v1/admin/feature-flags", params={"plan_id": "nonexistent"}
         )
         data = _assert_success_response(resp.json())
         assert len(data["items"]) == 0
@@ -485,7 +485,7 @@ class TestUpdateFeatureFlags:
         assert resp.status_code == 200
 
         data = _assert_success_response(resp.json())
-        assert data["plan_code"] == "free"
+        assert data["plan_id"] == "plan-free"
         # 合并后应保留原有 key，同时新增传入的 key
         assert "resize_image_local_paid" in data["enabled_features_json"]
         assert data["enabled_features_json"]["new_feature"] is True
@@ -518,7 +518,7 @@ class TestUpdateFeatureFlags:
         )
         # 再查询
         resp = await admin_client.get(
-            "/api/v1/admin/feature-flags", params={"plan_code": "pro"}
+            "/api/v1/admin/feature-flags", params={"plan_id": "plan-pro"}
         )
         data = _assert_success_response(resp.json())
         assert data["items"][0]["enabled_features_json"]["new_pro_feature"] is True

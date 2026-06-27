@@ -3,11 +3,12 @@
  * 所有功能码从后端 feature_codes 表动态加载，无需前端硬编码。
  */
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api/client';
 import { Sheet, priBtn, secBtn, inpS } from '../components/shared';
 
 interface Feat {
-  plan_id: string; plan_code: string; plan_name: string;
+  plan_id: string; plan_name: string;
   enabled_features_json: Record<string, unknown>; plan_status: string;
 }
 
@@ -53,6 +54,7 @@ export default function FeatureFlags() {
   const [items, setItems] = useState<Feat[]>([]);
   const [pc, setPc] = useState(''); const [err, setErr] = useState('');
   const [edit, setEdit] = useState<Feat | null>(null);
+  const navigate = useNavigate();
 
   // 从后端动态加载全部功能码
   const [allFeatureCodes, setAllFeatureCodes] = useState<FeatureCode[]>([]);
@@ -72,16 +74,19 @@ export default function FeatureFlags() {
 
   const load = useCallback(async () => {
     setErr('');
-    try { const d = await apiRequest<{ items: Feat[] }>('/admin/feature-flags', { params: { plan_code: pc || undefined } }); setItems(d.items); }
+    try { const d = await apiRequest<{ items: Feat[] }>('/admin/feature-flags', { params: { plan_id: pc || undefined } }); setItems(d.items); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
   }, [pc]);
   useEffect(() => { load(); }, [load]);
 
   return (
     <div>
-      <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 20 }}>功能开关</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>功能开关</h2>
+        <button onClick={() => navigate('/admin/plans')} style={priBtn}>+ 创建套餐</button>
+      </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-        <input placeholder="套餐编码筛选" value={pc} onChange={e => setPc(e.target.value)} style={inpS} />
+        <input placeholder="套餐ID筛选" value={pc} onChange={e => setPc(e.target.value)} style={inpS} />
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
@@ -94,7 +99,7 @@ export default function FeatureFlags() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
                 <h4 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 2px 0' }}>{it.plan_name}</h4>
-                <code style={{ fontSize: 12, color: 'var(--blue)' }}>{it.plan_code}</code>
+                <code style={{ fontSize: 12, color: 'var(--blue)' }}>{it.plan_id}</code>
                 <span style={{
                   marginLeft: 8, fontSize: 11, fontWeight: 500,
                   color: it.plan_status === 'active' ? '#34c759' : 'var(--gray-400)',
@@ -181,7 +186,7 @@ function EditModal({ item, allFeatureCodes, labelMap, close, done }: {
   return (
     <Sheet title={`功能开关: ${item.plan_name}`} close={close}>
       <div style={{ marginBottom: 16 }}>
-        <code style={{ fontSize: 12, color: 'var(--blue)' }}>{item.plan_code}</code>
+        <code style={{ fontSize: 12, color: 'var(--blue)' }}>{item.plan_id}</code>
         <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--gray-400)' }}>
           {item.plan_status === 'active' ? '已启用' : '已停用'}
         </span>

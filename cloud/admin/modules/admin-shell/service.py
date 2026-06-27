@@ -115,49 +115,26 @@ def get_menu(user_permissions: set | None = None) -> MenuData:
             path="/admin/dashboard",
             required_permission="dashboard.read",
         ),
-        # 系统用户（管理员账号）
+        # 用户管理（统一入口：管理员 + 普通用户）
         MenuItem(
-            id="system-users",
-            title="系统用户",
-            icon="admin",
-            path="/admin/system-users",
+            id="users",
+            title="用户管理",
+            icon="users",
+            path="/admin/users",
             children=[
                 MenuItem(
                     id="system-users-list",
-                    title="管理员列表",
-                    icon="list",
+                    title="管理员",
+                    icon="admin",
                     path="/admin/system-users",
                     required_permission="users.read",
                 ),
                 MenuItem(
-                    id="system-users-create",
-                    title="创建管理员",
-                    icon="plus",
-                    path="/admin/system-users?action=create",
-                    required_permission="users.create",
-                ),
-            ],
-        ),
-        # 客户端用户（普通用户账号）
-        MenuItem(
-            id="client-users",
-            title="客户端用户",
-            icon="users",
-            path="/admin/client-users",
-            children=[
-                MenuItem(
                     id="client-users-list",
-                    title="用户列表",
-                    icon="list",
+                    title="普通用户",
+                    icon="user",
                     path="/admin/client-users",
                     required_permission="users.read",
-                ),
-                MenuItem(
-                    id="client-users-create",
-                    title="创建用户",
-                    icon="plus",
-                    path="/admin/client-users?action=create",
-                    required_permission="users.create",
                 ),
             ],
         ),
@@ -378,13 +355,12 @@ def _generate_refresh_token() -> str:
     return secrets.token_urlsafe(64)
 
 
-def _create_jwt(user_id: str, role: str, plan_code: str) -> str:
+def _create_jwt(user_id: str, role: str) -> str:
     """创建 JWT access_token。"""
     now = datetime.now(timezone.utc)
     payload = {
         "sub": user_id,
         "role": role,
-        "plan_code": plan_code,
         "iat": now,
         "exp": now + timedelta(minutes=shared_settings.auth_access_token_expire_minutes),
         "type": "access",
@@ -401,7 +377,7 @@ async def login_admin(db, account: str, password: str, device_fingerprint: str =
     """
     # 原始 SQL 查询用户
     result = await db.execute(
-        text("SELECT id, account, password_hash, display_name, role, status, plan_code "
+        text("SELECT id, account, password_hash, display_name, role, status, plan_id "
              "FROM users WHERE account = :account"),
         {"account": account},
     )
@@ -411,7 +387,7 @@ async def login_admin(db, account: str, password: str, device_fingerprint: str =
                        message="账号或密码错误", status_code=401)
     # row 是 tuple，按 SELECT 字段顺序
     (user_id, user_account, password_hash, display_name,
-     role, status, plan_code) = row
+     role, status, plan_id) = row
 
     if status == "blocked":
         raise AppError(code=ErrorCode.AUTH_INVALID_CREDENTIALS,
@@ -425,8 +401,7 @@ async def login_admin(db, account: str, password: str, device_fingerprint: str =
         raise AppError(code=ErrorCode.AUTH_INVALID_CREDENTIALS,
                        message="账号或密码错误", status_code=401)
 
-    access_token = _create_jwt(user_id=user_id, role=role,
-                               plan_code=plan_code or "free")
+    access_token = _create_jwt(user_id=user_id, role=role)
     refresh_token = _generate_refresh_token()
     expires_in = shared_settings.auth_access_token_expire_minutes * 60
 
@@ -460,7 +435,7 @@ async def login_admin(db, account: str, password: str, device_fingerprint: str =
             "id": user_id,
             "account": user_account,
             "display_name": display_name,
-            "plan_code": plan_code or "free",
+            "plan_id": plan_id,
             "permissions": user_permissions,
         },
         "device": {
@@ -517,18 +492,16 @@ async def refresh_admin(db, refresh_token: str):
         {"id": session_id, "now": now_utc},
     )
 
-    # 3. 查询用户当前角色和套餐（确保 JWT 载荷反映最新状态）
+    # 3. 查询用户当前角色（确保 JWT 载荷反映最新状态）
     user_result = await db.execute(
-        text("SELECT role, plan_code FROM users WHERE id = :user_id"),
+        text("SELECT role FROM users WHERE id = :user_id"),
         {"user_id": user_id},
     )
     user_row = user_result.first()
     user_role = user_row[0] if user_row else "admin"
-    user_plan = user_row[1] if user_row else "free"
 
     # 4. 创建新会话
-    new_access_token = _create_jwt(user_id=user_id, role=user_role,
-                                    plan_code=user_plan or "free")
+    new_access_token = _create_jwt(user_id=user_id, role=user_role)
     new_refresh_token = _generate_refresh_token()
     new_refresh_hash = _hash_token(new_refresh_token)
     new_expires_in = shared_settings.auth_access_token_expire_minutes * 60

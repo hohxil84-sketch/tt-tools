@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, LBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS } from '../components/shared';
 
-interface Log { id: string; admin_user_id: string; admin_account: string; action: string; target_type: string; target_id: string | null; summary: string; ip_address: string | null; created_at: string; details_json?: any; }
+interface Log { id: string; admin_user_id: string; admin_account: string; admin_display_name?: string | null; action: string; target_type: string; target_id: string | null; summary: string; ip_address: string | null; created_at: string; details_json?: any; }
 interface List { items: Log[]; total: number; limit: number; offset: number; }
 const PAGE = 20;
 
@@ -67,7 +67,10 @@ export default function AuditLogs() {
         {d?.items.map(l => (
           <tr key={l.id}>
             <td style={{ fontSize: 12, color: 'var(--gray-500)', whiteSpace: 'nowrap' }}>{new Date(l.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ fontSize: 12, fontWeight: 500 }}>{l.admin_account}</td>
+            <td style={{ fontSize: 12 }}>
+              <span style={{ fontWeight: 500 }}>{l.admin_account}</span>
+              {l.admin_display_name && <span style={{ color: 'var(--gray-400)', marginLeft: 4 }}>({l.admin_display_name})</span>}
+            </td>
             <td><Badge t={ACTION_LABELS[l.action] || l.action} c={l.action === 'delete' ? 'var(--red)' : 'var(--blue)'} /></td>
             <td style={{ fontSize: 12 }}>{(TARGET_LABELS[l.target_type] || l.target_type) + (l.target_id ? ` (${l.target_id.substring(0, 8)}...)` : '')}</td>
             <td style={{ fontSize: 12, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.summary}</td>
@@ -80,7 +83,7 @@ export default function AuditLogs() {
       {detail && <Sheet title="审计日志详情" close={() => setDetail(null)}>
         <DetailRows rows={[
           ['ID', detail.id],
-          ['操作人', detail.admin_account],
+          ['操作人', detail.admin_display_name ? `${detail.admin_account} (${detail.admin_display_name})` : detail.admin_account],
           ['操作类型', ACTION_LABELS[detail.action] || detail.action],
           ['目标类型', TARGET_LABELS[detail.target_type] || detail.target_type],
           ['目标 ID', detail.target_id || '—'],

@@ -81,11 +81,21 @@ class ProviderCallLog(Base):
     # 设备 ID（可选）
     device_id = Column(String(36), ForeignKey("devices.id"), nullable=True)
 
-    # 功能码
-    feature = Column(String(100), nullable=False)
+    # 功能码（字符串冗余缓存，过渡期保留，新代码优先使用 feature_code_id）
+    feature = Column(String(100), nullable=True)
 
-    # Provider 名称
-    provider = Column(String(100), nullable=False)
+    # 功能码外键 ID（→ feature_codes.id）
+    feature_code_id = Column(
+        String(36), ForeignKey("feature_codes.id"), nullable=True, index=True
+    )
+
+    # Provider 名称（字符串冗余缓存，过渡期保留）
+    provider = Column(String(100), nullable=True)
+
+    # Provider 外键 ID（→ providers.id）
+    provider_id = Column(
+        String(36), ForeignKey("providers.id"), nullable=True, index=True
+    )
 
     # 模型名称
     model = Column(String(100), nullable=False)

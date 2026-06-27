@@ -112,8 +112,10 @@
 | request_id | varchar(100) | unique, not null | 请求追踪 ID |
 | user_id | uuid | fk users.id, not null | 用户 ID |
 | device_id | uuid | fk devices.id, nullable | 设备 ID |
-| feature | varchar(100) | not null | 功能码 |
-| provider | varchar(100) | not null | Provider 名称 |
+| feature | varchar(100) | nullable | 功能码（冗余缓存，过渡期保留） |
+| feature_code_id | uuid | fk feature_codes.id, nullable | 功能码外键 ID |
+| provider | varchar(100) | nullable | Provider 名称（冗余缓存，过渡期保留） |
+| provider_id | uuid | fk providers.id, nullable | Provider 外键 ID |
 | model | varchar(100) | not null | 模型名称 |
 | status | varchar(50) | not null | success / failed / timeout |
 | error_code | varchar(100) | nullable | 统一错误码 |
@@ -139,7 +141,8 @@
 | id | uuid | pk | 事件 ID |
 | user_id | uuid | fk users.id, not null | 用户 ID |
 | device_id | uuid | fk devices.id, nullable | 设备 ID |
-| feature | varchar(100) | not null | 功能码 |
+| feature | varchar(100) | nullable | 功能码（冗余缓存，过渡期保留） |
+| feature_code_id | uuid | fk feature_codes.id, nullable | 功能码外键 ID |
 | event_type | varchar(100) | not null | local_start / local_success / cloud_success 等 |
 | request_id | varchar(100) | nullable | 请求 ID |
 | metadata_json | jsonb | not null default `{}` | 脱敏元数据 |
@@ -188,7 +191,8 @@
 | id | uuid | pk | 任务 ID |
 | user_id | uuid | fk users.id, not null | 用户 ID |
 | device_id | uuid | fk devices.id, nullable | 设备 ID |
-| feature | varchar(100) | not null | 功能码 |
+| feature | varchar(100) | nullable | 功能码（冗余缓存，过渡期保留） |
+| feature_code_id | uuid | fk feature_codes.id, nullable | 功能码外键 ID |
 | status | varchar(50) | not null | queued / running / succeeded / failed |
 | input_json | jsonb | not null | 脱敏输入 |
 | result_json | jsonb | nullable | 结果 |

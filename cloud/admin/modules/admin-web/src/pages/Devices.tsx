@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, LBtn, Pager, Sheet, Modal, secBtn, inpS, selS } from '../components/shared';
 
-interface Dev { id: string; user_id: string; device_name: string | null; client_version: string | null; status: string; bound_at: string; last_seen_at: string | null; created_at?: string; updated_at?: string; }
+interface Dev { id: string; user_id: string; user_account?: string | null; device_name: string | null; client_version: string | null; status: string; bound_at: string; last_seen_at: string | null; created_at?: string; updated_at?: string; }
 interface List { items: Dev[]; total: number; limit: number; offset: number; }
 const PAGE = 20;
 const SL: Record<string, string> = { active: '正常', blocked: '已封禁', removed: '已移除' };
@@ -38,7 +38,7 @@ export default function Devices() {
         {d?.items.map(x => (
           <tr key={x.id}>
             <td style={{ fontWeight: 500 }}>{x.device_name || '—'}</td>
-            <td style={{ color: 'var(--gray-500)', fontSize: 12 }}>{x.user_id.substring(0, 10)}…</td>
+            <td style={{ color: 'var(--gray-500)', fontSize: 12 }}>{x.user_account || x.user_id.substring(0, 8) + '…'}</td>
             <td style={{ color: 'var(--gray-500)' }}>{x.client_version || '—'}</td>
             <td><span style={{ fontSize: 12, fontWeight: 500, color: SC[x.status] }}>{SL[x.status]}</span></td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(x.bound_at).toLocaleString('zh-CN')}</td>

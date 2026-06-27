@@ -25,7 +25,8 @@ class UserItem(BaseModel):
     display_name: Optional[str] = Field(default=None, description="展示名称")
     role: str = Field(..., description="用户角色：user / admin")
     status: str = Field(..., description="用户状态：active / blocked / deleted")
-    plan_code: str = Field(..., description="当前套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
+    plan_name: Optional[str] = Field(default=None, description="当前套餐中文名（从 plans 表关联查询）")
     created_at: datetime = Field(..., description="注册时间")
 
 
@@ -37,7 +38,8 @@ class UserDetail(BaseModel):
     display_name: Optional[str] = Field(default=None, description="展示名称")
     role: str = Field(..., description="用户角色")
     status: str = Field(..., description="用户状态")
-    plan_code: str = Field(..., description="当前套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
+    plan_name: Optional[str] = Field(default=None, description="当前套餐中文名（从 plans 表关联查询）")
     created_at: datetime = Field(..., description="注册时间")
     updated_at: datetime = Field(..., description="最近更新时间")
 
@@ -49,15 +51,24 @@ class CreateUserRequest(BaseModel):
     password: str = Field(..., description="登录密码（明文，服务端 bcrypt 哈希存储）")
     display_name: Optional[str] = Field(default=None, description="展示名称")
     role: str = Field(default="user", description="用户角色：user / admin", pattern="^(user|admin)$")
-    plan_code: str = Field(default="free", description="套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="套餐 ID（UUID）")
 
 
 class UpdateUserRequest(BaseModel):
     """编辑用户信息请求，对齐 admin-users.yaml UpdateUserRequest。"""
 
     display_name: Optional[str] = Field(default=None, description="展示名称")
-    plan_code: Optional[str] = Field(default=None, description="套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="套餐 ID（UUID）")
     role: Optional[str] = Field(default=None, description="用户角色：user / admin", pattern="^(user|admin)$")
+
+
+class ResetPasswordRequest(BaseModel):
+    """管理员重置用户密码请求，对齐 admin-users.yaml ResetPasswordRequest。"""
+
+    new_password: str = Field(
+        ..., min_length=1, max_length=128,
+        description="新密码（明文，服务端 bcrypt 哈希存储）"
+    )
 
 
 class UpdateUserStatusRequest(BaseModel):
@@ -89,6 +100,8 @@ class DeviceItem(BaseModel):
 
     id: str = Field(..., description="设备 ID（UUID）")
     user_id: str = Field(..., description="所属用户 ID")
+    user_account: Optional[str] = Field(default=None, description="所属用户账号（从 users 表关联查询）")
+    user_display_name: Optional[str] = Field(default=None, description="所属用户展示名称")
     device_name: Optional[str] = Field(default=None, description="设备名称")
     client_version: Optional[str] = Field(default=None, description="客户端版本")
     status: str = Field(..., description="设备状态：active / blocked / removed")
@@ -101,6 +114,8 @@ class DeviceDetail(BaseModel):
 
     id: str = Field(..., description="设备 ID（UUID）")
     user_id: str = Field(..., description="所属用户 ID")
+    user_account: Optional[str] = Field(default=None, description="所属用户账号（从 users 表关联查询）")
+    user_display_name: Optional[str] = Field(default=None, description="所属用户展示名称")
     device_name: Optional[str] = Field(default=None, description="设备名称")
     client_version: Optional[str] = Field(default=None, description="客户端版本")
     status: str = Field(..., description="设备状态")

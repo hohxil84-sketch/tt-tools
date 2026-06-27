@@ -45,7 +45,7 @@ class TestLogin:
         # 用户信息
         assert data["user"]["account"] == "test@example.com"
         assert data["user"]["display_name"] == "测试用户"
-        assert data["user"]["plan_code"] == "standard"
+        assert data["user"]["plan_id"] is None
 
         # 设备信息（首次登录，应为新设备）
         assert data["device"]["status"] == "active"
