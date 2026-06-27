@@ -23,7 +23,7 @@
 | cloud-provider-log | cloud/modules/provider-log | feature/cloud-provider-log | DEVELOPMENT_COMPLETE | 26/26 通过 | 2026-06-20 已合并 |
 | cloud-ai-copy | cloud/modules/ai-copy | feature/cloud-ai-copy | DEVELOPMENT_COMPLETE | 16/16 通过 | 2026-06-21 已合并 |
 | cloud-ai-render | cloud/modules/ai-render | feature/cloud-ai-render | DEVELOPMENT_COMPLETE | 22/22 通过 | 2026-06-21 已合并 |
-| cloud-ai-image-tools | cloud/modules/ai-image-tools | feature/cloud-ai-image-tools | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-21 已合并 |
+| cloud-ai-image-tools | cloud/modules/ai-image-tools | feature/cloud-ai-image-tools | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-21 已合并, 2026-06-27 修复合并 |
 | cloud-orders-recharge | cloud/modules/orders-recharge | feature/cloud-orders-recharge | DEVELOPMENT_COMPLETE | 25/25 通过 | 2026-06-21 已合并 |
 | cloud-admin-shell | cloud/admin/modules/admin-shell | feature/admin-shell | DEVELOPMENT_COMPLETE | 14/14 通过 | 2026-06-24 已合并 |
 | cloud-admin-users | cloud/admin/modules/admin-users | feature/admin-users | DEVELOPMENT_COMPLETE | 50/50 通过 | 2026-06-24 已合并 |
@@ -103,3 +103,23 @@
 - cloud-ai-copy: 16/16 通过
 - cloud-provider-runtime: 107/107 通过
 
+## Bug 修复记录 (2026-06-27)
+
+**分支**: fix/ai-image-tools-umbrella-to-individual
+**提交**: f5bb21a → 7a9c1f4
+
+### 修复范围
+
+1. **credits-billing/service.py** — 套餐配置中 `ai_image_tools_cloud` 伞形开关拆为 5 个独立子功能码（upscale/vectorize/ai_edit/remove_bg/ocr），Pro 用户权限检查时能直接匹配子功能码
+
+2. **ai-image-tools/service.py** — `_check_feature_permission` 移除伞形回退逻辑，改为直接查询子功能码
+
+3. **provider-runtime/mock.py** — Mock 响应键从 1 个拆为 5 个，各子功能有独立 mock 文案
+
+4. **seed_fake_data.py / 测试文件 / 文档 / 后台 UI** — 同步更新
+
+### 测试结果
+- cloud-ai-image-tools: 36/36 通过
+- cloud-credits-billing: 30/30 通过
+- cloud-admin-billing: 67/67 通过
+- DTO ai_image_tools: 100/100 通过
