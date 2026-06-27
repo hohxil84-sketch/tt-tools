@@ -8,7 +8,6 @@ interface PlanOption { id: string; name: string; }
 interface RoleOption { id: string; name: string; code: string; is_system: boolean; }
 interface CreditAccount { id: string; balance: number; plan_name?: string | null; status: string; }
 interface List { items: User[]; total: number; limit: number; offset: number; }
-const PAGE = 20;
 const SL: Record<string, string> = { active: '正常', blocked: '已封禁', deleted: '已删除' };
 const SC: Record<string, string> = { active: '#34c759', blocked: '#ff9500', deleted: '#ff3b30' };
 
@@ -37,6 +36,8 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchTarget, setBatchTarget] = useState<{ action: string; label: string } | null>(null);
   const [batching, setBatching] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [limit, setLimit] = useState(10);
 
   const toggleSelect = (id: string) => {
     setSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -64,7 +65,7 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
         await apiRequest('/admin/users/batch/status', { method: 'POST', body: { ids: [...selected], status: batchTarget.action } });
         showToast(`批量${batchTarget.label}成功`, 'success');
       }
-      clearSelection(); setBatchTarget(null); load();
+      clearSelection(); setBatchTarget(null); setRefreshKey(k => k + 1); load();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '批量操作失败', 'error'); }
     finally { setBatching(false); }
   };
@@ -79,20 +80,20 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
   const load = useCallback(async () => {
     setErr('');
     try {
-      const params: Record<string, string | number | undefined> = { limit: PAGE, offset: pg * PAGE, search: q || undefined, status: sf || undefined };
+      const params: Record<string, string | number | undefined> = { limit, offset: pg * limit, search: q || undefined, status: sf || undefined };
       // 根据 roleFilter 附加角色筛选参数
       if (roleFilter) params.role = roleFilter;
       setD(await apiRequest<List>('/admin/users', { params }));
     }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, q, sf, roleFilter]);
+  }, [pg, q, sf, roleFilter, limit, refreshKey]);
   useEffect(() => { load(); }, [load]);
 
   const updStatus = async (id: string, ns: string) => {
     try {
       await apiRequest(`/admin/users/${id}/status`, { method: 'PATCH', body: { status: ns } });
       showToast('操作成功', 'success');
-      setCa(null); load();
+      setCa(null); setRefreshKey(k => k + 1); load();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '操作失败', 'error'); }
   };
   const del = async () => {
@@ -100,10 +101,10 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
     try {
       await apiRequest(`/admin/users/${cd.id}`, { method: 'DELETE' });
       showToast('删除成功', 'success');
-      setCd(null); load();
+      setCd(null); setRefreshKey(k => k + 1); load();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); }
   };
-  const resetPw = async () => { if (!resetPwUser || !newPw) { showToast('请输入新密码', 'error'); return; } try { await apiRequest(`/admin/users/${resetPwUser.id}/reset-password`, { method: 'POST', body: { new_password: newPw } }); showToast('密码重置成功', 'success'); setResetPwUser(null); setNewPw(''); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '重置失败', 'error'); } };
+  const resetPw = async () => { if (!resetPwUser || !newPw) { showToast('请输入新密码', 'error'); return; } try { await apiRequest(`/admin/users/${resetPwUser.id}/reset-password`, { method: 'POST', body: { new_password: newPw } }); showToast('密码重置成功', 'success'); setResetPwUser(null); setNewPw(''); setRefreshKey(k => k + 1); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '重置失败', 'error'); } };
   const isSystem = roleFilter === 'admin';
   const isClient = roleFilter === 'user';
 
@@ -114,7 +115,12 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
     : isClient
       ? [selectAllCheckbox, '账号', '名称', '额度余额', '本月消费', '套餐', '到期时间', '状态', '设备', '最后登录', '更新时间', '']
       : [selectAllCheckbox, '账号', '名称', '角色', '额度余额', '套餐', '状态', '设备', '最后登录', '更新时间', ''];
-  const TP = d ? Math.ceil(d.total / PAGE) : 0;
+  const colAligns: ('l'|'r'|'c')[] = isSystem
+    ? ['c','c','c','c','c','c','c','c','c','r']
+    : isClient
+      ? ['c','c','c','c','c','c','c','c','c','c','c','r']
+      : ['c','c','c','c','c','c','c','c','c','c','r'];
+  const TP = d ? Math.ceil(d.total / limit) : 0;
   const title = getTitle(roleFilter);
 
   return (
@@ -144,7 +150,7 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
       )}
 
       <Card>
-        <Tbl heads={heads}>
+        <Tbl heads={heads} colAligns={colAligns}>
           {d?.items.map(u => {
             const lastLoginStr = u.last_login_at ? new Date(u.last_login_at).toLocaleString('zh-CN') : '—';
             const updatedStr = u.updated_at ? new Date(u.updated_at).toLocaleString('zh-CN') : '—';
@@ -153,7 +159,7 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
             const usageStr = (u.monthly_usage || 0).toLocaleString();
             // 操作按钮（三个视图共用）
             const actions = (
-              <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+              <td style={{ textAlign: 'right', width: '22%', whiteSpace: 'nowrap' }}>
                 <ActBtn kind="detail" onClick={() => setDetail(u)}>详情</ActBtn>
                 <ActBtn kind="edit" onClick={() => setEdit(u)}>编辑</ActBtn>
                 {u.role === 'admin' && <ActBtn kind="role" onClick={() => setRoleUser(u)}>角色</ActBtn>}
@@ -167,9 +173,9 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
             // 通用信息单元格
             const commonCells = (
               <>
-                <td style={{ width: 36, padding: '8px 4px' }}><input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} /></td>
-                <td style={{ fontWeight: 500 }}>{u.account}</td>
-                <td style={{ color: 'var(--gray-500)' }}>{u.display_name || '—'}</td>
+                <td style={{ width: 30, padding: '8px 4px', textAlign: 'center' }}><input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} /></td>
+                <td style={{ fontWeight: 500, fontSize: 13, width: '11%', textAlign: 'center' }}>{u.account}</td>
+                <td style={{ color: 'var(--gray-500)', fontSize: 13, width: '8%', textAlign: 'center' }}>{u.display_name || '—'}</td>
               </>
             );
             // 根据视图类型渲染不同的列布局
@@ -177,12 +183,12 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
               return (
                 <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                   {commonCells}
-                  <td><span style={{ fontSize: 12, fontWeight: 500, color: '#af52de' }}>{u.role_names || '—'}</span></td>
-                  <td><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
-                  <td><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 12 }}>{lastLoginStr}</td>
-                  <td><span style={{ fontSize: 12, fontWeight: 500, color: (u.audit_count || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{u.audit_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-400)', fontSize: 11 }}>{updatedStr}</td>
+                  <td style={{ fontSize: 13, width: '10%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#af52de' }}>{u.role_names || '—'}</span></td>
+                  <td style={{ fontSize: 13, width: '7%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
+                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-500)', fontSize: 12, width: '14%', textAlign: 'center' }}>{lastLoginStr}</td>
+                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.audit_count || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{u.audit_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-400)', fontSize: 12, width: '13%', textAlign: 'center' }}>{updatedStr}</td>
                   {actions}
                 </tr>
               );
@@ -192,14 +198,14 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
               return (
                 <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                   {commonCells}
-                  <td><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
-                  <td><span style={{ fontSize: 12, fontWeight: 500, color: (u.monthly_usage || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{usageStr}</span></td>
-                  <td><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 12 }}>{periodEndStr}</td>
-                  <td><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
-                  <td><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 12 }}>{lastLoginStr}</td>
-                  <td style={{ color: 'var(--gray-400)', fontSize: 11 }}>{updatedStr}</td>
+                  <td style={{ fontSize: 13, width: '7%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
+                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.monthly_usage || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{usageStr}</span></td>
+                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
+                  <td style={{ color: 'var(--gray-500)', fontSize: 12, width: '7%', textAlign: 'center' }}>{periodEndStr}</td>
+                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
+                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-500)', fontSize: 12, width: '11%', textAlign: 'center' }}>{lastLoginStr}</td>
+                  <td style={{ color: 'var(--gray-400)', fontSize: 12, width: '11%', textAlign: 'center' }}>{updatedStr}</td>
                   {actions}
                 </tr>
               );
@@ -208,20 +214,20 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
             return (
               <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                 {commonCells}
-                <td><Badge t={u.role === 'admin' ? '管理员' : '用户'} c={u.role === 'admin' ? 'var(--blue)' : 'var(--gray-500)'} /></td>
-                <td><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
-                <td><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
-                <td><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
-                <td><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
-                <td style={{ color: 'var(--gray-500)', fontSize: 12 }}>{lastLoginStr}</td>
-                <td style={{ color: 'var(--gray-400)', fontSize: 11 }}>{updatedStr}</td>
+                <td style={{ fontSize: 13, width: '6%', textAlign: 'center' }}><Badge t={u.role === 'admin' ? '管理员' : '用户'} c={u.role === 'admin' ? 'var(--blue)' : 'var(--gray-500)'} /></td>
+                <td style={{ fontSize: 13, width: '7%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
+                <td style={{ fontSize: 13, width: '5%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
+                <td style={{ fontSize: 13, width: '5%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
+                <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
+                <td style={{ color: 'var(--gray-500)', fontSize: 12, width: '12%', textAlign: 'center' }}>{lastLoginStr}</td>
+                <td style={{ color: 'var(--gray-400)', fontSize: 12, width: '12%', textAlign: 'center' }}>{updatedStr}</td>
                 {actions}
               </tr>
             );
           })}
         </Tbl>
       </Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
       {detail && <Sheet title="用户详情" close={() => setDetail(null)}>
         <DetailRows rows={[
           ['ID', detail.id],
@@ -247,11 +253,11 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
       {cd && <Modal title="删除用户" close={() => setCd(null)} action={del} danger>
         <p>永久删除 <b>{cd.account}</b>？此操作不可撤销。</p>
       </Modal>}
-      {showCreate && <UserForm roleFilter={roleFilter} close={() => setShowCreate(false)} done={() => { setShowCreate(false); load(); }} />}
-      {edit && <UserForm roleFilter={roleFilter} user={edit} close={() => setEdit(null)} done={() => { setEdit(null); load(); }} />}
+      {showCreate && <UserForm roleFilter={roleFilter} close={() => setShowCreate(false)} done={() => { setShowCreate(false); setRefreshKey(k => k + 1); load(); }} />}
+      {edit && <UserForm roleFilter={roleFilter} user={edit} close={() => setEdit(null)} done={() => { setEdit(null); setRefreshKey(k => k + 1); load(); }} />}
       {resetPwUser && <Modal title="重置密码" close={() => { setResetPwUser(null); setNewPw(''); }} action={resetPw}><p>为用户 <b>{resetPwUser.account}</b> 重置密码：</p><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="输入新密码" style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-sm)', fontSize: 13 }} /></Modal>}
-      {roleUser && <RoleAssignmentModal user={roleUser} close={() => setRoleUser(null)} done={() => { setRoleUser(null); load(); }} />}
-      {creditUser && <CreditAdjustModal user={creditUser} close={() => setCreditUser(null)} done={() => { setCreditUser(null); load(); }} />}
+      {roleUser && <RoleAssignmentModal user={roleUser} close={() => setRoleUser(null)} done={() => { setRoleUser(null); setRefreshKey(k => k + 1); load(); }} />}
+      {creditUser && <CreditAdjustModal user={creditUser} close={() => setCreditUser(null)} done={() => { setCreditUser(null); setRefreshKey(k => k + 1); load(); }} />}
 
       {batchTarget && <Modal title={`批量${batchTarget.label}`} close={() => setBatchTarget(null)} action={doBatch} danger={batchTarget.action === 'delete'}>
         <p>确认批量{batchTarget.label} <b>{selected.size}</b> 个用户？{batchTarget.action === 'delete' ? '此操作不可撤销。' : ''}</p>

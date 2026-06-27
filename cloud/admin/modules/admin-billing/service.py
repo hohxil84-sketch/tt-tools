@@ -257,6 +257,8 @@ async def list_plans(db: AsyncSession) -> PlanListData:
             id=p.id,
             name=p.name,
             monthly_grant=p.monthly_grant,
+            expire_days=getattr(p, 'expire_days', 0) or 0,
+            is_default=bool(getattr(p, 'is_default', False)),
             status=p.status,
             created_at=p.created_at,
         )
@@ -295,6 +297,7 @@ async def get_plan_detail(db: AsyncSession, plan_id: str) -> PlanDetail:
         id=plan.id,
         name=plan.name,
         monthly_grant=plan.monthly_grant,
+        expire_days=getattr(plan, 'expire_days', 0) or 0,
         enabled_features_json=plan.enabled_features_json or {},
         status=plan.status,
         created_at=plan.created_at,
@@ -342,6 +345,8 @@ async def create_plan(
     db: AsyncSession,
     name: str,
     monthly_grant: int = 0,
+    expire_days: int = 0,
+    is_default: bool = False,
     enabled_features_json: Optional[dict] = None,
 ) -> PlanDetail:
     """创建新套餐。
@@ -353,6 +358,7 @@ async def create_plan(
         db: 数据库异步会话
         name: 套餐名称
         monthly_grant: 每周期赠送额度
+        expire_days: 到期天数，0=永不过期
         enabled_features_json: 功能开关配置
 
     Returns:
@@ -379,10 +385,18 @@ async def create_plan(
             status_code=409,
         )
 
+    # 默认套餐互斥：新设为默认时清掉其他
+    if is_default:
+        await db.execute(
+            text("UPDATE plans SET is_default = false WHERE is_default = true")
+        )
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     plan = _Plan(
         name=name,
         monthly_grant=monthly_grant,
+        expire_days=expire_days,
+        is_default=is_default,
         enabled_features_json=enabled_features_json or {},
         status="active",
         created_at=now,
@@ -395,6 +409,7 @@ async def create_plan(
         id=plan.id,
         name=plan.name,
         monthly_grant=plan.monthly_grant,
+        expire_days=getattr(plan, 'expire_days', 0) or 0,
         enabled_features_json=plan.enabled_features_json or {},
         status=plan.status,
         created_at=plan.created_at,
@@ -407,6 +422,8 @@ async def update_plan(
     plan_id: str,
     name: Optional[str] = None,
     monthly_grant: Optional[int] = None,
+    expire_days: Optional[int] = None,
+    is_default: Optional[bool] = None,
     enabled_features_json: Optional[dict] = None,
 ) -> PlanDetail:
     """更新套餐配置。
@@ -443,6 +460,12 @@ async def update_plan(
         plan.name = name
     if monthly_grant is not None:
         plan.monthly_grant = monthly_grant
+    if expire_days is not None:
+        plan.expire_days = expire_days
+    if is_default is not None:
+        if is_default:
+            await db.execute(text("UPDATE plans SET is_default = false WHERE is_default = true"))
+        plan.is_default = is_default
     if enabled_features_json is not None:
         await _validate_features(db, enabled_features_json)
         plan.enabled_features_json = enabled_features_json
@@ -454,6 +477,7 @@ async def update_plan(
         id=plan.id,
         name=plan.name,
         monthly_grant=plan.monthly_grant,
+        expire_days=getattr(plan, 'expire_days', 0) or 0,
         enabled_features_json=plan.enabled_features_json or {},
         status=plan.status,
         created_at=plan.created_at,
@@ -504,6 +528,7 @@ async def update_plan_status(
         id=plan.id,
         name=plan.name,
         monthly_grant=plan.monthly_grant,
+        expire_days=getattr(plan, 'expire_days', 0) or 0,
         enabled_features_json=plan.enabled_features_json or {},
         status=plan.status,
         created_at=plan.created_at,

@@ -4,7 +4,6 @@ import { Card, Tbl, Badge, Pager, Modal, Fld, priBtn, secBtn, inpS, selS, finpS,
 
 interface Led { id: string; user_id: string; user_account: string | null; account_id: string; change_type: string; amount: number; balance_after: number; source_type: string; source_id: string | null; description: string | null; created_at: string; }
 interface List { items: Led[]; total: number; limit: number; offset: number; }
-const PAGE = 20;
 const TL: Record<string, string> = { grant: '赠送', consume: '消费', recharge: '充值', refund: '退款', adjust: '调整' };
 const TC: Record<string, string> = { grant: '#34c759', consume: '#ff3b30', recharge: '#0071e3', refund: '#ff9500', adjust: '#af52de' };
 
@@ -12,14 +11,16 @@ export default function CreditsLedger() {
   const [d, setD] = useState<List | null>(null);
   const [uid, setUid] = useState(''); const [ct, setCt] = useState(''); const [st, setSt] = useState('');
   const [pg, setPg] = useState(0); const [err, setErr] = useState(''); const [showAdj, setShowAdj] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [limit, setLimit] = useState(10);
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/credits/ledger', { params: { limit: PAGE, offset: pg * PAGE, user_id: uid || undefined, change_type: ct || undefined, source_type: st || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/credits/ledger', { params: { limit, offset: pg * limit, user_id: uid || undefined, change_type: ct || undefined, source_type: st || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, uid, ct, st]);
+  }, [pg, uid, ct, st, limit, refreshKey]);
   useEffect(() => { load(); }, [load]);
-  const TP = d ? Math.ceil(d.total / PAGE) : 0;
+  const TP = d ? Math.ceil(d.total / limit) : 0;
 
   return (
     <div>
@@ -34,21 +35,21 @@ export default function CreditsLedger() {
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['用户', '类型', '金额', '余额', '来源', '说明', '时间']}>
+      <Card><Tbl heads={['用户', '类型', '金额', '余额', '来源', '说明', '时间']} colAligns={['c','c','c','c','c','c','c']}>
         {d?.items.map(e => (
           <tr key={e.id}>
-            <td style={{ fontWeight: 500, fontSize: 12 }}>{e.user_account || e.user_id.substring(0, 8)}</td>
-            <td><Badge t={TL[e.change_type] || e.change_type} c={TC[e.change_type] || 'var(--gray-500)'} /></td>
-            <td style={{ fontWeight: 700, color: e.amount >= 0 ? '#34c759' : '#ff3b30' }}>{e.amount > 0 ? '+' : ''}{e.amount.toLocaleString()}</td>
-            <td>{e.balance_after.toLocaleString()}</td>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{e.source_type}</td>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.description || '—'}</td>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(e.created_at).toLocaleString('zh-CN')}</td>
+            <td style={{ fontWeight: 500, fontSize: 13, width: '15%', textAlign: 'center' }}>{e.user_account || e.user_id.substring(0, 8)}</td>
+            <td style={{ fontSize: 13, width: '10%', textAlign: 'center' }}><Badge t={TL[e.change_type] || e.change_type} c={TC[e.change_type] || 'var(--gray-500)'} /></td>
+            <td style={{ fontWeight: 700, fontSize: 13, width: '12%', textAlign: 'center', paddingRight: 24, color: e.amount >= 0 ? '#34c759' : '#ff3b30' }}>{e.amount > 0 ? '+' : ''}{e.amount.toLocaleString()}</td>
+            <td style={{ fontSize: 13, width: '12%', textAlign: 'center', paddingRight: 24 }}>{e.balance_after.toLocaleString()}</td>
+            <td style={{ fontSize: 12, color: 'var(--gray-500)', width: '10%', textAlign: 'center' }}>{e.source_type}</td>
+            <td style={{ fontSize: 12, color: 'var(--gray-500)', width: '18%', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{e.description || '—'}</td>
+            <td style={{ fontSize: 12, color: 'var(--gray-500)', width: '16%', textAlign: 'center' }}>{new Date(e.created_at).toLocaleString('zh-CN')}</td>
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
-      {showAdj && <AdjustModal close={() => setShowAdj(false)} done={() => { setShowAdj(false); load(); }} />}
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      {showAdj && <AdjustModal close={() => setShowAdj(false)} done={() => { setShowAdj(false); setRefreshKey(k => k + 1); load(); }} />}
     </div>
   );
 }

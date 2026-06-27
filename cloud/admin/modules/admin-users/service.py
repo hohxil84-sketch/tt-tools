@@ -309,15 +309,17 @@ async def _sync_credit_account(
 
     # 2) 所有数据库操作包裹在 broad except 中，任何失败都不影响用户 CRUD
     try:
-        # 查询套餐 monthly_grant
+        # 查询套餐 monthly_grant 和 expire_days
         plan_monthly_grant = 0
+        plan_expire_days = 0
         if plan_id:
             plan_result = await db.execute(
-                select(pl.c.monthly_grant).where(pl.c.id == plan_id)
+                select(pl.c.monthly_grant, pl.c.expire_days).where(pl.c.id == plan_id)
             )
             plan_row = plan_result.fetchone()
             if plan_row:
                 plan_monthly_grant = plan_row[0] or 0
+                plan_expire_days = plan_row[1] or 0
 
         # 检查额度账户是否存在
         result = await db.execute(
@@ -330,20 +332,13 @@ async def _sync_credit_account(
         if existing is None:
             # === 创建新额度账户 ===
             account_id = str(uuid.uuid4())
-            # 计费周期：从分配日起算，满一个月（周年计费）
             period_start = now
-            # 到期时间：下个月同一天，处理月末溢出（如 1/31 → 2/28）
-            import calendar as _cal
-            if now.month == 12:
-                next_year, next_month = now.year + 1, 1
+            # 到期时间：按 expire_days 计算，0 = 永不过期（100年后）
+            if plan_expire_days > 0:
+                from datetime import timedelta
+                period_end = now + timedelta(days=plan_expire_days)
             else:
-                next_year, next_month = now.year, now.month + 1
-            last_day = _cal.monthrange(next_year, next_month)[1]
-            period_end = now.replace(
-                year=next_year, month=next_month,
-                day=min(now.day, last_day),
-                hour=0, minute=0, second=0, microsecond=0,
-            )
+                period_end = now.replace(year=now.year + 100)
 
             await db.execute(
                 ca.insert().values(
@@ -379,19 +374,13 @@ async def _sync_credit_account(
             # === 已存在：同步 plan_id / monthly_grant，若套餐变更则重置余额和周期 ===
             old_plan_id = getattr(existing, "plan_id", None)
             if old_plan_id != plan_id:
-                # 套餐变更：余额重置为新套餐 monthly_grant，周期从今天起算
-                import calendar as _cal2
+                # 套餐变更：余额重置为新套餐 monthly_grant，周期根据 expire_days 重置
                 new_period_start = now
-                if now.month == 12:
-                    ny, nm = now.year + 1, 1
+                if plan_expire_days > 0:
+                    from datetime import timedelta as _td
+                    new_period_end = now + _td(days=plan_expire_days)
                 else:
-                    ny, nm = now.year, now.month + 1
-                ld = _cal2.monthrange(ny, nm)[1]
-                new_period_end = now.replace(
-                    year=ny, month=nm,
-                    day=min(now.day, ld),
-                    hour=0, minute=0, second=0, microsecond=0,
-                )
+                    new_period_end = now.replace(year=now.year + 100)
                 old_balance = getattr(existing, "balance", 0)
                 await db.execute(
                     ca.update()

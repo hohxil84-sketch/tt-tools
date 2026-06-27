@@ -27,6 +27,19 @@
 
 索引：unique `account`，index `status`，index `plan_id`
 
+## user_alipay_bindings
+
+支付宝用户与本地用户绑定表。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | 绑定 ID |
+| user_id | uuid | fk users.id, not null | 本地用户 ID |
+| alipay_user_id | varchar(64) | unique, not null | 支付宝 user_id |
+| created_at | timestamptz | not null | 绑定时间 |
+
+索引：unique `alipay_user_id`，index `user_id`
+
 ## devices
 
 | 字段 | 类型 | 约束 | 说明 |
@@ -65,6 +78,8 @@
 | name | varchar(100) | not null | 套餐名称 |
 | monthly_grant | integer | not null default 0 | 每周期赠送 AI 额度 |
 | enabled_features_json | jsonb | not null default `{}` | 功能开关 |
+| expire_days | integer | not null default 0 | 到期天数，0=永不过期 |
+| is_default | boolean | not null default false | 是否默认套餐（新用户自动获得） |
 | status | varchar(50) | not null default `active` | active / disabled |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |

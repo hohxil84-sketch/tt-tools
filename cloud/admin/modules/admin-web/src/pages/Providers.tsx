@@ -4,8 +4,6 @@ import { Card, Tbl, Badge, ActBtn, Pager, Sheet, Modal, DetailRows, secBtn, inpS
 
 interface P { id: string; name: string; provider_type: string; is_enabled: boolean; priority?: number; created_at: string; api_key_encrypted?: string | null; base_url?: string | null; models_json?: any; updated_at?: string; }
 interface List { items: P[]; total: number; limit: number; offset: number; }
-const PAGE = 20;
-
 export default function Providers() {
   const [d, setD] = useState<List | null>(null);
   const [providerType, setProviderType] = useState(''); const [sf, setSf] = useState(''); const [pg, setPg] = useState(0); const [err, setErr] = useState('');
@@ -13,15 +11,17 @@ export default function Providers() {
   const [edit, setEdit] = useState<P | null>(null);
   const [create, setCreate] = useState(false);
   const [delTarget, setDelTarget] = useState<P | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [limit, setLimit] = useState(10);
   const [form, setForm] = useState({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', models_json: '', priority: '0' });
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/providers', { params: { limit: PAGE, offset: pg * PAGE, provider_type: providerType || undefined, status: sf || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/providers', { params: { limit, offset: pg * limit, provider_type: providerType || undefined, status: sf || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, providerType, sf]);
+  }, [pg, providerType, sf, limit, refreshKey]);
   useEffect(() => { load(); }, [load]);
-  const TP = d ? Math.ceil(d.total / PAGE) : 0;
+  const TP = d ? Math.ceil(d.total / limit) : 0;
 
   const loadDetail = async (id: string) => {
     try { setDetail(await apiRequest<P>(`/admin/providers/${id}`)); }
@@ -34,7 +34,7 @@ export default function Providers() {
       if (form.models_json.trim()) { try { models = JSON.parse(form.models_json); } catch { setErr('models_json 格式错误'); return; } }
       await apiRequest('/admin/providers', { method: 'POST', body: { name: form.name, provider_type: form.provider_type, api_key_encrypted: form.api_key_encrypted || undefined, base_url: form.base_url || undefined, models_json: models, priority: parseInt(form.priority) || 0 } });
       showToast('创建成功', 'success');
-      setCreate(false); setForm({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', models_json: '', priority: '0' }); load();
+      setCreate(false); setForm({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', models_json: '', priority: '0' }); setRefreshKey(k => k + 1); load();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '创建失败', 'error'); }
   };
 
@@ -45,13 +45,13 @@ export default function Providers() {
       if (form.models_json.trim()) { try { models = JSON.parse(form.models_json); } catch { setErr('models_json 格式错误'); return; } }
       await apiRequest(`/admin/providers/${edit.id}`, { method: 'PATCH', body: { name: form.name, provider_type: form.provider_type, api_key_encrypted: form.api_key_encrypted || undefined, base_url: form.base_url || undefined, models_json: models, priority: parseInt(form.priority) || 0 } });
       showToast('保存成功', 'success');
-      setEdit(null); load();
+      setEdit(null); setRefreshKey(k => k + 1); load();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '更新失败', 'error'); }
   };
 
   const doDelete = async () => {
     if (!delTarget) return;
-    try { await apiRequest(`/admin/providers/${delTarget.id}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setDelTarget(null); load(); }
+    try { await apiRequest(`/admin/providers/${delTarget.id}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setDelTarget(null); setRefreshKey(k => k + 1); load(); }
     catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); }
   };
 
@@ -72,16 +72,16 @@ export default function Providers() {
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['名称', '类型', '优先级', '状态', '创建时间', '']}>
+      <Card><Tbl heads={['名称', '类型', '优先级', '状态', 'API URL', '创建时间', '']} colAligns={['c','c','c','c','c','c','r']}>
         {d?.items.map(p => (
           <tr key={p.id}>
-            <td style={{ fontWeight: 600 }}>{p.name}</td>
-            <td><Badge t={p.provider_type} c="var(--blue)" /></td>
-            <td style={{ fontSize: 13, fontWeight: 600, color: (p.priority || 0) > 0 ? 'var(--blue)' : 'var(--gray-400)' }}>{p.priority ?? 0}</td>
-            <td><Badge t={p.is_enabled ? '启用' : '禁用'} c={p.is_enabled ? '#34c759' : 'var(--gray-400)'} /></td>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.base_url || '—'}</td>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(p.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ textAlign: 'right' }}>
+            <td style={{ fontWeight: 600, fontSize: 13, width: '18%', textAlign: 'center' }}>{p.name}</td>
+            <td style={{ fontSize: 13, width: '10%', textAlign: 'center' }}><Badge t={p.provider_type} c="var(--blue)" /></td>
+            <td style={{ fontSize: 13, fontWeight: 600, width: '9%', textAlign: 'center', paddingRight: 24, color: (p.priority || 0) > 0 ? 'var(--blue)' : 'var(--gray-400)' }}>{p.priority ?? 0}</td>
+            <td style={{ fontSize: 13, width: '8%', textAlign: 'center' }}><Badge t={p.is_enabled ? '启用' : '禁用'} c={p.is_enabled ? '#34c759' : 'var(--gray-400)'} /></td>
+            <td style={{ fontSize: 12, color: 'var(--gray-500)', width: '24%', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }}>{p.base_url || '—'}</td>
+            <td style={{ fontSize: 12, color: 'var(--gray-500)', width: '16%', textAlign: 'center' }}>{new Date(p.created_at).toLocaleString('zh-CN')}</td>
+            <td style={{ textAlign: 'right', width: '15%', whiteSpace: 'nowrap' }}>
               <ActBtn kind="detail" onClick={() => loadDetail(p.id)}>详情</ActBtn>
               <ActBtn kind="edit" onClick={() => openEdit(p)}>编辑</ActBtn>
               <ActBtn kind="delete" onClick={() => setDelTarget(p)}>删除</ActBtn>
@@ -89,7 +89,7 @@ export default function Providers() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
 
       {/* 详情 Sheet */}
       {detail && <Sheet title="Provider 详情" close={() => setDetail(null)}>

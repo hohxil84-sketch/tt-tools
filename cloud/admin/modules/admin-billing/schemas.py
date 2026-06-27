@@ -23,6 +23,8 @@ class PlanItem(BaseModel):
     id: str = Field(..., description="套餐 ID（UUID）")
     name: str = Field(..., description="套餐名称（中文）")
     monthly_grant: int = Field(..., description="每周期赠送 AI 额度")
+    expire_days: int = Field(default=0, description="到期天数，0=永不过期")
+    is_default: bool = Field(default=False, description="是否默认套餐")
     status: str = Field(..., description="套餐状态：active / disabled")
     created_at: datetime = Field(..., description="创建时间")
 
@@ -33,6 +35,8 @@ class PlanDetail(BaseModel):
     id: str = Field(..., description="套餐 ID（UUID）")
     name: str = Field(..., description="套餐名称")
     monthly_grant: int = Field(..., description="每周期赠送 AI 额度")
+    expire_days: int = Field(default=0, description="到期天数，0=永不过期")
+    is_default: bool = Field(default=False, description="是否默认套餐")
     enabled_features_json: dict[str, Any] = Field(
         default_factory=dict, description="功能开关配置"
     )
@@ -52,6 +56,8 @@ class CreatePlanRequest(BaseModel):
 
     name: str = Field(..., description="套餐名称（中文）")
     monthly_grant: int = Field(default=0, ge=0, description="每周期赠送 AI 额度")
+    expire_days: int = Field(default=0, ge=0, description="到期天数，0=永不过期")
+    is_default: bool = Field(default=False, description="是否设为默认套餐")
     enabled_features_json: dict[str, Any] = Field(
         default_factory=dict, description="功能开关配置"
     )
@@ -62,6 +68,8 @@ class UpdatePlanRequest(BaseModel):
 
     name: Optional[str] = Field(default=None, description="套餐名称")
     monthly_grant: Optional[int] = Field(default=None, ge=0, description="每周期赠送 AI 额度")
+    expire_days: Optional[int] = Field(default=None, ge=0, description="到期天数，0=永不过期")
+    is_default: Optional[bool] = Field(default=None, description="是否设为默认套餐")
     enabled_features_json: Optional[dict[str, Any]] = Field(
         default=None, description="功能开关配置"
     )

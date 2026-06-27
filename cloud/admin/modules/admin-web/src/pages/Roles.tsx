@@ -5,8 +5,6 @@ import { Card, Tbl, Badge, ActBtn, Pager, Sheet, Modal, DetailRows, secBtn, inpS
 interface Role { id: string; name: string; code: string; is_system: boolean; created_at: string; description?: string | null; permissions?: Perm[]; }
 interface Perm { id: string; code: string; name: string; resource: string; action: string; }
 interface RoleList { items: Role[]; total: number; limit: number; offset: number; }
-const PAGE = 50;
-
 export default function Roles() {
   const [d, setD] = useState<RoleList | null>(null);
   const [search, setSearch] = useState(''); const [pg, setPg] = useState(0); const [err, setErr] = useState('');
@@ -14,6 +12,8 @@ export default function Roles() {
   const [allPerms, setAllPerms] = useState<Perm[]>([]);
   const [create, setCreate] = useState(false);
   const [delTarget, setDelTarget] = useState<Role | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [limit, setLimit] = useState(10);
   const [form, setForm] = useState({ name: '', code: '', description: '' });
   const [permForm, setPermForm] = useState<string[]>([]);
 
@@ -27,11 +27,11 @@ export default function Roles() {
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<RoleList>('/admin/roles', { params: { limit: PAGE, offset: pg * PAGE, search: search || undefined } })); }
+    try { setD(await apiRequest<RoleList>('/admin/roles', { params: { limit, offset: pg * limit, search: search || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, search]);
+  }, [pg, search, limit, refreshKey]);
   useEffect(() => { load(); }, [load]);
-  const TP = d ? Math.ceil(d.total / PAGE) : 0;
+  const TP = d ? Math.ceil(d.total / limit) : 0;
 
   const loadDetail = async (id: string) => {
     try {
@@ -46,13 +46,13 @@ export default function Roles() {
   };
 
   const doCreate = async () => {
-    try { await apiRequest('/admin/roles', { method: 'POST', body: form }); showToast('创建成功', 'success'); setCreate(false); setForm({ name: '', code: '', description: '' }); load(); }
+    try { await apiRequest('/admin/roles', { method: 'POST', body: form }); showToast('创建成功', 'success'); setCreate(false); setForm({ name: '', code: '', description: '' }); setRefreshKey(k => k + 1); load(); }
     catch (e: unknown) { showToast(e instanceof Error ? e.message : '创建失败', 'error'); }
   };
 
   const doDelete = async () => {
     if (!delTarget) return;
-    try { await apiRequest(`/admin/roles/${delTarget.id}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setDelTarget(null); load(); }
+    try { await apiRequest(`/admin/roles/${delTarget.id}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setDelTarget(null); setRefreshKey(k => k + 1); load(); }
     catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); }
   };
 
@@ -64,7 +64,7 @@ export default function Roles() {
     try {
       await apiRequest(`/admin/roles/${detail.id}/permissions`, { method: 'POST', body: { permission_ids: finalIds } });
       showToast('权限保存成功', 'success');
-      setDetail(null);
+      setDetail(null); setRefreshKey(k => k + 1); load();
     }
     catch (e: unknown) { showToast(e instanceof Error ? e.message : '保存权限失败', 'error'); }
   };
@@ -94,21 +94,21 @@ export default function Roles() {
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['角色名称', '编码', '系统内置', '创建时间', '']}>
+      <Card><Tbl heads={['角色名称', '编码', '系统内置', '创建时间', '']} colAligns={['c','c','c','c','r']}>
         {d?.items.map(r => (
           <tr key={r.id}>
-            <td style={{ fontWeight: 600 }}>{r.name}</td>
-            <td><code style={{ fontSize: 12 }}>{r.code}</code></td>
-            <td><Badge t={r.is_system ? '是' : '否'} c={r.is_system ? 'var(--orange)' : 'var(--gray-400)'} /></td>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(r.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ textAlign: 'right' }}>
+            <td style={{ fontWeight: 600, fontSize: 13, width: '24%', textAlign: 'center' }}>{r.name}</td>
+            <td style={{ fontSize: 13, width: '14%', textAlign: 'center' }}><code style={{ fontSize: 12 }}>{r.code}</code></td>
+            <td style={{ fontSize: 13, width: '10%', textAlign: 'center' }}><Badge t={r.is_system ? '是' : '否'} c={r.is_system ? 'var(--orange)' : 'var(--gray-400)'} /></td>
+            <td style={{ fontSize: 12, color: 'var(--gray-500)', width: '22%', textAlign: 'center' }}>{new Date(r.created_at).toLocaleString('zh-CN')}</td>
+            <td style={{ textAlign: 'right', width: '18%', whiteSpace: 'nowrap' }}>
               <ActBtn kind="role" onClick={() => loadDetail(r.id)}>权限</ActBtn>
               {!r.is_system && <ActBtn kind="delete" onClick={() => setDelTarget(r)}>删除</ActBtn>}
             </td>
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
 
       {/* 权限管理 Sheet */}
       {detail && <Sheet title={`${detail.name} — 权限配置`} close={() => setDetail(null)} maxHeight="none">

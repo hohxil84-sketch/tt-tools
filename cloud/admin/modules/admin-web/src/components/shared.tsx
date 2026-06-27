@@ -79,9 +79,13 @@ export function Card({ children }: { children: React.ReactNode }) {
   return <div style={{ background: 'var(--white)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--gray-200)', overflow: 'hidden' }}>{children}</div>;
 }
 
-export function Tbl({ heads, children }: { heads: (string | React.ReactNode)[]; children: React.ReactNode }) {
-  return <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-    <thead><tr>{heads.map((h, i) => <th key={i} style={{ textAlign: i === heads.length - 1 ? 'right' : 'left', width: i === 0 ? 36 : undefined }}>{h}</th>)}</tr></thead>
+export function Tbl({ heads, colAligns, children }: { heads: (string | React.ReactNode)[]; colAligns?: ('l' | 'r' | 'c')[]; children: React.ReactNode }) {
+  const align = (i: number): React.CSSProperties['textAlign'] => {
+    const a = (colAligns || [])[i] || 'l';
+    return a === 'r' ? 'right' : a === 'c' ? 'center' : 'left';
+  };
+  return <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed' }}>
+    <thead><tr>{heads.map((h, i) => <th key={i} style={{ padding: '10px 8px', textAlign: align(i), width: i === 0 && typeof h !== 'string' ? 36 : undefined }}>{h}</th>)}</tr></thead>
     <tbody>{children}</tbody>
   </table>;
 }
@@ -90,12 +94,14 @@ export function Badge({ t, c = 'var(--gray-500)' }: { t: string; c?: string }) {
   return <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 20, background: c + '18', color: c, fontSize: 11, fontWeight: 500 }}>{t}</span>;
 }
 
-export function Pager({ pg, tp, total, onPrev, onNext }: { pg: number; tp: number; total: number; onPrev: () => void; onNext: () => void }) {
-  if (tp <= 1) return null;
+export function Pager({ pg, tp, total, limit, onLimitChange, onPrev, onNext }: { pg: number; tp: number; total: number; limit: number; onLimitChange: (n: number) => void; onPrev: () => void; onNext: () => void }) {
   return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20, fontSize: 12, color: 'var(--gray-500)' }}>
     <button disabled={pg === 0} onClick={onPrev} style={secBtn}>上一页</button>
     <span>第 {pg + 1}/{tp} 页（共 {total} 条）</span>
     <button disabled={pg >= tp - 1} onClick={onNext} style={secBtn}>下一页</button>
+    <select value={limit} onChange={e => onLimitChange(Number(e.target.value))} style={{ ...selS, minWidth: 80, fontSize: 12, marginLeft: 8 }}>
+      <option value={10}>10条/页</option><option value={20}>20条/页</option><option value={50}>50条/页</option><option value={100}>100条/页</option>
+    </select>
   </div>;
 }
 

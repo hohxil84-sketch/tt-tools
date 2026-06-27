@@ -173,6 +173,8 @@ async def admin_create_plan(
             db=db,
             name=body.name,
             monthly_grant=body.monthly_grant,
+            expire_days=body.expire_days,
+            is_default=body.is_default,
             enabled_features_json=body.enabled_features_json,
         )
         return success_response(data.model_dump(mode="json"), request_id)
@@ -208,6 +210,8 @@ async def admin_update_plan(
             plan_id=plan_id,
             name=body.name,
             monthly_grant=body.monthly_grant,
+            expire_days=body.expire_days,
+            is_default=body.is_default,
             enabled_features_json=body.enabled_features_json,
         )
         return success_response(data.model_dump(mode="json"), request_id)

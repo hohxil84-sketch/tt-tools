@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, ActBtn, Sheet, Modal, Fld, priBtn, secBtn, inpS, selS, finpS, showToast } from '../components/shared';
+import { Card, Tbl, ActBtn, Pager, Sheet, Modal, Fld, priBtn, secBtn, inpS, selS, finpS, showToast } from '../components/shared';
 
-interface Plan { id: string; name: string; monthly_grant: number; status: string; created_at: string; enabled_features_json?: Record<string, unknown>; updated_at?: string; }
+interface Plan { id: string; name: string; monthly_grant: number; expire_days?: number; is_default?: boolean; status: string; created_at: string; enabled_features_json?: Record<string, unknown>; updated_at?: string; }
 interface FeatureCode { id: string; code: string; name: string; category: string; is_active: boolean; description?: string | null; }
 
 /** 功能开关条目（可视化用） */
@@ -19,21 +19,23 @@ const CAT: Record<string, string> = { local_free: '本地免费', local_paid: '�
 export default function Plans() {
   const [items, setItems] = useState<Plan[]>([]);
   const [err, setErr] = useState('');
-  const [search, setSearch] = useState(''); const [sf, setSf] = useState('');
+  const [search, setSearch] = useState(''); const [sf, setSf] = useState(''); const [pg, setPg] = useState(0);
   const [edit, setEdit] = useState<Plan | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [ct, setCt] = useState<Plan | null>(null);
   const [cd, setCd] = useState<Plan | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [limit, setLimit] = useState(10);
 
   const load = useCallback(async () => {
     setErr('');
-    try { const d = await apiRequest<{ items: Plan[] }>('/admin/plans', { params: { search: search || undefined, status: sf || undefined } }); setItems(d.items); }
+    try { const d = await apiRequest<{ items: Plan[] }>('/admin/plans', { params: { limit, search: search || undefined, status: sf || undefined } }); setItems(d.items); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [search, sf]);
+  }, [search, sf, pg, limit, refreshKey]);
   useEffect(() => { load(); }, [load]);
 
-  const toggle = async (id: string, ns: string) => { try { await apiRequest(`/admin/plans/${id}/status`, { method: 'PATCH', body: { status: ns } }); showToast('操作成功', 'success'); setCt(null); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '操作失败', 'error'); } };
-  const del = async () => { if (!cd) return; try { await apiRequest(`/admin/plans/${cd.id}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setCd(null); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); } };
+  const toggle = async (id: string, ns: string) => { try { await apiRequest(`/admin/plans/${id}/status`, { method: 'PATCH', body: { status: ns } }); showToast('操作成功', 'success'); setCt(null); setRefreshKey(k => k + 1); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '操作失败', 'error'); } };
+  const del = async () => { if (!cd) return; try { await apiRequest(`/admin/plans/${cd.id}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setCd(null); setRefreshKey(k => k + 1); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); } };
 
   return (
     <div>
@@ -47,14 +49,16 @@ export default function Plans() {
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['名称', '月赠额度', '状态', '创建时间', '']}>
+      <Card><Tbl heads={['名称', '月赠额度', '到期', '默认', '状态', '创建时间', '']} colAligns={['l', 'r', 'c', 'c', 'c', 'l', 'r']}>
         {items.map(p => (
           <tr key={p.id}>
-            <td style={{ fontWeight: 500 }}>{p.name}</td>
-            <td>{p.monthly_grant.toLocaleString()}</td>
-            <td><span style={{ fontSize: 12, fontWeight: 500, color: p.status === 'active' ? '#34c759' : 'var(--gray-500)' }}>{p.status === 'active' ? '启用' : '停用'}</span></td>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(p.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ textAlign: 'right' }}>
+            <td style={{ fontWeight: 600, fontSize: 13, width: '22%' }}>{p.name}</td>
+            <td style={{ fontSize: 13, width: '10%', textAlign: 'right' }}>{p.monthly_grant.toLocaleString()}</td>
+            <td style={{ fontSize: 13, width: '12%', textAlign: 'center', color: (p.expire_days || 0) > 0 ? 'var(--orange)' : 'var(--gray-400)', fontWeight: (p.expire_days || 0) > 0 ? 600 : 400 }}>{p.expire_days ? `${p.expire_days} 天` : '永不过期'}</td>
+            <td style={{ fontSize: 13, width: '8%', textAlign: 'center' }}>{p.is_default ? <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', background: '#ff9500', padding: '2px 10px', borderRadius: 10 }}>默认</span> : <span style={{ color: 'var(--gray-400)' }}>—</span>}</td>
+            <td style={{ fontSize: 13, width: '8%', textAlign: 'center' }}><span style={{ fontWeight: 600, color: p.status === 'active' ? '#34c759' : 'var(--gray-400)' }}>{p.status === 'active' ? '● 启用' : '○ 停用'}</span></td>
+            <td style={{ fontSize: 12, width: '20%', color: 'var(--gray-500)' }}>{new Date(p.created_at).toLocaleString('zh-CN')}</td>
+            <td style={{ textAlign: 'right', width: '20%', whiteSpace: 'nowrap' }}>
               <ActBtn kind="edit" onClick={() => setEdit(p)}>编辑</ActBtn>
               <ActBtn kind={p.status === 'active' ? 'block' : 'unblock'} onClick={() => setCt(p)}>{p.status === 'active' ? '停用' : '启用'}</ActBtn>
               <ActBtn kind="delete" onClick={() => setCd(p)}>删除</ActBtn>
@@ -62,9 +66,10 @@ export default function Plans() {
           </tr>
         ))}
       </Tbl></Card>
+      <Pager pg={pg} tp={Math.ceil(items.length / limit)} total={items.length} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
       {ct && <Modal title="确认" close={() => setCt(null)} action={() => toggle(ct.id, ct.status === 'active' ? 'disabled' : 'active')} danger><p>{ct.status === 'active' ? '停用' : '启用'}套餐 <b>{ct.name}</b>？</p></Modal>}
       {cd && <Modal title="删除套餐" close={() => setCd(null)} action={del} danger><p>永久删除 <b>{cd.name}</b>？</p></Modal>}
-      {(edit || showNew) && <PlanForm plan={edit} close={() => { setEdit(null); setShowNew(false); }} done={() => { setEdit(null); setShowNew(false); load(); }} />}
+      {(edit || showNew) && <PlanForm plan={edit} close={() => { setEdit(null); setShowNew(false); }} done={() => { setEdit(null); setShowNew(false); setRefreshKey(k => k + 1); load(); }} />}
     </div>
   );
 }
@@ -77,6 +82,8 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   // 基本字段
   const [name, setName] = useState(plan?.name || '');
   const [mg, setMg] = useState(plan?.monthly_grant || 0);
+  const [expDays, setExpDays] = useState(plan?.expire_days || 0);
+  const [isDefault, setIsDefault] = useState(plan?.is_default || false);
 
   // 全部可用功能码列表（从后端拉取）
   const [allFeatures, setAllFeatures] = useState<FeatureCode[]>([]);
@@ -164,9 +171,9 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
     const featuresJson = buildFeaturesJson();
     try {
       if (isEdit) {
-        await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body: { name, monthly_grant: mg, enabled_features_json: featuresJson } });
+        await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body: { name, monthly_grant: mg, expire_days: expDays, is_default: isDefault, enabled_features_json: featuresJson } });
       } else {
-        await apiRequest('/admin/plans', { method: 'POST', body: { name, monthly_grant: mg, enabled_features_json: featuresJson } });
+        await apiRequest('/admin/plans', { method: 'POST', body: { name, monthly_grant: mg, expire_days: expDays, is_default: isDefault, enabled_features_json: featuresJson } });
       }
       showToast('保存成功', 'success'); done();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '保存失败', 'error'); }
@@ -186,6 +193,13 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
     <form onSubmit={submit}>
       <Fld label="名称"><input value={name} onChange={e => setName(e.target.value)} required style={finpS} /></Fld>
       <Fld label="月赠额度"><input type="number" value={mg} onChange={e => setMg(Number(e.target.value))} min={0} style={finpS} /></Fld>
+      <Fld label="到期天数（0=永不过期）"><input type="number" value={expDays} onChange={e => setExpDays(Math.max(0, Number(e.target.value)))} min={0} style={finpS} /></Fld>
+      <Fld label="">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
+          <input type="checkbox" checked={isDefault} onChange={e => setIsDefault(e.target.checked)} style={{ width: 18, height: 18 }} />
+          设为默认套餐（新用户自动获得）
+        </label>
+      </Fld>
 
       {/* 功能开关 — 可视化选择 */}
       <div style={{ marginBottom: 16 }}>

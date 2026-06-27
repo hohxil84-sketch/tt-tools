@@ -27,6 +27,19 @@ if _project_root not in sys.path:
 import uvicorn
 from fastapi import FastAPI
 
+# 加载 cloud/.env 到环境变量（支付宝等配置）
+import os as _os
+_env_path = _os.path.join(_os.path.dirname(__file__), "..", ".env")
+if _os.path.exists(_env_path):
+    with open(_env_path, encoding="utf-8") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+                if _k not in _os.environ:
+                    _os.environ[_k] = _v
+
 from config import settings
 from health import router as health_router
 from middleware import setup_middleware
@@ -130,6 +143,16 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as auth_device_router  # noqa: E402
     app.include_router(auth_device_router, prefix="/api/v1")
+
+    # 注册 auth-alipay 支付宝第三方登录路由
+    _auth_alipay_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "auth-alipay")
+    if _auth_alipay_dir not in sys.path:
+        sys.path.insert(0, _auth_alipay_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as auth_alipay_router  # noqa: E402
+    app.include_router(auth_alipay_router, prefix="/api/v1")
 
     # 注册 admin-feature-codes 动态功能码管理模块路由（必须在 credits-billing 之前，其 FK 引用 feature_codes 表）
     _admin_fc_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-feature-codes")

@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Integer,
     DateTime,
+    Boolean,
     ForeignKey,
     UniqueConstraint,
     Index,
@@ -52,6 +53,10 @@ class Plan(Base):
     monthly_grant = Column(Integer, nullable=False, default=0)
     # 功能开关（JSON）：{"feature_code": true | {"daily_limit": N}}
     enabled_features_json = Column(JSON, nullable=False, default=dict)
+    # 到期天数，0 = 永不过期
+    expire_days = Column(Integer, nullable=False, default=0)
+    # 是否默认套餐（新用户自动获得），全局唯一
+    is_default = Column(Boolean, nullable=False, default=False)
     # 套餐状态：active / disabled
     status = Column(String(50), nullable=False, default="active")
     # 时间戳

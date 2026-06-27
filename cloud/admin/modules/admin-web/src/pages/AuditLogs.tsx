@@ -4,8 +4,6 @@ import { Card, Tbl, Badge, ActBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS 
 
 interface Log { id: string; admin_user_id: string; admin_account: string; admin_display_name?: string | null; action: string; target_type: string; target_id: string | null; summary: string; ip_address: string | null; created_at: string; details_json?: any; }
 interface List { items: Log[]; total: number; limit: number; offset: number; }
-const PAGE = 20;
-
 const ACTION_LABELS: Record<string, string> = {
   create: '创建', update: '更新', delete: '删除', status_change: '状态变更',
   adjust: '额度调整', refund: '退款', cancel: '取消', batch: '批量操作',
@@ -19,17 +17,18 @@ export default function AuditLogs() {
   const [d, setD] = useState<List | null>(null);
   const [search, setSearch] = useState(''); const [action, setAction] = useState(''); const [targetType, setTargetType] = useState('');
   const [pg, setPg] = useState(0); const [err, setErr] = useState(''); const [detail, setDetail] = useState<Log | null>(null);
+  const [limit, setLimit] = useState(10);
 
   const load = useCallback(async () => {
     setErr('');
     try {
       setD(await apiRequest<List>('/admin/audit-logs', {
-        params: { limit: PAGE, offset: pg * PAGE, search: search || undefined, action: action || undefined, target_type: targetType || undefined },
+        params: { limit, offset: pg * limit, search: search || undefined, action: action || undefined, target_type: targetType || undefined },
       }));
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, search, action, targetType]);
+  }, [pg, search, action, targetType, limit]);
   useEffect(() => { load(); }, [load]);
-  const TP = d ? Math.ceil(d.total / PAGE) : 0;
+  const TP = d ? Math.ceil(d.total / limit) : 0;
 
   const loadDetail = async (id: string) => {
     try { setDetail(await apiRequest<Log>(`/admin/audit-logs/${id}`)); }
@@ -64,23 +63,23 @@ export default function AuditLogs() {
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['时间', '操作人', '操作', '目标', '摘要', 'IP', '']}>
+      <Card><Tbl heads={['时间', '操作人', '操作', '目标', '摘要', 'IP', '']} colAligns={['c','c','c','c','c','c','r']}>
         {d?.items.map(l => (
           <tr key={l.id}>
-            <td style={{ fontSize: 12, color: 'var(--gray-500)', whiteSpace: 'nowrap' }}>{new Date(l.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ fontSize: 12 }}>
+            <td style={{ fontSize: 12, color: 'var(--gray-500)', whiteSpace: 'nowrap', width: '14%', textAlign: 'center' }}>{new Date(l.created_at).toLocaleString('zh-CN')}</td>
+            <td style={{ fontSize: 13, width: '14%', textAlign: 'center' }}>
               <span style={{ fontWeight: 500 }}>{l.admin_account}</span>
               {l.admin_display_name && <span style={{ color: 'var(--gray-400)', marginLeft: 4 }}>({l.admin_display_name})</span>}
             </td>
-            <td><Badge t={ACTION_LABELS[l.action] || l.action} c={l.action === 'delete' ? 'var(--red)' : 'var(--blue)'} /></td>
-            <td style={{ fontSize: 12 }}>{(TARGET_LABELS[l.target_type] || l.target_type) + (l.target_id ? ` (${l.target_id.substring(0, 8)}...)` : '')}</td>
-            <td style={{ fontSize: 12, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.summary}</td>
-            <td style={{ fontSize: 11, color: 'var(--gray-400)', fontFamily: 'monospace' }}>{l.ip_address || '—'}</td>
-            <td style={{ textAlign: 'right' }}><ActBtn kind="detail" onClick={() => loadDetail(l.id)}>详情</ActBtn></td>
+            <td style={{ fontSize: 13, width: '8%', textAlign: 'center' }}><Badge t={ACTION_LABELS[l.action] || l.action} c={l.action === 'delete' ? 'var(--red)' : 'var(--blue)'} /></td>
+            <td style={{ fontSize: 12, width: '16%', textAlign: 'center' }}>{(TARGET_LABELS[l.target_type] || l.target_type) + (l.target_id ? ` (${l.target_id.substring(0, 8)}...)` : '')}</td>
+            <td style={{ fontSize: 12, width: '22%', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{l.summary}</td>
+            <td style={{ fontSize: 12, color: 'var(--gray-400)', fontFamily: 'monospace', width: '10%', textAlign: 'center' }}>{l.ip_address || '—'}</td>
+            <td style={{ textAlign: 'right', width: '8%', whiteSpace: 'nowrap' }}><ActBtn kind="detail" onClick={() => loadDetail(l.id)}>详情</ActBtn></td>
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
       {detail && <Sheet title="审计日志详情" close={() => setDetail(null)}>
         <DetailRows rows={[
           ['ID', detail.id],

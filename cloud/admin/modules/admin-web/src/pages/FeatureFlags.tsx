@@ -55,6 +55,7 @@ export default function FeatureFlags() {
   const [items, setItems] = useState<Feat[]>([]);
   const [pc, setPc] = useState(''); const [err, setErr] = useState('');
   const [edit, setEdit] = useState<Feat | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
 
   // 从后端动态加载全部功能码
@@ -77,7 +78,7 @@ export default function FeatureFlags() {
     setErr('');
     try { const d = await apiRequest<{ items: Feat[] }>('/admin/feature-flags', { params: { plan_id: pc || undefined } }); setItems(d.items); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pc]);
+  }, [pc, refreshKey]);
   useEffect(() => { load(); }, [load]);
 
   return (
@@ -134,7 +135,7 @@ export default function FeatureFlags() {
         ))}
         {items.length === 0 && <div style={{ color: 'var(--gray-400)', fontSize: 13 }}>暂无配置</div>}
       </div>
-      {edit && <EditModal item={edit} allFeatureCodes={allFeatureCodes} labelMap={labelMap} close={() => setEdit(null)} done={() => { setEdit(null); load(); }} />}
+      {edit && <EditModal item={edit} allFeatureCodes={allFeatureCodes} labelMap={labelMap} close={() => setEdit(null)} done={() => { setEdit(null); setRefreshKey(k => k + 1); load(); }} />}
     </div>
   );
 }
