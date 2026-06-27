@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     Index,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -149,3 +150,20 @@ class AuthSession(Base):
 
     def __repr__(self) -> str:
         return f"<AuthSession(id={self.id}, user_id={self.user_id}, status={self.status})>"
+
+
+class PasswordResetToken(Base):
+    """密码重置令牌表。"""
+
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(String(36), primary_key=True, default=_new_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(255), unique=True, nullable=False, index=True)
+    status = Column(String(50), nullable=False, default="active")
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("NOW()"))
+    used_at = Column(DateTime(timezone=True), nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<PasswordResetToken(id={self.id}, user_id={self.user_id}, status={self.status})>"

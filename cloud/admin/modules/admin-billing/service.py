@@ -958,3 +958,53 @@ async def _get_user_account_map(
     )
     rows = result.all()
     return {row[0]: row[1] for row in rows}
+
+
+# ============================================================
+# 订单操作（取消 / 退款）
+# ============================================================
+
+
+async def cancel_admin_order(db: AsyncSession, order_id: str):
+    """管理员取消订单。
+
+    通过 importlib 加载 orders_recharge 的 cancel_order。
+    """
+    _cancel = await _get_order_function("cancel_order")
+    return await _cancel(db, order_id)
+
+
+async def refund_admin_order(db: AsyncSession, order_id: str):
+    """管理员退款订单。
+
+    通过 importlib 加载 orders_recharge 的 refund_order。
+    """
+    _refund = await _get_order_function("refund_order")
+    return await _refund(db, order_id)
+
+
+async def _get_order_function(func_name: str):
+    """惰性加载 orders_recharge 的 service 函数。"""
+    import importlib.util, os, sys
+
+    # 尝试从 sys.modules 查找
+    for _name in ("orders_recharge_service", "service"):
+        if _name in sys.modules:
+            _mod = sys.modules[_name]
+            if hasattr(_mod, func_name):
+                return getattr(_mod, func_name)
+
+    # fallback: importlib 加载
+    _order_dir = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "modules", "orders_recharge"
+    )
+    _svc_path = os.path.join(_order_dir, "service.py")
+    _spec = importlib.util.spec_from_file_location(
+        f"_orders_{func_name}_svc", _svc_path
+    )
+    if _spec and _spec.loader:
+        _mod = importlib.util.module_from_spec(_spec)
+        sys.modules[f"_orders_{func_name}_svc"] = _mod
+        _spec.loader.exec_module(_mod)
+        return getattr(_mod, func_name)
+    raise RuntimeError(f"Cannot load {func_name} from orders_recharge")

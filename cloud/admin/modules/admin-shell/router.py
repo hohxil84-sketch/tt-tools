@@ -19,6 +19,8 @@ from fastapi.responses import JSONResponse
 from cloud.shared import (
     TokenData,
     require_admin,
+    require_permission,
+    get_user_permissions,
     get_request_id,
     success_response,
     error_response,
@@ -40,7 +42,7 @@ router = APIRouter(tags=["Admin Shell"])
 @router.get("/dashboard")
 async def admin_dashboard(
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("dashboard.read")),
     db=Depends(get_db),
 ):
     """后台仪表盘概览。
@@ -71,17 +73,20 @@ async def admin_dashboard(
 @router.get("/menu")
 async def admin_menu(
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("dashboard.read")),
+    db=Depends(get_db),
 ):
     """后台导航菜单。
 
     返回后台左侧导航栏的菜单结构，前端根据此数据渲染导航。
-    需要管理员权限。
+    需要管理员权限。菜单项按当前用户 RBAC 权限自动过滤。
 
     对齐 admin-shell.yaml GET /admin/menu。
     """
     try:
-        data = get_menu()
+        # 查询用户权限码，传入 get_menu 进行菜单过滤
+        user_permissions = await get_user_permissions(db, current_user.user_id)
+        data = get_menu(user_permissions=set(user_permissions))
         return success_response(data.model_dump(), request_id)
     except AppError as e:
         return error_response(
@@ -100,7 +105,7 @@ async def admin_menu(
 @router.get("/status")
 async def admin_status(
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("dashboard.read")),
 ):
     """服务状态检查。
 

@@ -47,6 +47,7 @@ def _get_engine() -> AsyncEngine:
                 connect_args={
                     "timeout": 10,
                     "command_timeout": 30,
+                    "server_settings": {"timezone": "utc"},
                 },
             )
         else:

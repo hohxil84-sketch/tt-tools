@@ -593,6 +593,67 @@ async def grant_credits(
     return account
 
 
+async def refund_credits(
+    db: AsyncSession,
+    user_id: str,
+    amount: int,
+    source_id: Optional[str] = None,
+    description: Optional[str] = None,
+) -> CreditAccount:
+    """退款：扣除已充值的 AI 额度。
+
+    写入 credit_ledger 流水，change_type 为 refund。
+    用于管理员退款操作。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 用户 ID
+        amount: 退款金额（正整数，从用户余额扣除）
+        source_id: 来源订单 ID
+        description: 中文说明
+
+    Returns:
+        更新后的 CreditAccount
+
+    Raises:
+        AppError: 额度不足或金额无效
+    """
+    if amount <= 0:
+        raise AppError(
+            code=ErrorCode.BILLING_FAILED,
+            message="退款金额必须大于 0",
+            status_code=400,
+        )
+
+    account = await get_or_create_credit_account(db, user_id)
+
+    if account.balance < amount:
+        raise AppError(
+            code=ErrorCode.BILLING_FAILED,
+            message=f"用户余额不足，当前余额 {account.balance}，退款需要 {amount}",
+            status_code=400,
+        )
+
+    new_balance = account.balance - amount
+    account.balance = new_balance
+    account.updated_at = datetime.now(timezone.utc)
+
+    await _create_ledger_entry(
+        db,
+        user_id=user_id,
+        account_id=account.id,
+        change_type="refund",
+        amount=-amount,  # 负数表示扣除
+        balance_after=new_balance,
+        source_type="admin",
+        source_id=source_id,
+        description=description or f"订单退款扣除 {amount} 额度",
+    )
+
+    await db.flush()
+    return account
+
+
 # ============================================================
 # 内部辅助函数
 # ============================================================

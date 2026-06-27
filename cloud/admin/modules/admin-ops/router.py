@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloud.shared import (
+    require_permission,
     TokenData,
     require_admin,
     get_request_id,
@@ -68,7 +69,7 @@ async def admin_list_provider_call_logs(
     provider: str | None = Query(default=None, description="按 Provider 名称筛选"),
     status: str | None = Query(default=None, description="按调用状态筛选"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询全部 Provider 调用日志。
@@ -105,7 +106,7 @@ async def admin_list_provider_call_logs(
 async def admin_get_provider_call_log_detail(
     log_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询 Provider 调用日志详情。
@@ -138,7 +139,7 @@ async def admin_get_provider_call_log_detail(
 @router.get("/admin/cost-stats")
 async def admin_cost_stats(
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询成本/用量聚合统计。
@@ -176,7 +177,7 @@ async def admin_list_risk_logs(
     risk_type: str | None = Query(default=None, description="按风险类型筛选"),
     severity: str | None = Query(default=None, description="按严重程度筛选"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询风控日志列表。
@@ -211,7 +212,7 @@ async def admin_list_risk_logs(
 async def admin_get_risk_log_detail(
     log_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询风控日志详情。
@@ -244,7 +245,7 @@ async def admin_get_risk_log_detail(
 async def admin_get_feature_flags(
     plan_code: str | None = Query(default=None, description="按套餐编码筛选"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询功能开关配置。
@@ -273,7 +274,7 @@ async def admin_update_plan_features(
     plan_id: str,
     body: UpdateFeatureFlagsRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("ops.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """更新套餐功能开关。

@@ -33,6 +33,7 @@ class MenuItem(BaseModel):
     """后台导航菜单项，对齐 admin-shell.yaml MenuItem。
 
     支持嵌套子菜单：children 字段可包含子 MenuItem 列表。
+    required_permission 用于服务端按用户权限过滤菜单。
     """
 
     id: str = Field(..., description="菜单项唯一标识")
@@ -41,6 +42,9 @@ class MenuItem(BaseModel):
     path: str = Field(..., description="菜单项对应页面路径")
     children: Optional[list["MenuItem"]] = Field(
         default=None, description="子菜单项列表"
+    )
+    required_permission: Optional[str] = Field(
+        default=None, description="查看此菜单项所需的权限码"
     )
 
 

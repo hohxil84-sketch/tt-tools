@@ -327,6 +327,135 @@ async def confirm_order(
     return _to_order_data(order)
 
 
+async def cancel_order(
+    db: AsyncSession,
+    order_id: str,
+) -> OrderData:
+    """取消订单（管理员操作）。
+
+    将 pending 状态的订单变更为 closed。已支付订单不可取消。
+
+    Args:
+        db: 数据库异步会话
+        order_id: 订单 ID
+
+    Returns:
+        更新后的 OrderData
+
+    Raises:
+        AppError: 订单不存在、状态不允许取消
+    """
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if order is None:
+        raise AppError(code="ORDER_NOT_FOUND", message="订单不存在", status_code=404)
+
+    if order.status != "pending":
+        raise AppError(
+            code="ORDER_CANNOT_CANCEL",
+            message=f"订单状态为 {order.status}，只有待支付订单可以取消",
+            status_code=400,
+        )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    order.status = "closed"
+    order.updated_at = now
+    await db.flush()
+    await db.refresh(order)
+    return _to_order_data(order)
+
+
+async def refund_order(
+    db: AsyncSession,
+    order_id: str,
+) -> OrderData:
+    """退款订单（管理员操作）。
+
+    将 paid 状态的订单变更为 refunded。
+    对于 credits 类型订单，退还已充值的额度（调用 refund_credits）。
+    对于 plan 类型订单，将用户套餐降级为 free。
+
+    Args:
+        db: 数据库异步会话
+        order_id: 订单 ID
+
+    Returns:
+        更新后的 OrderData
+
+    Raises:
+        AppError: 订单不存在、状态不允许退款
+    """
+    result = await db.execute(select(Order).where(Order.id == order_id))
+    order = result.scalar_one_or_none()
+    if order is None:
+        raise AppError(code="ORDER_NOT_FOUND", message="订单不存在", status_code=404)
+
+    if order.status == "refunded":
+        raise AppError(
+            code="ORDER_ALREADY_REFUNDED",
+            message="订单已退款，不可重复操作",
+            status_code=400,
+        )
+
+    if order.status != "paid":
+        raise AppError(
+            code="ORDER_CANNOT_REFUND",
+            message=f"订单状态为 {order.status}，只有已支付订单可以退款",
+            status_code=400,
+        )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # 根据订单类型执行退款逻辑
+    if order.order_type == "credits" and order.credit_amount:
+        # 退款 credits 订单：扣除已充值的额度
+        _refund_credits = await _get_refund_credits()
+        await _refund_credits(
+            db,
+            user_id=order.user_id,
+            amount=order.credit_amount,
+            source_id=order.id,
+            description=f"订单 {order.order_no} 退款，扣除 {order.credit_amount} 额度",
+        )
+
+    elif order.order_type == "plan":
+        # 退款 plan 订单：将用户套餐降级为 free
+        await db.execute(
+            text("UPDATE users SET plan_code = 'free', updated_at = :now WHERE id = :uid"),
+            {"now": now, "uid": order.user_id},
+        )
+
+    # 更新订单状态
+    order.status = "refunded"
+    order.updated_at = now
+    await db.flush()
+    await db.refresh(order)
+    return _to_order_data(order)
+
+
+async def _get_refund_credits():
+    """惰性加载 credits-billing 的 refund_credits 函数。"""
+    import importlib.util, os
+    _credits_billing_dir = os.path.join(
+        os.path.dirname(__file__), "..", "credits-billing"
+    )
+    # 通过 sys.modules 查找已加载的 credits_billing
+    import sys
+    for _name in ("credits_billing_service", "service"):
+        if _name in sys.modules:
+            _mod = sys.modules[_name]
+            if hasattr(_mod, "refund_credits"):
+                return _mod.refund_credits
+    # fallback: importlib 加载
+    _svc_path = os.path.join(_credits_billing_dir, "service.py")
+    _spec = importlib.util.spec_from_file_location("_credits_billing_refund_svc", _svc_path)
+    if _spec and _spec.loader:
+        _mod = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        return _mod.refund_credits
+    raise RuntimeError("Cannot load refund_credits from credits-billing")
+
+
 # ============================================================
 # 内部辅助
 # ============================================================

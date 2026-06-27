@@ -20,6 +20,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel, Field
 
 from .config import shared_settings
+from .database import get_db
 
 # -- OAuth2 密码流（FastAPI 标准） --
 # tokenUrl 指向登录接口，用于自动生成的 OpenAPI 文档
@@ -157,6 +158,7 @@ async def require_admin(
     """FastAPI 依赖：要求当前用户为管理员。
 
     在 require_auth 基础上增加角色检查。
+    保留此函数用于向后兼容；新代码应优先使用 require_permission()。
     """
     if current_user.role != "admin":
         raise HTTPException(
@@ -168,6 +170,132 @@ async def require_admin(
             },
         )
     return current_user
+
+
+def require_permission(permission_code: str):
+    """FastAPI 依赖工厂：要求当前用户拥有指定权限。
+
+    检查逻辑（按优先级）：
+    1. 先通过 RBAC 表（user_roles → role_permissions → permissions）检查
+    2. 如果用户 role=admin 且在 user_roles 表中无任何记录，视为超级管理员放行
+    3. 否则拒绝访问
+
+    使用示例：
+        @router.get("/users")
+        async def list_users(
+            current_user: TokenData = Depends(require_permission("users.read")),
+        ):
+            ...
+
+    Args:
+        permission_code: 权限码，如 "users.read"、"orders.refund"
+
+    Returns:
+        异步依赖函数，返回 TokenData
+    """
+    async def _check(
+        current_user: TokenData = Depends(require_auth),
+        db=Depends(get_db),
+    ) -> TokenData:
+        from sqlalchemy import text as sql_text
+
+        # 1. 快速路径：非管理员直接拒绝（管理后台仅限管理员访问）
+        if current_user.role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "PERMISSION_DENIED",
+                    "message": f"需要权限：{permission_code}",
+                    "request_id": "",
+                },
+            )
+
+        # 2. 查询该用户是否已分配 RBAC 角色
+        role_count_result = await db.execute(
+            sql_text("SELECT COUNT(*) FROM user_roles WHERE user_id = :uid"),
+            {"uid": current_user.user_id},
+        )
+        has_rbac = role_count_result.scalar_one() > 0
+
+        if not has_rbac:
+            # 向后兼容：admin 且无 RBAC 记录 → 超级管理员，直接放行
+            return current_user
+
+        # 3. 有 RBAC 记录 → 严格检查具体权限
+        result = await db.execute(
+            sql_text(
+                "SELECT 1 FROM user_roles ur "
+                "JOIN role_permissions rp ON ur.role_id = rp.role_id "
+                "JOIN permissions p ON rp.permission_id = p.id "
+                "WHERE ur.user_id = :uid AND p.code = :pcode LIMIT 1"
+            ),
+            {"uid": current_user.user_id, "pcode": permission_code},
+        )
+        if result.first() is not None:
+            return current_user
+
+        # 4. 无此权限
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "PERMISSION_DENIED",
+                "message": f"需要权限：{permission_code}",
+                "request_id": "",
+            },
+        )
+
+    return _check
+
+
+async def get_user_permissions(db, user_id: str) -> list[str]:
+    """查询用户拥有的所有权限码列表。
+
+    用于登录响应和前端菜单过滤。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 用户 ID
+
+    Returns:
+        权限码字符串列表，如 ["users.read", "users.create", ...]
+    """
+    from sqlalchemy import text as sql_text
+
+    result = await db.execute(
+        sql_text(
+            "SELECT DISTINCT p.code FROM user_roles ur "
+            "JOIN role_permissions rp ON ur.role_id = rp.role_id "
+            "JOIN permissions p ON rp.permission_id = p.id "
+            "WHERE ur.user_id = :uid ORDER BY p.code"
+        ),
+        {"uid": user_id},
+    )
+    perms = [row[0] for row in result.all()]
+    if perms:
+        return perms
+
+    # 如果用户没有 RBAC 记录但是 admin，返回全部权限
+    role_count_result = await db.execute(
+        sql_text("SELECT COUNT(*) FROM user_roles WHERE user_id = :uid"),
+        {"uid": user_id},
+    )
+    has_rbac = role_count_result.scalar_one() > 0
+
+    if not has_rbac:
+        # 检查 users 表的 role 字段
+        user_result = await db.execute(
+            sql_text("SELECT role FROM users WHERE id = :uid"),
+            {"uid": user_id},
+        )
+        user_row = user_result.first()
+        if user_row and user_row[0] == "admin":
+            # 返回系统中所有权限码（admin 无 RBAC 记录 = 超级管理员）
+            all_perms = await db.execute(
+                sql_text("SELECT code FROM permissions ORDER BY code")
+            )
+            return [row[0] for row in all_perms.all()]
+
+    return perms
 
 
 async def optional_auth(

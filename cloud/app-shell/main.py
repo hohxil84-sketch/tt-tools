@@ -80,6 +80,10 @@ def create_app() -> FastAPI:
     # -- 注册基础中间件 --
     setup_middleware(app)
 
+    # -- 注册审计日志中间件（记录所有后台写操作） --
+    from cloud.shared.audit_middleware import AuditMiddleware
+    app.add_middleware(AuditMiddleware)
+
     # 注意：不再通过 importlib 预加载 ORM 模型，避免与后续路由注册重复导入导致
     # "Table is already defined for this MetaData instance" 错误。
     # 各模块 ORM 模型会在对应的 router 导入链中自动加载到 Base.metadata，
@@ -215,6 +219,66 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as admin_ops_router  # noqa: E402
     app.include_router(admin_ops_router, prefix="/api/v1")
+
+    # 注册 admin-audit 审计日志模块路由
+    _admin_audit_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-audit")
+    if _admin_audit_dir not in sys.path:
+        sys.path.insert(0, _admin_audit_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_audit_router  # noqa: E402
+    app.include_router(admin_audit_router, prefix="/api/v1")
+
+    # 注册 admin-batch 批量操作模块路由
+    _admin_batch_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-batch")
+    if _admin_batch_dir not in sys.path:
+        sys.path.insert(0, _admin_batch_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_batch_router  # noqa: E402
+    app.include_router(admin_batch_router, prefix="/api/v1")
+
+    # 注册 admin-export 数据导出模块路由
+    _admin_export_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-export")
+    if _admin_export_dir not in sys.path:
+        sys.path.insert(0, _admin_export_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_export_router  # noqa: E402
+    app.include_router(admin_export_router, prefix="/api/v1")
+
+    # 注册 admin-providers Provider 配置管理模块路由
+    _admin_providers_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-providers")
+    if _admin_providers_dir not in sys.path:
+        sys.path.insert(0, _admin_providers_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_providers_router  # noqa: E402
+    app.include_router(admin_providers_router, prefix="/api/v1")
+
+    # 注册 admin-feature-codes 动态功能码管理模块路由
+    _admin_fc_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-feature-codes")
+    if _admin_fc_dir not in sys.path:
+        sys.path.insert(0, _admin_fc_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_feature_codes_router  # noqa: E402
+    app.include_router(admin_feature_codes_router, prefix="/api/v1")
+
+    # 注册 admin-roles RBAC 权限管理模块路由
+    _admin_roles_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-roles")
+    if _admin_roles_dir not in sys.path:
+        sys.path.insert(0, _admin_roles_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_roles_router  # noqa: E402
+    app.include_router(admin_roles_router, prefix="/api/v1")
 
     # -- 生产模式：托管 admin-web 前端静态文件（SPA） --
     # 构建产物位于 cloud/admin/modules/admin-web/dist/

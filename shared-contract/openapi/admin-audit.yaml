@@ -1,0 +1,185 @@
+openapi: "3.1.0"
+
+info:
+  title: TT Tools Admin Audit
+  description: 后台审计日志查询。
+  version: "0.1.0"
+
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+    description: 本地开发服务器
+
+security:
+  - BearerAuth: []
+
+paths:
+  /admin/audit-logs:
+    get:
+      tags: [Admin Audit]
+      summary: 查询审计日志列表
+      description: |
+        返回后台所有管理操作的审计日志，支持分页和多条件筛选。
+        需要管理员权限。
+      operationId: listAuditLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: admin_user_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [create, update, delete, status_change, adjust, refund, cancel, batch]
+        - name: target_type
+          in: query
+          schema:
+            type: string
+            enum: [user, device, order, plan, credits, feature_flag, provider]
+        - name: target_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 审计日志列表
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AuditLogListData"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /admin/audit-logs/{log_id}:
+    get:
+      tags: [Admin Audit]
+      summary: 查询审计日志详情
+      operationId: getAuditLogDetail
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: log_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: 审计日志详情
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "./common.yaml#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AuditLogDetail"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+components:
+  schemas:
+    AuditLogItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        admin_user_id:
+          type: string
+          format: uuid
+        admin_account:
+          type: string
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+          format: uuid
+          nullable: true
+        summary:
+          type: string
+        ip_address:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required: [id, admin_user_id, admin_account, action, target_type, summary, created_at]
+
+    AuditLogDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        admin_user_id:
+          type: string
+          format: uuid
+        admin_account:
+          type: string
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+          format: uuid
+          nullable: true
+        summary:
+          type: string
+        details_json:
+          type: object
+        ip_address:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required: [id, admin_user_id, admin_account, action, target_type, summary, created_at]
+
+    AuditLogListData:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogItem"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required: [items, total, limit, offset]

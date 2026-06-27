@@ -103,6 +103,104 @@
 - cloud-ai-copy: 16/16 通过
 - cloud-provider-runtime: 107/107 通过
 
+## 后台管理系统完善记录 (2026-06-27)
+
+**分支**: feature/admin-backend-improvements
+**状态**: DEVELOPMENT_COMPLETE（待提交）
+
+### 修复/新增范围
+
+#### P0 修复
+1. **Admin Token 刷新** — `cloud/admin/modules/admin-shell/service.py`
+   - `login_admin()`: refresh_token 现在写入 auth_sessions 表
+   - `refresh_admin()`: 从 501 空壳改为完整令牌轮换（校验→撤销→签发新对）
+   - `logout_admin()`: 从空操作改为实际撤销 refresh_token
+   - 前端 `client.ts`: 新增 401 拦截器自动静默刷新 token
+   - 前端 `AuthContext.tsx`: 登录时存储 refresh_token
+
+2. **审计日志** — 新模块 `cloud/admin/modules/admin-audit/`
+   - 新增 `admin_audit_logs` 表
+   - `GET /admin/audit-logs`、`GET /admin/audit-logs/{id}` 查询端点
+   - `cloud/shared/audit_middleware.py`: 自动记录所有后台写操作
+   - 前端 `AuditLogs.tsx`: 审计日志列表和详情页
+   - 新增 `shared-contract/openapi/admin-audit.yaml`
+
+#### P1 实现
+3. **密码重置** — `cloud/modules/auth-device/`
+   - 新增 `password_reset_tokens` 表 + `PasswordResetToken` 模型
+   - `POST /auth/password/forgot`: 忘记密码（生成重置令牌）
+   - `POST /auth/password/reset`: 重置密码（使用令牌）
+   - `POST /auth/password/change`: 已登录修改密码
+   - Admin: `POST /admin/users/{user_id}/reset-password` 强制重置
+
+4. **订单退款/取消** — `cloud/modules/credits-billing/` + `orders_recharge/`
+   - `refund_credits()`: 退款扣除额度
+   - `cancel_order()`: pending→closed
+   - `refund_order()`: paid→refunded（credits 退额度，plan 降级 free）
+   - Admin 端点: `POST /admin/orders/{id}/cancel`、`POST /admin/orders/{id}/refund`
+
+#### P2 实现
+5. **批量操作** — 新模块 `cloud/admin/modules/admin-batch/`
+   - `POST /admin/users/batch/status`: 批量修改用户状态
+   - `POST /admin/credits/batch/adjust`: 批量调整额度
+   - `POST /admin/orders/batch/cancel`: 批量取消订单
+
+6. **数据导出** — 新模块 `cloud/admin/modules/admin-export/`
+   - 4 个 CSV 导出端点: users, orders, credits-ledger, provider-call-logs
+   - StreamingResponse 流式返回
+
+#### P3 实现
+7. **Provider 配置管理** — 新模块 `cloud/admin/modules/admin-providers/`
+   - 新增 `providers` 表
+   - CRUD: `GET/POST /admin/providers`、`GET/PATCH/DELETE /admin/providers/{id}`
+
+8. **动态功能码注册** — 新模块 `cloud/admin/modules/admin-feature-codes/`
+   - 新增 `feature_codes` 表
+   - CRUD: `GET/POST /admin/feature-codes`、`GET/PATCH/DELETE /admin/feature-codes/{id}`
+
+#### RBAC 实现
+9. **RBAC 权限控制** — 新模块 `cloud/admin/modules/admin-roles/`
+   - 新增 `roles`、`permissions`、`role_permissions`、`user_roles` 表
+   - Roles CRUD、Permissions 查询
+   - 角色-权限关联: `POST /admin/roles/{id}/permissions`
+   - 用户-角色关联: `GET/POST /admin/users/{id}/roles`
+
+### 规格文档更新
+- `cloud/DATABASE_SCHEMA.md`: 新增 7 个表定义
+- `shared-contract/API_INDEX.md`: 新增 Admin Audit 段
+- `shared-contract/openapi/admin-audit.yaml`: 新建
+- Admin Shell 菜单: 新增审计日志、角色权限、Provider 管理、功能码管理
+
+### 新增文件清单
+- `cloud/admin/modules/admin-audit/` (6 files)
+- `cloud/admin/modules/admin-batch/` (4 files)
+- `cloud/admin/modules/admin-export/` (3 files)
+- `cloud/admin/modules/admin-providers/` (5 files)
+- `cloud/admin/modules/admin-feature-codes/` (5 files)
+- `cloud/admin/modules/admin-roles/` (5 files)
+- `cloud/shared/audit_middleware.py`
+- `cloud/admin/modules/admin-web/src/pages/AuditLogs.tsx`
+- `shared-contract/openapi/admin-audit.yaml`
+
+### 修改文件清单
+- `cloud/admin/modules/admin-shell/service.py` (token 刷新 + 菜单)
+- `cloud/admin/modules/admin-web/src/api/client.ts` (刷新拦截器)
+- `cloud/admin/modules/admin-web/src/contexts/AuthContext.tsx` (存储 refresh_token)
+- `cloud/admin/modules/admin-web/src/App.tsx` (审计日志路由)
+- `cloud/modules/auth-device/` (models, schemas, service, router)
+- `cloud/modules/credits-billing/service.py` (refund_credits)
+- `cloud/modules/orders_recharge/service.py` (cancel/refund)
+- `cloud/admin/modules/admin-billing/` (router, service)
+- `cloud/admin/modules/admin-users/` (router, service)
+- `cloud/app-shell/main.py` (5 个新模块注册 + 审计中间件)
+- `cloud/app-shell/init_tables.py` (新模型目录)
+- `cloud/DATABASE_SCHEMA.md` (新表)
+- `shared-contract/API_INDEX.md` (审计日志 API)
+
+### 测试结果
+- cloud-auth-device: 20/20 通过（无回归）
+- admin-shell 测试: 14 失败（均为预存问题，非本次引入）
+
 ## Bug 修复记录 (2026-06-27)
 
 **分支**: fix/ai-image-tools-umbrella-to-individual

@@ -50,7 +50,7 @@ from sqlalchemy.ext.asyncio import (
 
 from cloud.shared import (
     TokenData,
-    require_admin,
+    require_auth,
     get_db,
     Base,
 )
@@ -149,6 +149,24 @@ finally:
     sys.path.clear()
     sys.path.extend(_orig_path3)
 
+# 3.5 加载 admin-roles 模型（require_permission 需要 user_roles 表）
+_ar_models_path = os.path.join(
+    _PROJECT_ROOT, "cloud", "admin", "modules", "admin-roles", "models.py"
+)
+_ar_dir = os.path.dirname(_ar_models_path)
+_orig_path4 = list(sys.path)
+if _ar_dir in sys.path:
+    sys.path.remove(_ar_dir)
+sys.path.insert(0, _ar_dir)
+try:
+    _spec4 = _iu.spec_from_file_location("admin_roles_models", _ar_models_path)
+    _ar_mod = _iu.module_from_spec(_spec4)
+    sys.modules["admin_roles_models"] = _ar_mod
+    _spec4.loader.exec_module(_ar_mod)
+finally:
+    sys.path.clear()
+    sys.path.extend(_orig_path4)
+
 # 4. 清理模块缓存，确保 admin-billing 的 router/service/schemas 重新导入
 for _key in list(sys.modules.keys()):
     if _key in ("router", "service", "schemas", "models") or _key.startswith(
@@ -192,19 +210,16 @@ USER_TOKEN_DATA = TokenData(
 
 
 async def _override_admin() -> TokenData:
-    """覆盖 require_admin：返回管理员身份。"""
+    """覆盖 require_auth：返回管理员身份。"""
     return ADMIN_TOKEN_DATA
 
 
-async def _override_user_forbidden() -> TokenData:
-    """覆盖 require_admin：模拟普通用户被拒绝（403）。"""
-    raise HTTPException(
-        status_code=403,
-        detail={
-            "code": "PERMISSION_DENIED",
-            "message": "需要管理员权限",
-        },
-    )
+async def _override_user() -> TokenData:
+    """覆盖 require_auth：返回普通用户身份。
+
+    require_permission 会检查 role != admin，自动返回 403。
+    """
+    return USER_TOKEN_DATA
 
 
 # ============================================================
@@ -474,26 +489,29 @@ async def app(db_engine, _db_session_factory):
 
 @pytest_asyncio.fixture
 async def admin_client(app: FastAPI) -> AsyncClient:
-    """创建异步 HTTP 测试客户端（管理员权限）。"""
-    app.dependency_overrides[require_admin] = _override_admin
+    """创建异步 HTTP 测试客户端（管理员权限）。
+
+    覆盖 require_auth（require_permission 通过 Depends(require_auth) 链式调用）。
+    """
+    app.dependency_overrides[require_auth] = _override_admin
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
-    app.dependency_overrides.pop(require_admin, None)
+    app.dependency_overrides.pop(require_auth, None)
 
 
 @pytest_asyncio.fixture
 async def user_client(app: FastAPI) -> AsyncClient:
     """创建异步 HTTP 测试客户端（普通用户权限 → 预期 403）。"""
-    app.dependency_overrides[require_admin] = _override_user_forbidden
+    app.dependency_overrides[require_auth] = _override_user
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
-    app.dependency_overrides.pop(require_admin, None)
+    app.dependency_overrides.pop(require_auth, None)
 
 
 @pytest_asyncio.fixture

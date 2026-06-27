@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloud.shared import (
+    require_permission,
     TokenData,
     require_admin,
     get_request_id,
@@ -51,6 +52,8 @@ from service import (
     delete_plan,
     list_all_orders,
     get_admin_order_detail,
+    cancel_admin_order,
+    refund_admin_order,
     list_credit_accounts,
     get_credit_account_detail,
     list_all_credit_ledger,
@@ -69,7 +72,7 @@ router = APIRouter(tags=["Admin Billing"])
 @router.get("/admin/plans")
 async def admin_list_plans(
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("plans.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询套餐列表。
@@ -98,7 +101,7 @@ async def admin_list_plans(
 async def admin_get_plan_detail(
     plan_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("plans.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询套餐详情。
@@ -126,7 +129,7 @@ async def admin_get_plan_detail(
 async def admin_create_plan(
     body: CreatePlanRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """创建新套餐。
@@ -161,7 +164,7 @@ async def admin_update_plan(
     plan_id: str,
     body: UpdatePlanRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """更新套餐配置。
@@ -196,7 +199,7 @@ async def admin_update_plan_status(
     plan_id: str,
     body: UpdatePlanStatusRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """启用/停用套餐。
@@ -229,7 +232,7 @@ async def admin_update_plan_status(
 async def admin_delete_plan(
     plan_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """删除套餐。
@@ -261,7 +264,7 @@ async def admin_list_orders(
     order_type: str | None = Query(default=None, description="按订单类型筛选"),
     status: str | None = Query(default=None, description="按订单状态筛选"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("orders.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询全部订单列表。
@@ -296,7 +299,7 @@ async def admin_list_orders(
 async def admin_get_order_detail(
     order_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("orders.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询订单详情。
@@ -320,6 +323,55 @@ async def admin_get_order_detail(
         )
 
 
+@router.post("/admin/orders/{order_id}/cancel")
+async def admin_cancel_order(
+    order_id: str,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("orders.cancel")),
+    db: AsyncSession = Depends(get_db),
+):
+    """取消订单。
+
+    将 pending 状态的订单变更为 closed。需要管理员权限。
+    """
+    try:
+        data = await cancel_admin_order(db=db, order_id=order_id)
+        return success_response(data.model_dump(mode="json"), request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code, message=e.message,
+                request_id=request_id, details=e.details,
+            ),
+            status_code=e.status_code,
+        )
+
+
+@router.post("/admin/orders/{order_id}/refund")
+async def admin_refund_order(
+    order_id: str,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("orders.refund")),
+    db: AsyncSession = Depends(get_db),
+):
+    """退款订单。
+
+    将 paid 状态的订单变更为 refunded，并退还/扣除对应资源。
+    credits 类型退额度，plan 类型降级套餐。需要管理员权限。
+    """
+    try:
+        data = await refund_admin_order(db=db, order_id=order_id)
+        return success_response(data.model_dump(mode="json"), request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code, message=e.message,
+                request_id=request_id, details=e.details,
+            ),
+            status_code=e.status_code,
+        )
+
+
 # ============================================================
 # 额度管理端点
 # ============================================================
@@ -332,7 +384,7 @@ async def admin_list_credit_accounts(
     status: str | None = Query(default=None, description="按账户状态筛选"),
     plan_code: str | None = Query(default=None, description="按套餐编码筛选"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("credits.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询额度账户列表。
@@ -366,7 +418,7 @@ async def admin_list_credit_accounts(
 async def admin_get_credit_account_detail(
     account_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("credits.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询额度账户详情。
@@ -398,7 +450,7 @@ async def admin_list_credit_ledger(
     change_type: str | None = Query(default=None, description="按变化类型筛选"),
     source_type: str | None = Query(default=None, description="按来源类型筛选"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("credits.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询全部额度流水。
@@ -433,7 +485,7 @@ async def admin_list_credit_ledger(
 async def admin_adjust_credits(
     body: AdjustCreditsRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("credits.adjust")),
     db: AsyncSession = Depends(get_db),
 ):
     """手动调整额度。

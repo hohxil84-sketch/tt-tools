@@ -624,3 +624,57 @@ async def delete_device(db: AsyncSession, device_id: str) -> dict:
     await db.flush()
 
     return {"deleted": True}
+
+
+# ============================================================
+# 管理员强制重置密码
+# ============================================================
+
+
+async def force_reset_password(db: AsyncSession, user_id: str) -> dict:
+    """管理员强制重置用户密码。
+
+    生成新随机密码、更新哈希、撤销该用户所有活跃会话。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 目标用户 ID
+
+    Returns:
+        {"new_password": "<新密码>", "message": "..."}
+    """
+    import secrets
+    import bcrypt
+
+    # 查询用户
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise AppError(code="USER_NOT_FOUND", message="用户不存在", status_code=404)
+
+    # 生成新随机密码
+    new_password = secrets.token_urlsafe(12)
+
+    # 哈希新密码
+    password_hash = bcrypt.hashpw(
+        new_password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
+
+    # 更新密码
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    user.password_hash = password_hash
+    user.updated_at = now
+
+    # 撤销该用户所有活跃会话
+    from sqlalchemy import text
+    await db.execute(
+        text("UPDATE auth_sessions SET status = 'revoked', revoked_at = :now "
+             "WHERE user_id = :uid AND status = 'active'"),
+        {"now": now, "uid": user_id},
+    )
+    await db.flush()
+
+    return {
+        "new_password": new_password,
+        "message": "密码已重置，用户需使用新密码重新登录",
+    }

@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cloud.shared import (
     TokenData,
     require_admin,
+    require_permission,
     get_request_id,
     success_response,
     error_response,
@@ -49,6 +50,7 @@ from service import (
     get_device_detail,
     update_device_status,
     delete_device,
+    force_reset_password,
 )
 
 # 创建路由，prefix="/api/v1/admin" 在 app-shell 装配时指定
@@ -67,7 +69,7 @@ async def admin_list_users(
     status: str | None = Query(default=None, description="按状态筛选"),
     search: str | None = Query(default=None, description="按账号或名称搜索"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("users.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询用户列表。
@@ -101,7 +103,7 @@ async def admin_list_users(
 async def admin_create_user(
     body: CreateUserRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("users.create")),
     db: AsyncSession = Depends(get_db),
 ):
     """创建新用户。
@@ -137,7 +139,7 @@ async def admin_update_user(
     user_id: str,
     body: UpdateUserRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("users.update")),
     db: AsyncSession = Depends(get_db),
 ):
     """编辑用户信息。
@@ -171,7 +173,7 @@ async def admin_update_user(
 async def admin_delete_user(
     user_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("users.delete")),
     db: AsyncSession = Depends(get_db),
 ):
     """删除用户。
@@ -199,7 +201,7 @@ async def admin_delete_user(
 async def admin_get_user(
     user_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("users.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询用户详情。
@@ -228,7 +230,7 @@ async def admin_update_user_status(
     user_id: str,
     body: UpdateUserStatusRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("users.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """修改用户状态。
@@ -254,13 +256,40 @@ async def admin_update_user_status(
         )
 
 
+@router.post("/admin/users/{user_id}/reset-password")
+async def admin_reset_user_password(
+    user_id: str,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("users.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """管理员强制重置用户密码。
+
+    生成新随机密码并返回。用户将被强制登出（所有会话撤销）。
+    需要管理员权限。
+    """
+    try:
+        data = await force_reset_password(db=db, user_id=user_id)
+        return success_response(data, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code,
+                message=e.message,
+                request_id=request_id,
+                details=e.details,
+            ),
+            status_code=e.status_code,
+        )
+
+
 @router.get("/admin/users/{user_id}/devices")
 async def admin_list_user_devices(
     user_id: str,
     limit: int = Query(default=20, ge=1, le=100, description="每页条数"),
     offset: int = Query(default=0, ge=0, description="偏移量"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("devices.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询用户的设备列表。
@@ -295,7 +324,7 @@ async def admin_list_user_devices(
 async def admin_delete_device(
     device_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("devices.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """删除设备。
@@ -325,7 +354,7 @@ async def admin_list_devices(
     offset: int = Query(default=0, ge=0, description="偏移量"),
     status: str | None = Query(default=None, description="按状态筛选"),
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("devices.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询所有设备列表。
@@ -355,7 +384,7 @@ async def admin_list_devices(
 async def admin_get_device(
     device_id: str,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("devices.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询设备详情。
@@ -384,7 +413,7 @@ async def admin_update_device_status(
     device_id: str,
     body: UpdateDeviceStatusRequest,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_admin),
+    current_user: TokenData = Depends(require_permission("devices.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """修改设备状态。

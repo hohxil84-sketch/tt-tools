@@ -645,3 +645,23 @@ Response `data`: `items`
 Request: `{ "enabled_features_json": { "feature_code": true | {...} } }`
 
 Response `data`: 同 PlanFeatureFlagsItem。
+
+## Admin Audit — 后台审计日志
+
+所有后台接口要求 `Authorization: Bearer <admin_access_token>`，且 JWT 中 role 字段为 `admin`。
+
+### GET `/api/v1/admin/audit-logs`
+
+查询审计日志列表（管理员所有写操作的记录）。
+
+Query: `limit`、`offset`、`admin_user_id`、`action`、`target_type`、`target_id`
+
+Response `data`: `items`、`total`、`limit`、`offset`
+
+Item fields: `id`、`admin_user_id`、`admin_account`、`action`、`target_type`、`target_id`、`summary`、`ip_address`、`created_at`
+
+### GET `/api/v1/admin/audit-logs/{log_id}`
+
+查询审计日志详情（含操作详情 JSON）。
+
+Response `data`: 同列表项字段 + `details_json`

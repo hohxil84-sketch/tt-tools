@@ -24,7 +24,7 @@ from cloud.shared import (
     shared_settings,
 )
 
-from models import User, Device, AuthSession
+from models import User, Device, AuthSession, PasswordResetToken
 from schemas import (
     LoginRequest,
     LoginData,
@@ -595,3 +595,204 @@ async def bind_device(
         status=device.status,
         is_new=is_new,
     )
+
+
+# ============================================================
+# 密码重置服务
+# ============================================================
+
+# 密码重置令牌有效期（小时）
+_PASSWORD_RESET_EXPIRE_HOURS = 1
+
+
+async def forgot_password(
+    db: AsyncSession,
+    account: str,
+) -> tuple[str, str]:
+    """忘记密码：生成重置令牌。
+
+    1. 根据账号查找用户
+    2. 生成加密随机重置令牌
+    3. 哈希后存入 password_reset_tokens 表
+    4. 返回原始令牌（开发阶段，生产应发邮件）
+
+    Args:
+        db: 数据库异步会话
+        account: 用户登录账号
+
+    Returns:
+        (message, reset_token) 元组
+
+    Raises:
+        AppError: 用户不存在
+    """
+    user = await _get_active_user(db, account)
+
+    # 生成重置令牌
+    raw_token = generate_refresh_token()  # 复用安全随机生成
+    token_hash = hash_token(raw_token)
+
+    # 使该用户之前的未使用重置令牌失效
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.execute(
+        text("UPDATE password_reset_tokens SET status = 'expired' "
+             "WHERE user_id = :user_id AND status = 'active'"),
+        {"user_id": user.id},
+    )
+
+    # 创建新重置令牌
+    expires_at = now_utc + timedelta(hours=_PASSWORD_RESET_EXPIRE_HOURS)
+    import uuid as _uuid
+    reset_record = PasswordResetToken(
+        id=str(_uuid.uuid4()),
+        user_id=user.id,
+        token_hash=token_hash,
+        status="active",
+        expires_at=expires_at,
+    )
+    db.add(reset_record)
+    await db.flush()
+
+    return (
+        f"密码重置令牌已生成，有效期 {_PASSWORD_RESET_EXPIRE_HOURS} 小时",
+        raw_token,
+    )
+
+
+async def reset_password(
+    db: AsyncSession,
+    reset_token: str,
+    new_password: str,
+) -> str:
+    """重置密码：使用重置令牌设置新密码。
+
+    1. 哈希令牌并查找有效记录
+    2. 校验未过期、未使用
+    3. 更新用户密码哈希
+    4. 标记令牌为已使用
+    5. 撤销该用户所有活跃会话
+
+    Args:
+        db: 数据库异步会话
+        reset_token: 原始重置令牌
+        new_password: 新密码明文
+
+    Returns:
+        成功消息
+
+    Raises:
+        AppError: 令牌无效、过期或已使用
+    """
+    from cloud.shared import ErrorCode as EC
+
+    token_hash = hash_token(reset_token)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # 查找有效令牌
+    result = await db.execute(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token_hash == token_hash
+        )
+    )
+    reset_record = result.scalar_one_or_none()
+
+    if reset_record is None:
+        raise AppError(
+            code=EC.AUTH_TOKEN_EXPIRED,
+            message="密码重置链接无效",
+            status_code=400,
+        )
+
+    if reset_record.status == "used":
+        raise AppError(
+            code=EC.AUTH_TOKEN_EXPIRED,
+            message="密码重置链接已使用，请重新申请",
+            status_code=400,
+        )
+
+    if reset_record.status == "expired" or reset_record.expires_at < now_utc:
+        if reset_record.status != "expired":
+            reset_record.status = "expired"
+            await db.flush()
+        raise AppError(
+            code=EC.AUTH_TOKEN_EXPIRED,
+            message="密码重置链接已过期，请重新申请",
+            status_code=400,
+        )
+
+    # 更新密码
+    new_hash = hash_password(new_password)
+    await db.execute(
+        text("UPDATE users SET password_hash = :pw, updated_at = :now WHERE id = :uid"),
+        {"pw": new_hash, "now": now_utc, "uid": reset_record.user_id},
+    )
+
+    # 标记令牌已使用
+    reset_record.status = "used"
+    reset_record.used_at = now_utc
+
+    # 撤销该用户所有活跃会话（强制重新登录）
+    await db.execute(
+        text("UPDATE auth_sessions SET status = 'revoked', revoked_at = :now "
+             "WHERE user_id = :uid AND status = 'active'"),
+        {"now": now_utc, "uid": reset_record.user_id},
+    )
+    await db.flush()
+
+    return "密码已重置，请使用新密码重新登录"
+
+
+async def change_password(
+    db: AsyncSession,
+    user_id: str,
+    old_password: str,
+    new_password: str,
+) -> str:
+    """已登录用户修改密码。
+
+    1. 查询用户
+    2. 验证旧密码
+    3. 更新为新密码哈希
+    4. 撤销其他会话（当前会话保留）
+
+    Args:
+        db: 数据库异步会话
+        user_id: 当前用户 ID
+        old_password: 旧密码
+        new_password: 新密码
+
+    Returns:
+        成功消息
+
+    Raises:
+        AppError: 旧密码错误
+    """
+    from cloud.shared import ErrorCode as EC
+
+    result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise AppError(
+            code=EC.AUTH_INVALID_CREDENTIALS,
+            message="用户不存在",
+            status_code=404,
+        )
+
+    if not verify_password(old_password, user.password_hash):
+        raise AppError(
+            code=EC.AUTH_INVALID_CREDENTIALS,
+            message="旧密码错误",
+            status_code=400,
+        )
+
+    # 更新密码
+    new_hash = hash_password(new_password)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    user.password_hash = new_hash
+    user.updated_at = now_utc
+    await db.flush()
+
+    return "密码已修改"

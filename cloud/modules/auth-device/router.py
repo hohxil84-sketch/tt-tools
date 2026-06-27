@@ -30,8 +30,14 @@ from schemas import (
     RefreshRequest,
     LogoutRequest,
     BindDeviceRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    ChangePasswordRequest,
 )
-from service import login, refresh, logout, get_current_device, bind_device
+from service import (
+    login, refresh, logout, get_current_device, bind_device,
+    forgot_password, reset_password, change_password,
+)
 
 # 创建路由，prefix 在 app-shell 装配时指定
 router = APIRouter(tags=["Auth / Device"])
@@ -114,6 +120,78 @@ async def auth_logout(
             request_id=request_id,
             status_code=e.status_code,
             details=e.details,
+        )
+
+
+# ============================================================
+# 密码重置端点
+# ============================================================
+
+
+@router.post("/auth/password/forgot")
+async def auth_forgot_password(
+    req: ForgotPasswordRequest,
+    request_id: str = Depends(get_request_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """忘记密码接口。
+
+    根据账号生成密码重置令牌。开发阶段直接返回令牌，
+    生产环境应改为发送邮件。
+    """
+    try:
+        message, reset_token = await forgot_password(db, req.account)
+        return success_response(
+            {"message": message, "reset_token": reset_token},
+            request_id,
+        )
+    except AppError as e:
+        return error_response(
+            code=e.code, message=e.message,
+            request_id=request_id, status_code=e.status_code, details=e.details,
+        )
+
+
+@router.post("/auth/password/reset")
+async def auth_reset_password(
+    req: ResetPasswordRequest,
+    request_id: str = Depends(get_request_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """重置密码接口。
+
+    使用重置令牌设置新密码。成功后所有旧会话被撤销。
+    """
+    try:
+        message = await reset_password(db, req.reset_token, req.new_password)
+        return success_response({"message": message}, request_id)
+    except AppError as e:
+        return error_response(
+            code=e.code, message=e.message,
+            request_id=request_id, status_code=e.status_code, details=e.details,
+        )
+
+
+@router.post("/auth/password/change")
+async def auth_change_password(
+    req: ChangePasswordRequest,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改密码接口（需登录）。
+
+    验证旧密码后更新为新密码。
+    """
+    try:
+        message = await change_password(
+            db, current_user.user_id, req.old_password, req.new_password,
+        )
+        return success_response({"message": message}, request_id)
+    except AppError as e:
+        return error_response(
+            code=e.code, message=e.message,
+            request_id=request_id, status_code=e.status_code, details=e.details,
         )
 
 

@@ -8,6 +8,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import {
   apiRequest,
   setToken,
+  setRefreshToken,
   setUser,
   getUser,
   clearAuth,
@@ -19,6 +20,7 @@ interface User {
   account: string;
   display_name?: string;
   plan_code?: string;
+  permissions?: string[];
 }
 
 interface AuthState {
@@ -76,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     setToken(data.access_token);
+    setRefreshToken(data.refresh_token);
     setUser(data.user);
     setUserState(data.user);
 

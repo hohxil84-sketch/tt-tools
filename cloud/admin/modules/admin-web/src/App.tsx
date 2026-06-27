@@ -25,6 +25,10 @@ import ProviderCallLogs from './pages/ProviderCallLogs';
 import CostStats from './pages/CostStats';
 import RiskLogs from './pages/RiskLogs';
 import FeatureFlags from './pages/FeatureFlags';
+import AuditLogs from './pages/AuditLogs';
+import Roles from './pages/Roles';
+import Providers from './pages/Providers';
+import FeatureCodes from './pages/FeatureCodes';
 
 /** 需要登录才能访问的受保护路由 */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -71,6 +75,10 @@ export default function App() {
             <Route path="cost-stats" element={<CostStats />} />
             <Route path="risk-logs" element={<RiskLogs />} />
             <Route path="feature-flags" element={<FeatureFlags />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
+            <Route path="roles" element={<Roles />} />
+            <Route path="providers" element={<Providers />} />
+            <Route path="feature-codes" element={<FeatureCodes />} />
           </Route>
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Routes>

@@ -17,6 +17,18 @@ function getToken(): string | null {
   }
 }
 
+function getRefreshToken(): string | null {
+  try {
+    return localStorage.getItem('admin_refresh_token');
+  } catch {
+    return null;
+  }
+}
+
+// 是否正在刷新 token（防止并发刷新）
+let _refreshing = false;
+let _refreshPromise: Promise<boolean> | null = null;
+
 // 请求选项类型
 interface RequestOptions {
   method?: string;
@@ -74,9 +86,42 @@ export async function apiRequest<T = unknown>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  // 401 → 跳转登录
+  // 401 → 尝试刷新 token，失败则跳转登录
   if (response.status === 401) {
+    // 如果已经是刷新请求本身失败，直接踢出
+    if (path === '/admin/auth/refresh') {
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_refresh_token');
+      localStorage.removeItem('admin_user');
+      if (window.location.pathname !== '/admin/login') {
+        window.location.href = '/admin/login';
+      }
+      throw new ApiError('登录已过期，请重新登录', 'AUTH_REQUIRED', 401);
+    }
+
+    // 尝试静默刷新
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      // 刷新成功，用新 token 重试原请求
+      const newToken = getToken();
+      if (newToken) {
+        headers['Authorization'] = `Bearer ${newToken}`;
+      }
+      const retryResponse = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      // 递归解析重试结果
+      if (retryResponse.ok) {
+        const retryJson = await retryResponse.json();
+        if (retryJson?.data !== undefined) return retryJson.data as T;
+        return null as T;
+      }
+      if (retryResponse.status === 403) {
+        throw new ApiError('需要管理员权限', 'PERMISSION_DENIED', 403);
+      }
+    }
+
+    // 刷新失败，清除认证信息并跳转
     localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_refresh_token');
     localStorage.removeItem('admin_user');
     if (window.location.pathname !== '/admin/login') {
       window.location.href = '/admin/login';
@@ -132,11 +177,57 @@ export function setToken(token: string) {
   localStorage.setItem('admin_token', token);
 }
 
-export function setUser(user: { id: string; account: string; display_name?: string; plan_code?: string }) {
-  localStorage.setItem('admin_user', JSON.stringify(user));
+export function setRefreshToken(token: string) {
+  localStorage.setItem('admin_refresh_token', token);
 }
 
-export function getUser(): { id: string; account: string; display_name?: string; plan_code?: string } | null {
+/**
+ * 尝试用 refresh_token 静默刷新 access_token。
+ * 返回 true 表示刷新成功，false 表示需要重新登录。
+ */
+async function tryRefreshToken(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  // 防止并发刷新
+  if (_refreshing && _refreshPromise) return _refreshPromise;
+  _refreshing = true;
+  _refreshPromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE}/admin/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!response.ok) return false;
+      const json = await response.json();
+      if (json?.data?.access_token) {
+        setToken(json.data.access_token);
+        if (json.data.refresh_token) {
+          setRefreshToken(json.data.refresh_token);
+        }
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      _refreshing = false;
+      _refreshPromise = null;
+    }
+  })();
+  return _refreshPromise;
+}
+
+export function setUser(user: { id: string; account: string; display_name?: string; plan_code?: string; permissions?: string[] }) {
+  localStorage.setItem('admin_user', JSON.stringify(user));
+  // 同时单独存储权限列表，方便快速读取
+  if (user.permissions) {
+    localStorage.setItem('admin_permissions', JSON.stringify(user.permissions));
+  }
+}
+
+export function getUser(): { id: string; account: string; display_name?: string; plan_code?: string; permissions?: string[] } | null {
   try {
     const raw = localStorage.getItem('admin_user');
     return raw ? JSON.parse(raw) : null;
@@ -145,9 +236,26 @@ export function getUser(): { id: string; account: string; display_name?: string;
   }
 }
 
+/** 获取当前用户的权限码列表（RBAC） */
+export function getPermissions(): string[] {
+  try {
+    const raw = localStorage.getItem('admin_permissions');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 检查当前用户是否拥有指定权限 */
+export function hasPermission(code: string): boolean {
+  return getPermissions().includes(code);
+}
+
 export function clearAuth() {
   localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_refresh_token');
   localStorage.removeItem('admin_user');
+  localStorage.removeItem('admin_permissions');
 }
 
 export function isAuthenticated(): boolean {

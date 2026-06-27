@@ -210,7 +210,98 @@
 | details_json | jsonb | not null default `{}` | 脱敏详情 |
 | created_at | timestamptz | not null | 创建时间 |
 
+## admin_audit_logs
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | 审计日志 ID |
+| admin_user_id | uuid | fk users.id, not null | 操作管理员 ID |
+| admin_account | varchar(255) | not null | 操作管理员账号 |
+| action | varchar(50) | not null | 操作类型：create / update / delete / status_change / adjust / refund / cancel / batch |
+| target_type | varchar(50) | not null | 目标资源类型：user / device / order / plan / credits / feature_flag / provider |
+| target_id | uuid | nullable | 目标资源 ID |
+| summary | varchar(500) | not null | 操作摘要（中文） |
+| details_json | jsonb | not null default `{}` | 操作详情（请求体、变更前后等） |
+| ip_address | varchar(45) | nullable | 请求来源 IP |
+| created_at | timestamptz | not null | 记录时间 |
+
+索引：`admin_user_id`、`action`、`target_type`、`(target_type, target_id)`、`created_at`
+
+## password_reset_tokens
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | 令牌 ID |
+| user_id | uuid | fk users.id, not null | 目标用户 ID |
+| token_hash | varchar(255) | unique, not null | 重置令牌 SHA-256 哈希 |
+| status | varchar(50) | not null default `active` | active / used / expired |
+| expires_at | timestamptz | not null | 过期时间（默认 1 小时） |
+| created_at | timestamptz | not null | 创建时间 |
+| used_at | timestamptz | nullable | 使用时间 |
+
+## providers
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | Provider ID |
+| name | varchar(100) | unique, not null | Provider 名称 |
+| provider_type | varchar(50) | not null | deepseek / doubao / openai 等 |
+| api_key_encrypted | varchar(500) | nullable | 加密存储的 API Key |
+| base_url | varchar(500) | nullable | API 基础 URL |
+| models_json | jsonb | nullable | 模型配置 JSON |
+| is_enabled | boolean | not null default true | 是否启用 |
+| created_at | timestamptz | not null | 创建时间 |
+| updated_at | timestamptz | not null | 更新时间 |
+
+## feature_codes
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | 功能码 ID |
+| code | varchar(100) | unique, not null | 功能码（如 ai_copy_cloud） |
+| name | varchar(100) | not null | 功能名称 |
+| category | varchar(50) | not null | local_free / local_paid / cloud_ai |
+| description | text | nullable | 功能说明 |
+| is_active | boolean | not null default true | 是否启用 |
+| created_at | timestamptz | not null | 创建时间 |
+
+## roles / permissions / 关联表
+
+### roles
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | 角色 ID |
+| name | varchar(100) | not null | 角色名称 |
+| code | varchar(100) | unique, not null | 角色编码 |
+| description | text | nullable | 描述 |
+| is_system | boolean | not null default false | 是否系统内置（不可删除） |
+| created_at | timestamptz | not null | 创建时间 |
+
+### permissions
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | 权限 ID |
+| code | varchar(100) | unique, not null | 权限编码（如 users.read） |
+| name | varchar(100) | not null | 权限名称 |
+| resource | varchar(50) | not null | 资源：users / orders / plans / credits / providers / features / roles / audit |
+| action | varchar(50) | not null | 操作：read / create / update / delete / manage |
+| description | text | nullable | 描述 |
+| created_at | timestamptz | not null | 创建时间 |
+
+### role_permissions（关联表）
+
+| role_id | uuid | pk, fk roles.id |
+| permission_id | uuid | pk, fk permissions.id |
+
+### user_roles（关联表）
+
+| user_id | uuid | pk, fk users.id |
+| role_id | uuid | pk, fk roles.id |
+
 ## 写入边界
+
 
 - `credit_ledger` 只能由云端计费服务写入。
 - `provider_call_log` 只能由 Provider Runtime 或其封装服务写入。

@@ -118,3 +118,41 @@ class TokenPair(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+# ============================================================
+# 密码重置 DTO
+# ============================================================
+
+
+class ForgotPasswordRequest(BaseModel):
+    """忘记密码请求。"""
+    account: str = Field(..., description="登录账号")
+
+
+class ForgotPasswordData(BaseModel):
+    """忘记密码响应（开发阶段返回重置 token，生产改发邮件）。"""
+    message: str = Field(default="密码重置链接已发送", description="提示信息")
+    reset_token: Optional[str] = Field(default=None, description="重置令牌（仅开发阶段返回）")
+
+
+class ResetPasswordRequest(BaseModel):
+    """重置密码请求。"""
+    reset_token: str = Field(..., description="密码重置令牌")
+    new_password: str = Field(..., description="新密码", min_length=6)
+
+
+class ResetPasswordData(BaseModel):
+    """重置密码响应。"""
+    message: str = Field(default="密码已重置，请重新登录", description="提示信息")
+
+
+class ChangePasswordRequest(BaseModel):
+    """已登录用户修改密码请求。"""
+    old_password: str = Field(..., description="旧密码")
+    new_password: str = Field(..., description="新密码", min_length=6)
+
+
+class ChangePasswordData(BaseModel):
+    """修改密码响应。"""
+    message: str = Field(default="密码已修改", description="提示信息")

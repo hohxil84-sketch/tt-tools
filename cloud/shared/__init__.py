@@ -39,10 +39,12 @@ from .auth import (
     TokenData,
     create_access_token,
     decode_token,
+    get_user_permissions,
     oauth2_scheme,
     optional_auth,
     require_admin,
     require_auth,
+    require_permission,
 )
 
 # -- 权限 --
@@ -84,9 +86,11 @@ __all__ = [
     "TokenData",
     "create_access_token",
     "decode_token",
+    "get_user_permissions",
     "oauth2_scheme",
     "require_auth",
     "require_admin",
+    "require_permission",
     "optional_auth",
     # permissions
     "check_entitlement",
