@@ -53,7 +53,19 @@
 
 ## Bug 记录
 
-暂无。
+### 2026-06-27：伞形开关拆为独立子功能权限控制
+
+- **现象**：桌面端 Pro 用户无法使用 AI 图片工具——下拉框功能选择后权限检查失败
+- **根因**：credits-billing/service.py 的 check_entitlement 直接按子功能码查 enabled_features_json，但套餐只配了伞形开关 ai_image_tools_cloud，没有配各子功能码；ai-image-tools/service.py 的 _check_feature_permission 虽有伞形回退逻辑但 credits-billing 侧没有
+- **修复点**：
+  1. credits-billing/service.py：Free/Standard/Pro 套餐配置中 ai_image_tools_cloud 拆为 5 个独立子功能码
+  2. ai-image-tools/service.py：移除 _check_feature_permission 伞形回退逻辑
+  3. provider-runtime/mock.py：Mock 响应键拆为 5 个
+  4. seed_fake_data.py/test 文件/文档/后台 UI 同步更新
+- **测试命令**：`pytest cloud/modules/ai-image-tools/tests/ cloud/modules/credits-billing/tests/ cloud/admin/modules/admin-billing/tests/ -v`
+- **测试结果**：133 passed（ai-image-tools 36 + credits-billing 30 + admin-billing 67）
+- **分支**：`fix/ai-image-tools-umbrella-to-individual`
+- **提交哈希**：`f5bb21a`
 
 ## 提交记录
 
@@ -61,6 +73,11 @@
 - 分支：`feature/cloud-ai-image-tools`
 - 已推送至 `origin/feature/cloud-ai-image-tools`
 - 提交信息：`feat(cloud-ai-image-tools): 完成云端高级图片AI模块开发，36项测试全部通过`
+
+- 提交哈希：`f5bb21a`
+- 分支：`fix/ai-image-tools-umbrella-to-individual`
+- 已推送至 `origin/fix/ai-image-tools-umbrella-to-individual`
+- 提交信息：`fix(ai-image-tools): 将伞形开关 ai_image_tools_cloud 拆为 5 个独立子功能权限控制`
 
 ## 下一步
 
