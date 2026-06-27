@@ -16,6 +16,8 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
+import SystemUsers from './pages/SystemUsers';
+import ClientUsers from './pages/ClientUsers';
 import Devices from './pages/Devices';
 import Plans from './pages/Plans';
 import Orders from './pages/Orders';
@@ -66,6 +68,8 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="users" element={<Users />} />
+            <Route path="system-users" element={<SystemUsers />} />
+            <Route path="client-users" element={<ClientUsers />} />
             <Route path="devices" element={<Devices />} />
             <Route path="plans" element={<Plans />} />
             <Route path="orders" element={<Orders />} />

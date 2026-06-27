@@ -115,23 +115,63 @@ def get_menu(user_permissions: set | None = None) -> MenuData:
             path="/admin/dashboard",
             required_permission="dashboard.read",
         ),
+        # 系统用户（管理员账号）
         MenuItem(
-            id="users",
-            title="用户管理",
-            icon="users",
-            path="/admin/users",
+            id="system-users",
+            title="系统用户",
+            icon="admin",
+            path="/admin/system-users",
             children=[
                 MenuItem(
-                    id="users-list",
-                    title="用户列表",
+                    id="system-users-list",
+                    title="管理员列表",
                     icon="list",
-                    path="/admin/users",
+                    path="/admin/system-users",
                     required_permission="users.read",
                 ),
                 MenuItem(
+                    id="system-users-create",
+                    title="创建管理员",
+                    icon="plus",
+                    path="/admin/system-users?action=create",
+                    required_permission="users.create",
+                ),
+            ],
+        ),
+        # 客户端用户（普通用户账号）
+        MenuItem(
+            id="client-users",
+            title="客户端用户",
+            icon="users",
+            path="/admin/client-users",
+            children=[
+                MenuItem(
+                    id="client-users-list",
+                    title="用户列表",
+                    icon="list",
+                    path="/admin/client-users",
+                    required_permission="users.read",
+                ),
+                MenuItem(
+                    id="client-users-create",
+                    title="创建用户",
+                    icon="plus",
+                    path="/admin/client-users?action=create",
+                    required_permission="users.create",
+                ),
+            ],
+        ),
+        # 设备管理（独立顶级菜单）
+        MenuItem(
+            id="devices",
+            title="设备管理",
+            icon="devices",
+            path="/admin/devices",
+            children=[
+                MenuItem(
                     id="devices-list",
-                    title="设备管理",
-                    icon="devices",
+                    title="设备列表",
+                    icon="list",
                     path="/admin/devices",
                     required_permission="devices.read",
                 ),

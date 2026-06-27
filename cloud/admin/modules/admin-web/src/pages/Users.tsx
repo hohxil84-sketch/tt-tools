@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, LBtn, Pager, Sheet, Modal, Fld, DetailRows, priBtn, secBtn, inpS, selS, finpS } from '../components/shared';
 
@@ -8,7 +9,15 @@ const PAGE = 20;
 const SL: Record<string, string> = { active: '正常', blocked: '已封禁', deleted: '已删除' };
 const SC: Record<string, string> = { active: '#34c759', blocked: '#ff9500', deleted: '#ff3b30' };
 
-export default function Users() {
+/** 根据 roleFilter 决定页面标题 */
+function getTitle(roleFilter?: string): string {
+  if (roleFilter === 'admin') return '系统用户';
+  if (roleFilter === 'user') return '客户端用户';
+  return '用户管理';
+}
+
+export default function Users({ roleFilter }: { roleFilter?: string }) {
+  const [searchParams] = useSearchParams();
   const [d, setD] = useState<List | null>(null);
   const [q, setQ] = useState(''); const [sf, setSf] = useState(''); const [pg, setPg] = useState(0);
   const [err, setErr] = useState(''); const [detail, setDetail] = useState<User | null>(null);
@@ -17,11 +26,23 @@ export default function Users() {
   const [showCreate, setShowCreate] = useState(false);
   const [edit, setEdit] = useState<User | null>(null);
 
+  // URL 参数 ?action=create 自动打开创建表单
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      setShowCreate(true);
+    }
+  }, [searchParams]);
+
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/users', { params: { limit: PAGE, offset: pg * PAGE, search: q || undefined, status: sf || undefined } })); }
+    try {
+      const params: Record<string, string | number | undefined> = { limit: PAGE, offset: pg * PAGE, search: q || undefined, status: sf || undefined };
+      // 根据 roleFilter 附加角色筛选参数
+      if (roleFilter) params.role = roleFilter;
+      setD(await apiRequest<List>('/admin/users', { params }));
+    }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, q, sf]);
+  }, [pg, q, sf, roleFilter]);
   useEffect(() => { load(); }, [load]);
 
   const updStatus = async (id: string, ns: string) => {
@@ -30,12 +51,13 @@ export default function Users() {
   };
   const del = async () => { if (!cd) return; await apiRequest(`/admin/users/${cd.id}`, { method: 'DELETE' }); setCd(null); load(); };
   const TP = d ? Math.ceil(d.total / PAGE) : 0;
+  const title = getTitle(roleFilter);
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>用户管理</h2>
-        <button onClick={() => setShowCreate(true)} style={priBtn}>+ 创建用户</button>
+        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>{title}</h2>
+        <button onClick={() => setShowCreate(true)} style={priBtn}>+ 创建{roleFilter === 'admin' ? '管理员' : '用户'}</button>
       </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
         <input placeholder="搜索账号或名称…" value={q} onChange={e => { setQ(e.target.value); setPg(0); }} style={inpS} />
@@ -76,20 +98,24 @@ export default function Users() {
       {cd && <Modal title="删除用户" close={() => setCd(null)} action={del} danger>
         <p>永久删除 <b>{cd.account}</b>？此操作不可撤销。</p>
       </Modal>}
-      {showCreate && <UserForm close={() => setShowCreate(false)} done={() => { setShowCreate(false); load(); }} />}
-      {edit && <UserForm user={edit} close={() => setEdit(null)} done={() => { setEdit(null); load(); }} />}
+      {showCreate && <UserForm roleFilter={roleFilter} close={() => setShowCreate(false)} done={() => { setShowCreate(false); load(); }} />}
+      {edit && <UserForm roleFilter={roleFilter} user={edit} close={() => setEdit(null)} done={() => { setEdit(null); load(); }} />}
     </div>
   );
 }
 
-function UserForm({ user, close, done }: { user?: User; close: () => void; done: () => void }) {
+function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?: string; close: () => void; done: () => void }) {
   const [acc, setAcc] = useState(user?.account || '');
   const [pw, setPw] = useState('');
   const [dn, setDn] = useState(user?.display_name || '');
-  const [role, setRole] = useState(user?.role || 'user');
+  // 角色默认值：roleFilter 锁定时使用 roleFilter，否则沿用 user 角色
+  const defaultRole = roleFilter || user?.role || 'user';
+  const [role, setRole] = useState(defaultRole);
   const [pc, setPc] = useState(user?.plan_code || 'free');
   const [saving, setSaving] = useState(false);
   const isEdit = !!user;
+  // 当 roleFilter 存在时，角色字段不可更改
+  const roleLocked = !!roleFilter;
 
   const submit = async (e: React.FormEvent) => { e.preventDefault(); setSaving(true);
     try {
@@ -101,7 +127,7 @@ function UserForm({ user, close, done }: { user?: User; close: () => void; done:
   };
 
   return (
-    <Sheet title={isEdit ? `编辑: ${user!.account}` : '创建用户'} close={close}>
+    <Sheet title={isEdit ? `编辑: ${user!.account}` : (roleFilter === 'admin' ? '创建管理员' : '创建用户')} close={close}>
       <form onSubmit={submit}>
         {!isEdit && <>
           <Fld label="账号 *"><input value={acc} onChange={e => setAcc(e.target.value)} required style={finpS} /></Fld>
@@ -109,7 +135,19 @@ function UserForm({ user, close, done }: { user?: User; close: () => void; done:
         </>}
         <Fld label="展示名称"><input value={dn} onChange={e => setDn(e.target.value)} style={finpS} /></Fld>
         <Fld label="套餐编码"><input value={pc} onChange={e => setPc(e.target.value)} style={finpS} /></Fld>
-        <Fld label="角色"><select value={role} onChange={e => setRole(e.target.value)} style={finpS}><option value="user">user</option><option value="admin">admin</option></select></Fld>
+        <Fld label="角色">
+          {roleLocked ? (
+            // 角色锁定时显示只读文本
+            <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-700)' }}>
+              {role === 'admin' ? '管理员 (admin)' : '用户 (user)'}
+            </span>
+          ) : (
+            <select value={role} onChange={e => setRole(e.target.value)} style={finpS}>
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+          )}
+        </Fld>
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           <button type="submit" disabled={saving} style={priBtn}>{saving ? '保存中…' : '保存'}</button>
           <button type="button" onClick={close} style={secBtn}>取消</button>

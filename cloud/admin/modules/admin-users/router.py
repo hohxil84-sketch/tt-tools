@@ -68,13 +68,14 @@ async def admin_list_users(
     offset: int = Query(default=0, ge=0, description="偏移量"),
     status: str | None = Query(default=None, description="按状态筛选"),
     search: str | None = Query(default=None, description="按账号或名称搜索"),
+    role: str | None = Query(default=None, description="按角色筛选（admin / user）"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("users.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询用户列表。
 
-    支持分页、状态筛选和账号/名称模糊搜索。需要管理员权限。
+    支持分页、状态筛选、角色筛选和账号/名称模糊搜索。需要 users.read 权限。
 
     对齐 admin-users.yaml GET /admin/users。
     """
@@ -85,6 +86,7 @@ async def admin_list_users(
             offset=offset,
             status=status,
             search=search,
+            role=role,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:

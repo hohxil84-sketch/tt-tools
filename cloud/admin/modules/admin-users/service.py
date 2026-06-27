@@ -55,8 +55,9 @@ async def list_users(
     offset: int = 0,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    role: Optional[str] = None,
 ) -> UserListData:
-    """查询用户列表，支持分页、状态筛选和账号/名称模糊搜索。
+    """查询用户列表，支持分页、状态筛选、角色筛选和账号/名称模糊搜索。
 
     Args:
         db: 数据库异步会话
@@ -64,10 +65,13 @@ async def list_users(
         offset: 偏移量
         status: 按状态筛选（active / blocked / deleted）
         search: 按账号或展示名称模糊搜索
+        role: 按角色筛选（admin / user）
 
     Returns:
         UserListData 用户列表及分页信息
     """
+    # 角色值校验
+    VALID_ROLES = {"admin", "user"}
     # 参数规范化
     limit = max(1, min(limit, MAX_LIMIT))
     offset = max(0, offset)
@@ -76,6 +80,16 @@ async def list_users(
     query = select(User).options(
         # 使用 load_only 只加载需要的列，排除 password_hash
     )
+
+    # 角色筛选
+    if role is not None:
+        if role not in VALID_ROLES:
+            raise AppError(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=f"无效的用户角色：{role}，允许值：{', '.join(sorted(VALID_ROLES))}",
+                status_code=400,
+            )
+        query = query.where(User.role == role)
 
     # 状态筛选
     if status is not None:
@@ -97,6 +111,8 @@ async def list_users(
 
     # 查询总数
     count_query = select(func.count()).select_from(User)
+    if role is not None:
+        count_query = count_query.where(User.role == role)
     if status is not None:
         count_query = count_query.where(User.status == status)
     if search and search.strip():

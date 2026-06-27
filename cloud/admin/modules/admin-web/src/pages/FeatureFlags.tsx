@@ -1,5 +1,6 @@
 /**
- * 功能开关管理 — 可视化开关界面，替代原始 JSON 编辑。
+ * 功能开关管理 — 可视化开关界面。
+ * 所有功能码从后端 feature_codes 表动态加载，无需前端硬编码。
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
@@ -10,11 +11,15 @@ interface Feat {
   enabled_features_json: Record<string, unknown>; plan_status: string;
 }
 
+interface FeatureCode {
+  id: string; code: string; name: string; category: string; is_active: boolean;
+}
+
 /** 将功能值解析为统一结构 */
 interface FeatureEntry {
   key: string;
   enabled: boolean;
-  dailyLimit: number | null;   // 仅 object 类型时有值
+  dailyLimit: number | null;
 }
 
 function parseFeatures(json: Record<string, unknown>): FeatureEntry[] {
@@ -44,28 +49,26 @@ function featuresToJson(entries: FeatureEntry[]): Record<string, unknown> {
   return result;
 }
 
-/** 已知功能码的中文名 */
-const FEATURE_LABELS: Record<string, string> = {
-  ai_copy_cloud: 'AI 文案生成',
-  ai_render_cloud: 'AI 效果图',
-  ai_image_tools_cloud: 'AI 高级图片',  // 已弃用，使用下方独立子功能
-  upscale_image_cloud: 'AI 高清修复',
-  vectorize_image_cloud: 'AI 转矢量',
-  ai_edit_image_cloud: 'AI 改图',
-  remove_bg_cloud: 'AI 高级抠图',
-  ocr_cloud: 'AI 高级 OCR',
-  resize_image_local_paid: '本地图片处理',
-  priority_queue: '优先队列',
-  reseller_panel: '经销商面板',
-};
-
-/** 所有可选功能码（下拉框用） */
-const ALL_FEATURE_CODES = Object.keys(FEATURE_LABELS);
-
 export default function FeatureFlags() {
   const [items, setItems] = useState<Feat[]>([]);
   const [pc, setPc] = useState(''); const [err, setErr] = useState('');
   const [edit, setEdit] = useState<Feat | null>(null);
+
+  // 从后端动态加载全部功能码
+  const [allFeatureCodes, setAllFeatureCodes] = useState<FeatureCode[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiRequest<{ items: FeatureCode[] }>('/admin/feature-codes/list', { params: { limit: 200 } });
+        setAllFeatureCodes(data.items);
+      } catch { /* 加载失败时保持为空 */ }
+    })();
+  }, []);
+
+  // 构建功能码中文名映射
+  const labelMap = new Map<string, string>();
+  for (const fc of allFeatureCodes) { labelMap.set(fc.code, fc.name); }
 
   const load = useCallback(async () => {
     setErr('');
@@ -111,7 +114,7 @@ export default function FeatureFlags() {
                   color: f.enabled ? '#34c759' : 'var(--gray-400)',
                   border: `1px solid ${f.enabled ? 'rgba(52,199,89,0.25)' : 'var(--gray-200)'}`,
                 }}>
-                  {FEATURE_LABELS[f.key] || f.key}
+                  {labelMap.get(f.key) || f.key}
                   {f.dailyLimit !== null && ` (${f.dailyLimit}/天)`}
                 </span>
               ))}
@@ -123,21 +126,27 @@ export default function FeatureFlags() {
         ))}
         {items.length === 0 && <div style={{ color: 'var(--gray-400)', fontSize: 13 }}>暂无配置</div>}
       </div>
-      {edit && <EditModal item={edit} close={() => setEdit(null)} done={() => { setEdit(null); load(); }} />}
+      {edit && <EditModal item={edit} allFeatureCodes={allFeatureCodes} labelMap={labelMap} close={() => setEdit(null)} done={() => { setEdit(null); load(); }} />}
     </div>
   );
 }
 
 /** ==================== 编辑弹窗：可视化开关 ==================== */
 
-function EditModal({ item, close, done }: { item: Feat; close: () => void; done: () => void }) {
+function EditModal({ item, allFeatureCodes, labelMap, close, done }: {
+  item: Feat;
+  allFeatureCodes: FeatureCode[];
+  labelMap: Map<string, string>;
+  close: () => void;
+  done: () => void;
+}) {
   const [entries, setEntries] = useState<FeatureEntry[]>(() => parseFeatures(item.enabled_features_json));
   const [saving, setSaving] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState('');
 
-  // 计算未被添加的可选功能码
+  // 计算未被添加的可选功能码（从数据库动态列表）
   const addedKeys = new Set(entries.map(e => e.key));
-  const availableFeatures = ALL_FEATURE_CODES.filter(code => !addedKeys.has(code));
+  const availableFeatures = allFeatureCodes.filter(fc => !addedKeys.has(fc.code));
 
   const toggle = (idx: number) => {
     setEntries(prev => prev.map((e, i) => i === idx ? { ...e, enabled: !e.enabled } : e));
@@ -192,7 +201,7 @@ function EditModal({ item, close, done }: { item: Feat; close: () => void; done:
           }}>
             <div style={{ flex: 1 }}>
               <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--gray-800)' }}>
-                {FEATURE_LABELS[feat.key] || feat.key}
+                {labelMap.get(feat.key) || feat.key}
               </span>
               <code style={{ display: 'block', fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>
                 {feat.key}
@@ -250,7 +259,7 @@ function EditModal({ item, close, done }: { item: Feat; close: () => void; done:
         ))}
       </div>
 
-      {/* 新增功能码 — 下拉框选择 */}
+      {/* 新增功能码 — 下拉框（来自数据库） */}
       <div style={{
         display: 'flex', gap: 8, padding: '10px 0', marginBottom: 20,
         borderTop: '1px solid var(--gray-200)', alignItems: 'center',
@@ -261,8 +270,8 @@ function EditModal({ item, close, done }: { item: Feat; close: () => void; done:
           style={{ flex: 1, padding: '7px 12px', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-sm)', fontSize: 12, background: 'var(--white)' }}
         >
           <option value="">-- 选择要添加的功能 --</option>
-          {availableFeatures.map(code => (
-            <option key={code} value={code}>{FEATURE_LABELS[code]} ({code})</option>
+          {availableFeatures.map(fc => (
+            <option key={fc.code} value={fc.code}>{fc.name} ({fc.code})</option>
           ))}
           {availableFeatures.length === 0 && (
             <option value="" disabled>所有功能已添加</option>

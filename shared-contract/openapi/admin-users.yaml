@@ -55,6 +55,12 @@ paths:
           description: 按账号或展示名称模糊搜索
           schema:
             type: string
+        - name: role
+          in: query
+          description: 按角色筛选（admin / user），不传则返回全部
+          schema:
+            type: string
+            enum: [admin, user]
       responses:
         "200":
           description: 用户列表
