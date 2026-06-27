@@ -46,6 +46,7 @@ from schemas import (
 from service import (
     list_plans,
     get_plan_detail,
+    list_plan_options,
     create_plan,
     update_plan,
     update_plan_status,
@@ -84,6 +85,35 @@ async def admin_list_plans(
     """
     try:
         data = await list_plans(db=db)
+        return success_response(data.model_dump(mode="json"), request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(
+                code=e.code,
+                message=e.message,
+                request_id=request_id,
+                details=e.details,
+            ),
+            status_code=e.status_code,
+        )
+
+
+@router.get("/admin/plans/options")
+async def admin_list_plan_options(
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """查询套餐选项列表。
+
+    返回 active 套餐的 {id, name} 精简列表，供前端下拉框使用。
+    需要管理员权限。
+    注意：此路由必须在 /admin/plans/{plan_id} 之前注册，否则 "options" 会被当作 plan_id 参数匹配。
+
+    对齐 admin-billing.yaml GET /admin/plans/options。
+    """
+    try:
+        data = await list_plan_options(db=db)
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
         return JSONResponse(
@@ -141,7 +171,6 @@ async def admin_create_plan(
     try:
         data = await create_plan(
             db=db,
-            code=body.code,
             name=body.name,
             monthly_grant=body.monthly_grant,
             enabled_features_json=body.enabled_features_json,
@@ -382,14 +411,15 @@ async def admin_list_credit_accounts(
     limit: int = Query(default=20, ge=1, le=100, description="每页条数"),
     offset: int = Query(default=0, ge=0, description="偏移量"),
     status: str | None = Query(default=None, description="按账户状态筛选"),
-    plan_code: str | None = Query(default=None, description="按套餐编码筛选"),
+    plan_id: str | None = Query(default=None, description="按套餐 ID 筛选"),
+    user_id: str | None = Query(default=None, description="按用户 ID 筛选"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("credits.read")),
     db: AsyncSession = Depends(get_db),
 ):
     """查询额度账户列表。
 
-    管理员可查看所有用户的额度账户，支持状态和套餐编码筛选。需要管理员权限。
+    管理员可查看所有用户的额度账户，支持状态和用户 ID 筛选。需要管理员权限。
 
     对齐 admin-billing.yaml GET /admin/credits/accounts。
     """
@@ -399,7 +429,8 @@ async def admin_list_credit_accounts(
             limit=limit,
             offset=offset,
             status=status,
-            plan_code=plan_code,
+            plan_id=plan_id,
+            user_id=user_id,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
