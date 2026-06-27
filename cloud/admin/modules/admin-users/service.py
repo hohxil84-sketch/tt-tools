@@ -14,13 +14,15 @@ admin-users 业务逻辑层。
 """
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloud.shared import AppError, ErrorCode
+from cloud.shared.database import Base
 from models import UserAdmin as User, DeviceAdmin as Device
 from schemas import (
     UserItem,
@@ -148,6 +150,281 @@ async def _get_plan_info_map(
             return {row[0]: (row[0], row[1]) for row in rows}  # plan_id → (plan_id, plan_name)
 
     return {}
+
+
+# ============================================================
+# 批量聚合查询辅助函数（用于用户列表增强字段）
+# ============================================================
+
+
+async def _batch_credit_balances(
+    db: AsyncSession, user_ids: list[str]
+) -> dict[str, int]:
+    """批量查询用户额度余额（credit_accounts 表，与 users 1:1）。"""
+    if not user_ids:
+        return {}
+    try:
+        ca = Base.metadata.tables["credit_accounts"]
+        result = await db.execute(
+            select(ca.c.user_id, ca.c.balance).where(ca.c.user_id.in_(user_ids))
+        )
+        return {row[0]: row[1] for row in result.all()}
+    except Exception:
+        return {}
+
+
+async def _batch_device_counts(
+    db: AsyncSession, user_ids: list[str]
+) -> dict[str, int]:
+    """批量查询用户绑定设备数（devices 表 COUNT）。"""
+    if not user_ids:
+        return {}
+    try:
+        dev = Base.metadata.tables["devices"]
+        result = await db.execute(
+            select(dev.c.user_id, func.count().label("cnt"))
+            .where(dev.c.user_id.in_(user_ids))
+            .group_by(dev.c.user_id)
+        )
+        return {row[0]: row[1] for row in result.all()}
+    except Exception:
+        return {}
+
+
+async def _batch_last_logins(
+    db: AsyncSession, user_ids: list[str]
+) -> dict[str, datetime]:
+    """批量查询用户最后登录时间（auth_sessions 表 MAX(created_at)）。"""
+    if not user_ids:
+        return {}
+    try:
+        sess = Base.metadata.tables["auth_sessions"]
+        result = await db.execute(
+            select(sess.c.user_id, func.max(sess.c.created_at).label("last_login"))
+            .where(sess.c.user_id.in_(user_ids))
+            .group_by(sess.c.user_id)
+        )
+        return {row[0]: row[1] for row in result.all()}
+    except Exception:
+        return {}
+
+
+async def _batch_role_names(
+    db: AsyncSession, user_ids: list[str]
+) -> dict[str, str]:
+    """批量查询用户 RBAC 角色名称（user_roles JOIN roles，逗号拼接）。"""
+    if not user_ids:
+        return {}
+    try:
+        ur = Base.metadata.tables["user_roles"]
+        r = Base.metadata.tables["roles"]
+        result = await db.execute(
+            select(ur.c.user_id, func.group_concat(r.c.name, ', ').label("role_names"))
+            .join(r, r.c.id == ur.c.role_id)
+            .where(ur.c.user_id.in_(user_ids))
+            .group_by(ur.c.user_id)
+        )
+        return {row[0]: row[1] for row in result.all()}
+    except Exception:
+        return {}
+
+
+async def _batch_monthly_usages(
+    db: AsyncSession, user_ids: list[str]
+) -> dict[str, int]:
+    """批量查询用户本月消费额度（credit_ledger 表，当月 consume 类型 SUM(ABS(amount))）。"""
+    if not user_ids:
+        return {}
+    try:
+        cl = Base.metadata.tables["credit_ledger"]
+        # 当月第一天 00:00:00 UTC
+        month_start = datetime.now(timezone.utc).replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        result = await db.execute(
+            select(
+                cl.c.user_id,
+                func.coalesce(func.sum(func.abs(cl.c.amount)), 0).label("total"),
+            )
+            .where(cl.c.user_id.in_(user_ids))
+            .where(cl.c.change_type == "consume")
+            .where(cl.c.created_at >= month_start)
+            .group_by(cl.c.user_id)
+        )
+        return {row[0]: row[1] for row in result.all()}
+    except Exception:
+        return {}
+
+
+async def _batch_audit_counts(
+    db: AsyncSession, user_ids: list[str]
+) -> dict[str, int]:
+    """批量查询系统用户操作审计次数（admin_audit_logs 表 COUNT）。"""
+    if not user_ids:
+        return {}
+    try:
+        aal = Base.metadata.tables["admin_audit_logs"]
+        result = await db.execute(
+            select(aal.c.admin_user_id, func.count().label("cnt"))
+            .where(aal.c.admin_user_id.in_(user_ids))
+            .group_by(aal.c.admin_user_id)
+        )
+        return {row[0]: row[1] for row in result.all()}
+    except Exception:
+        return {}
+
+
+async def _batch_period_ends(
+    db: AsyncSession, user_ids: list[str]
+) -> dict[str, datetime]:
+    """批量查询用户套餐周期结束时间（credit_accounts 表 period_end）。"""
+    if not user_ids:
+        return {}
+    try:
+        ca = Base.metadata.tables["credit_accounts"]
+        result = await db.execute(
+            select(ca.c.user_id, ca.c.period_end).where(ca.c.user_id.in_(user_ids))
+        )
+        return {row[0]: row[1] for row in result.all()}
+    except Exception:
+        return {}
+
+
+async def _sync_credit_account(
+    db: AsyncSession, user_id: str, plan_id: str
+) -> None:
+    """同步额度账户：用户分配套餐后，确保 credit_accounts 行存在且 plan_id / monthly_grant 一致。
+
+    若账户不存在则创建并赠送初始额度（= 套餐 monthly_grant）；
+    若已存在且 plan_id 有变化则更新 plan_id 和 monthly_grant。
+    所有异常均静默吞掉，不影响用户 CRUD 主流程。
+    """
+    # 1) 表存在性检查
+    try:
+        ca = Base.metadata.tables["credit_accounts"]
+        cl = Base.metadata.tables["credit_ledger"]
+        pl = Base.metadata.tables["plans"]
+    except KeyError:
+        return  # 相关表未注册，跳过
+
+    # 2) 所有数据库操作包裹在 broad except 中，任何失败都不影响用户 CRUD
+    try:
+        # 查询套餐 monthly_grant
+        plan_monthly_grant = 0
+        if plan_id:
+            plan_result = await db.execute(
+                select(pl.c.monthly_grant).where(pl.c.id == plan_id)
+            )
+            plan_row = plan_result.fetchone()
+            if plan_row:
+                plan_monthly_grant = plan_row[0] or 0
+
+        # 检查额度账户是否存在
+        result = await db.execute(
+            select(ca).where(ca.c.user_id == user_id)
+        )
+        existing = result.fetchone()
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        if existing is None:
+            # === 创建新额度账户 ===
+            account_id = str(uuid.uuid4())
+            # 计费周期：从分配日起算，满一个月（周年计费）
+            period_start = now
+            # 到期时间：下个月同一天，处理月末溢出（如 1/31 → 2/28）
+            import calendar as _cal
+            if now.month == 12:
+                next_year, next_month = now.year + 1, 1
+            else:
+                next_year, next_month = now.year, now.month + 1
+            last_day = _cal.monthrange(next_year, next_month)[1]
+            period_end = now.replace(
+                year=next_year, month=next_month,
+                day=min(now.day, last_day),
+                hour=0, minute=0, second=0, microsecond=0,
+            )
+
+            await db.execute(
+                ca.insert().values(
+                    id=account_id,
+                    user_id=user_id,
+                    plan_id=plan_id or None,
+                    balance=plan_monthly_grant,
+                    monthly_grant=plan_monthly_grant,
+                    period_start=period_start,
+                    period_end=period_end,
+                    status="active",
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            # 记录初始赠送流水
+            if plan_monthly_grant > 0:
+                await db.execute(
+                    cl.insert().values(
+                        id=str(uuid.uuid4()),
+                        user_id=user_id,
+                        account_id=account_id,
+                        change_type="grant",
+                        amount=plan_monthly_grant,
+                        balance_after=plan_monthly_grant,
+                        source_type="system",
+                        description="管理员分配套餐，初始赠送额度",
+                        created_at=now,
+                    )
+                )
+            await db.flush()
+        else:
+            # === 已存在：同步 plan_id / monthly_grant，若套餐变更则重置余额和周期 ===
+            old_plan_id = getattr(existing, "plan_id", None)
+            if old_plan_id != plan_id:
+                # 套餐变更：余额重置为新套餐 monthly_grant，周期从今天起算
+                import calendar as _cal2
+                new_period_start = now
+                if now.month == 12:
+                    ny, nm = now.year + 1, 1
+                else:
+                    ny, nm = now.year, now.month + 1
+                ld = _cal2.monthrange(ny, nm)[1]
+                new_period_end = now.replace(
+                    year=ny, month=nm,
+                    day=min(now.day, ld),
+                    hour=0, minute=0, second=0, microsecond=0,
+                )
+                old_balance = getattr(existing, "balance", 0)
+                await db.execute(
+                    ca.update()
+                    .where(ca.c.user_id == user_id)
+                    .values(
+                        plan_id=plan_id or None,
+                        monthly_grant=plan_monthly_grant,
+                        balance=plan_monthly_grant,
+                        period_start=new_period_start,
+                        period_end=new_period_end,
+                        updated_at=now,
+                    )
+                )
+                # 记录套餐变更流水
+                await db.execute(
+                    cl.insert().values(
+                        id=str(uuid.uuid4()),
+                        user_id=user_id,
+                        account_id=getattr(existing, "id", ""),
+                        change_type="adjust",
+                        amount=plan_monthly_grant - old_balance,
+                        balance_after=plan_monthly_grant,
+                        source_type="system",
+                        description=f"更换套餐，余额重置为 {plan_monthly_grant}（原余额 {old_balance}）",
+                        created_at=now,
+                    )
+                )
+                await db.flush()
+    except Exception:
+        # 额度账户同步失败不应阻塞用户创建/编辑主流程
+        pass
+
+
 # 允许的设备状态值
 VALID_DEVICE_STATUSES = {"active", "blocked", "removed"}
 # 分页最大条数
@@ -242,6 +519,16 @@ async def list_users(
     plan_ids = list({row.plan_id for row in rows if row.plan_id})
     plan_map = await _get_plan_info_map(db, plan_ids=plan_ids) if plan_ids else {}
 
+    # === 批量聚合查询（增强字段） ===
+    user_ids = [row.id for row in rows]
+    credit_map = await _batch_credit_balances(db, user_ids)
+    device_map = await _batch_device_counts(db, user_ids)
+    login_map = await _batch_last_logins(db, user_ids)
+    role_map = await _batch_role_names(db, user_ids)
+    usage_map = await _batch_monthly_usages(db, user_ids)
+    audit_map = await _batch_audit_counts(db, user_ids)
+    period_end_map = await _batch_period_ends(db, user_ids)
+
     # 构建响应 DTO
     items = []
     for row in rows:
@@ -258,6 +545,15 @@ async def list_users(
             plan_id=pid or row.plan_id,
             plan_name=pname,
             created_at=row.created_at,
+            # === 新增聚合字段 ===
+            updated_at=row.updated_at if hasattr(row, 'updated_at') and row.updated_at else None,
+            last_login_at=login_map.get(row.id),
+            device_count=device_map.get(row.id, 0),
+            credit_balance=credit_map.get(row.id),
+            role_names=role_map.get(row.id),
+            monthly_usage=usage_map.get(row.id, 0),
+            audit_count=audit_map.get(row.id, 0),
+            period_end=period_end_map.get(row.id),
         ))
 
     return UserListData(items=items, total=total, limit=limit, offset=offset)
@@ -273,10 +569,19 @@ async def _build_user_detail(
     created_at: datetime,
     updated_at: datetime,
     plan_id: Optional[str] = None,
+    # === 新增聚合字段（可选，单用户查询时批量填充） ===
+    last_login_at: Optional[datetime] = None,
+    device_count: int = 0,
+    credit_balance: Optional[int] = None,
+    role_names: Optional[str] = None,
+    monthly_usage: int = 0,
+    audit_count: int = 0,
+    period_end: Optional[datetime] = None,
 ) -> UserDetail:
     """统一构建 UserDetail，自动查询 plan_name。
 
     按 plan_id 查 plans 表获取套餐名称。
+    聚合字段由调用方通过批量查询填充后传入。
     """
     pid, pname = None, None
     if plan_id:
@@ -294,6 +599,14 @@ async def _build_user_detail(
         plan_name=pname,
         created_at=created_at,
         updated_at=updated_at,
+        # === 新增聚合字段 ===
+        last_login_at=last_login_at,
+        device_count=device_count,
+        credit_balance=credit_balance,
+        role_names=role_names,
+        monthly_usage=monthly_usage,
+        audit_count=audit_count,
+        period_end=period_end,
     )
 
 
@@ -320,11 +633,28 @@ async def get_user_detail(db: AsyncSession, user_id: str) -> UserDetail:
             status_code=404,
         )
 
+    # === 单用户批量聚合查询 ===
+    uid_list = [user.id]
+    credit_map = await _batch_credit_balances(db, uid_list)
+    device_map = await _batch_device_counts(db, uid_list)
+    login_map = await _batch_last_logins(db, uid_list)
+    role_map = await _batch_role_names(db, uid_list)
+    usage_map = await _batch_monthly_usages(db, uid_list)
+    audit_map = await _batch_audit_counts(db, uid_list)
+    period_end_map = await _batch_period_ends(db, uid_list)
+
     return await _build_user_detail(
         db, user.id, user.account, user.display_name,
         user.role, user.status,
         user.created_at, user.updated_at,
         plan_id=getattr(user, 'plan_id', None),
+        last_login_at=login_map.get(user.id),
+        device_count=device_map.get(user.id, 0),
+        credit_balance=credit_map.get(user.id),
+        role_names=role_map.get(user.id),
+        monthly_usage=usage_map.get(user.id, 0),
+        audit_count=audit_map.get(user.id, 0),
+        period_end=period_end_map.get(user.id),
     )
 
 
@@ -380,26 +710,55 @@ async def create_user(
     db: AsyncSession,
     account: str,
     password: str,
-    display_name: Optional[str] = None,
+    display_name: str,
     role: str = "user",
     plan_id: Optional[str] = None,
+    role_ids: Optional[list[str]] = None,
 ) -> UserDetail:
     """创建新用户（管理员手动创建）。
+
+    创建规则：
+    - display_name 必填
+    - role=user 时必须选套餐（plan_id）
+    - role=admin 时必须分配 RBAC 角色（role_ids）
 
     Args:
         db: 数据库异步会话
         account: 登录账号
         password: 明文密码（将 bcrypt 哈希存储）
-        display_name: 展示名称（可选）
+        display_name: 展示名称（必填）
         role: 用户角色（默认 user）
-        plan_id: 套餐 ID（UUID）
+        plan_id: 套餐 ID（UUID），普通用户必选
+        role_ids: RBAC 角色 ID 列表，管理员必选
 
     Returns:
         UserDetail 创建的用户信息
 
     Raises:
-        AppError: 账号已存在时抛出 409
+        AppError: 账号已存在、校验失败等
     """
+    # === 校验 ===
+    if not display_name or not display_name.strip():
+        raise AppError(
+            code=ErrorCode.VALIDATION_ERROR,
+            message="展示名称不能为空",
+            status_code=422,
+        )
+
+    if role == "user" and not plan_id:
+        raise AppError(
+            code=ErrorCode.VALIDATION_ERROR,
+            message="普通用户必须选择套餐",
+            status_code=422,
+        )
+
+    if role == "admin" and (not role_ids or len(role_ids) == 0):
+        raise AppError(
+            code=ErrorCode.VALIDATION_ERROR,
+            message="管理员必须分配至少一个角色",
+            status_code=422,
+        )
+
     # 检查账号是否已存在
     existing = await db.execute(select(User).where(User.account == account))
     if existing.scalar_one_or_none() is not None:
@@ -418,7 +777,7 @@ async def create_user(
     user = User(
         account=account,
         password_hash=password_hash,
-        display_name=display_name,
+        display_name=display_name.strip(),
         role=role,
         status="active",
         plan_id=plan_id,
@@ -428,12 +787,37 @@ async def create_user(
     db.add(user)
     await db.flush()
 
+    # 用户创建时若指定了套餐，同步创建额度账户并赠送初始额度
+    if plan_id:
+        await _sync_credit_account(db, user.id, plan_id)
+
+    # 创建管理员时分配 RBAC 角色
+    if role_ids:
+        await _assign_roles_to_user(db, user.id, role_ids)
+
     return await _build_user_detail(
         db, user.id, user.account, user.display_name,
         user.role, user.status,
         user.created_at, user.updated_at,
         plan_id=getattr(user, 'plan_id', None),
     )
+
+
+async def _assign_roles_to_user(
+    db: AsyncSession, user_id: str, role_ids: list[str]
+) -> None:
+    """内部函数：为用户分配 RBAC 角色。
+
+    使用 raw SQL 写入 user_roles 表，避免跨模块 ORM 冲突。
+    """
+    for rid in role_ids:
+        await db.execute(
+            text(
+                "INSERT INTO user_roles (user_id, role_id) "
+                "VALUES (:uid, :rid)"
+            ),
+            {"uid": user_id, "rid": rid},
+        )
 
 
 async def update_user(
@@ -472,6 +856,8 @@ async def update_user(
         user.display_name = display_name
     if plan_id is not None:
         user.plan_id = plan_id
+        # 套餐变更时同步额度账户（创建或更新 plan_id / monthly_grant）
+        await _sync_credit_account(db, user_id, plan_id)
     if role is not None:
         user.role = role
 
@@ -510,15 +896,18 @@ async def delete_user(db: AsyncSession, user_id: str) -> dict:
             status_code=404,
         )
 
+    # 按外键依赖顺序清理所有关联数据（raw SQL 避免跨模块 ORM 冲突）
+    await db.execute(text("DELETE FROM credit_ledger WHERE user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM usage_events WHERE user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM provider_call_log WHERE user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM ai_tasks WHERE user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM orders WHERE user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM admin_audit_logs WHERE admin_user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM user_roles WHERE user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM auth_sessions WHERE user_id = :uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM credit_accounts WHERE user_id = :uid"), {"uid": user_id})
     # 删除关联设备
-    await db.execute(
-        select(Device).where(Device.user_id == user_id)
-    )
-    devices_result = await db.execute(
-        select(Device).where(Device.user_id == user_id)
-    )
-    for device in devices_result.scalars().all():
-        await db.delete(device)
+    await db.execute(text("DELETE FROM devices WHERE user_id = :uid"), {"uid": user_id})
 
     # 删除用户
     await db.delete(user)

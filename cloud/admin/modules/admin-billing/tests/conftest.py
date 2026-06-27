@@ -319,6 +319,27 @@ async def _seed_test_data(session_factory) -> None:
         return datetime.now(timezone.utc).replace(tzinfo=None)
 
     async with session_factory() as session:
+        # === 功能码数据（feature_codes 表） ===
+        from sqlalchemy import text as _txt
+        _feature_codes = [
+            ("fc-resize", "resize_image_local_paid", "本地图片缩放", "local_paid"),
+            ("fc-ai-copy", "ai_copy_cloud", "AI 文案生成", "cloud_ai"),
+            ("fc-ai-render", "ai_render_cloud", "AI 效果图", "cloud_ai"),
+            ("fc-upscale", "upscale_image_cloud", "AI 高清修复", "cloud_ai"),
+            ("fc-remove-bg", "remove_bg_cloud", "AI 抠图", "cloud_ai"),
+            ("fc-ocr", "ocr_cloud", "AI OCR", "cloud_ai"),
+            ("fc-ai-edit", "ai_edit_image_cloud", "AI 改图", "cloud_ai"),
+            ("fc-vectorize", "vectorize_image_cloud", "AI 矢量化", "cloud_ai"),
+        ]
+        for fc_id, fc_code, fc_name, fc_cat in _feature_codes:
+            await session.execute(
+                _txt(
+                    "INSERT INTO feature_codes (id, code, name, category, is_active, created_at) "
+                    "VALUES (:id, :code, :name, :cat, true, :now)"
+                ),
+                {"id": fc_id, "code": fc_code, "name": fc_name, "cat": fc_cat, "now": _now()},
+            )
+
         # === 套餐数据 ===
         plan_free = Plan(
             id="plan-free",

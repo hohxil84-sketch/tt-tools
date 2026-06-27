@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, LBtn, Sheet, Modal, Fld, priBtn, secBtn, finpS } from '../components/shared';
+import { Card, Tbl, ActBtn, Sheet, Modal, Fld, priBtn, secBtn, inpS, selS, finpS, showToast } from '../components/shared';
 
 interface Plan { id: string; name: string; monthly_grant: number; status: string; created_at: string; enabled_features_json?: Record<string, unknown>; updated_at?: string; }
 interface FeatureCode { id: string; code: string; name: string; category: string; is_active: boolean; description?: string | null; }
@@ -19,6 +19,7 @@ const CAT: Record<string, string> = { local_free: '本地免费', local_paid: '�
 export default function Plans() {
   const [items, setItems] = useState<Plan[]>([]);
   const [err, setErr] = useState('');
+  const [search, setSearch] = useState(''); const [sf, setSf] = useState('');
   const [edit, setEdit] = useState<Plan | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [ct, setCt] = useState<Plan | null>(null);
@@ -26,19 +27,24 @@ export default function Plans() {
 
   const load = useCallback(async () => {
     setErr('');
-    try { const d = await apiRequest<{ items: Plan[] }>('/admin/plans'); setItems(d.items); }
+    try { const d = await apiRequest<{ items: Plan[] }>('/admin/plans', { params: { search: search || undefined, status: sf || undefined } }); setItems(d.items); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, []);
+  }, [search, sf]);
   useEffect(() => { load(); }, [load]);
 
-  const toggle = async (id: string, ns: string) => { await apiRequest(`/admin/plans/${id}/status`, { method: 'PATCH', body: { status: ns } }); setCt(null); load(); };
-  const del = async () => { if (!cd) return; await apiRequest(`/admin/plans/${cd.id}`, { method: 'DELETE' }); setCd(null); load(); };
+  const toggle = async (id: string, ns: string) => { try { await apiRequest(`/admin/plans/${id}/status`, { method: 'PATCH', body: { status: ns } }); showToast('操作成功', 'success'); setCt(null); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '操作失败', 'error'); } };
+  const del = async () => { if (!cd) return; try { await apiRequest(`/admin/plans/${cd.id}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setCd(null); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); } };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>套餐管理</h2>
         <button onClick={() => setShowNew(true)} style={priBtn}>+ 新建套餐</button>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        <input placeholder="搜索套餐名称..." value={search} onChange={e => { setSearch(e.target.value); }} style={inpS} />
+        <select value={sf} onChange={e => { setSf(e.target.value); }} style={selS}><option value="">全部</option><option value="active">启用</option><option value="disabled">停用</option></select>
+        <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
       <Card><Tbl heads={['名称', '月赠额度', '状态', '创建时间', '']}>
@@ -49,9 +55,9 @@ export default function Plans() {
             <td><span style={{ fontSize: 12, fontWeight: 500, color: p.status === 'active' ? '#34c759' : 'var(--gray-500)' }}>{p.status === 'active' ? '启用' : '停用'}</span></td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(p.created_at).toLocaleString('zh-CN')}</td>
             <td style={{ textAlign: 'right' }}>
-              <LBtn onClick={() => setEdit(p)}>编辑</LBtn>
-              <LBtn c={p.status === 'active' ? '#ff9500' : '#34c759'} onClick={() => setCt(p)}>{p.status === 'active' ? '停用' : '启用'}</LBtn>
-              <LBtn c="#ff3b30" onClick={() => setCd(p)}>删除</LBtn>
+              <ActBtn kind="edit" onClick={() => setEdit(p)}>编辑</ActBtn>
+              <ActBtn kind={p.status === 'active' ? 'block' : 'unblock'} onClick={() => setCt(p)}>{p.status === 'active' ? '停用' : '启用'}</ActBtn>
+              <ActBtn kind="delete" onClick={() => setCd(p)}>删除</ActBtn>
             </td>
           </tr>
         ))}
@@ -75,6 +81,7 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   // 全部可用功能码列表（从后端拉取）
   const [allFeatures, setAllFeatures] = useState<FeatureCode[]>([]);
   const [featuresLoading, setFeaturesLoading] = useState(true);
+  const [featuresError, setFeaturesError] = useState('');
 
   // 功能开关状态
   const [toggles, setToggles] = useState<FeatureToggle[]>([]);
@@ -86,7 +93,8 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
       try {
         const data = await apiRequest<{ items: FeatureCode[] }>('/admin/feature-codes/list', { params: { limit: 200 } });
         setAllFeatures(data.items || []);
-      } catch {
+      } catch (e: unknown) {
+        setFeaturesError(e instanceof Error ? e.message : '加载功能码失败');
         setAllFeatures([]);
       }
       finally { setFeaturesLoading(false); }
@@ -160,8 +168,8 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
       } else {
         await apiRequest('/admin/plans', { method: 'POST', body: { name, monthly_grant: mg, enabled_features_json: featuresJson } });
       }
-      done();
-    } catch (e: unknown) { alert(e instanceof Error ? e.message : '保存失败'); }
+      showToast('保存成功', 'success'); done();
+    } catch (e: unknown) { showToast(e instanceof Error ? e.message : '保存失败', 'error'); }
     finally { setSaving(false); }
   };
 
@@ -184,6 +192,7 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
         <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--gray-600)', marginBottom: 8 }}>
           功能开关
         </label>
+        {featuresError && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{featuresError}</div>}
         {featuresLoading ? (
           <div style={{ fontSize: 12, color: 'var(--gray-400)', padding: '20px 0', textAlign: 'center' }}>加载功能码列表…</div>
         ) : toggles.length === 0 ? (

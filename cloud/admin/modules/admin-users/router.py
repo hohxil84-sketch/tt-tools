@@ -123,6 +123,7 @@ async def admin_create_user(
             display_name=body.display_name,
             role=body.role,
             plan_id=body.plan_id,
+            role_ids=body.role_ids,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:

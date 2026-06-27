@@ -2,6 +2,7 @@
 admin-roles 业务逻辑层。
 """
 from __future__ import annotations
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,9 +34,17 @@ async def list_roles(db: AsyncSession, limit=20, offset=0) -> RoleListData:
 async def create_role(db: AsyncSession, name: str, code: str, description=None) -> RoleDetail:
     ex = (await db.execute(select(Role).where(Role.code == code))).scalar_one_or_none()
     if ex: raise AppError(code="ROLE_EXISTS", message=f"角色代码 '{code}' 已存在", status_code=409)
-    r = Role(name=name, code=code, description=description)
+    r = Role(
+        name=name, code=code, description=description,
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+    )
     db.add(r); await db.flush()
-    return _to_detail(r)
+    # 新角色无权限，直接构造返回值避免 _to_detail 触发 permissions 懒加载
+    return RoleDetail(
+        id=r.id, name=r.name, code=r.code,
+        description=r.description, is_system=r.is_system,
+        created_at=_fmt_ts(r.created_at), permissions=[],
+    )
 
 
 async def get_role_detail(db: AsyncSession, role_id: str) -> RoleDetail:
@@ -57,6 +66,9 @@ async def delete_role(db: AsyncSession, role_id: str) -> dict:
     r = (await db.execute(select(Role).where(Role.id == role_id))).scalar_one_or_none()
     if not r: raise AppError(code="ROLE_NOT_FOUND", message="角色不存在", status_code=404)
     if r.is_system: raise AppError(code="ROLE_IS_SYSTEM", message="系统内置角色不可删除", status_code=400)
+    # 级联清理关联数据
+    await db.execute(text("DELETE FROM role_permissions WHERE role_id = :rid"), {"rid": role_id})
+    await db.execute(text("DELETE FROM user_roles WHERE role_id = :rid"), {"rid": role_id})
     await db.delete(r); await db.flush()
     return {"deleted": True}
 

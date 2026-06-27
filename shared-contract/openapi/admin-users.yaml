@@ -500,7 +500,7 @@ components:
 
     UserItem:
       type: object
-      description: 用户列表项（摘要信息）
+      description: 用户列表项（摘要信息），含聚合展示字段
       properties:
         id:
           type: string
@@ -519,24 +519,61 @@ components:
         status:
           type: string
           description: 用户状态（active / blocked / deleted）
-        plan_code:
+        plan_id:
           type: string
-          description: 当前套餐编码
+          format: uuid
+          nullable: true
+          description: 当前套餐 ID（UUID 外键 → plans.id）
+        plan_name:
+          type: string
+          nullable: true
+          description: 当前套餐中文名（从 plans 表关联查询）
         created_at:
           type: string
           format: date-time
           description: 注册时间
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最近更新时间
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最后登录时间（来自 auth_sessions 表）
+        device_count:
+          type: integer
+          description: 绑定设备数（来自 devices 表）
+        credit_balance:
+          type: integer
+          nullable: true
+          description: 额度余额（来自 credit_accounts 表，仅普通用户有值）
+        role_names:
+          type: string
+          nullable: true
+          description: RBAC 角色名称，逗号分隔（来自 user_roles/roles 表，仅系统用户有值）
+        monthly_usage:
+          type: integer
+          description: 本月消费额度（来自 credit_ledger 表，仅普通用户有值）
+        audit_count:
+          type: integer
+          description: 操作审计次数（来自 admin_audit_logs 表，仅系统用户有值）
+        period_end:
+          type: string
+          format: date-time
+          nullable: true
+          description: 套餐到期时间（来自 credit_accounts 表，仅普通用户有值）
       required:
         - id
         - account
         - role
         - status
-        - plan_code
         - created_at
 
     UserDetail:
       type: object
-      description: 用户详细信息
+      description: 用户详细信息，含聚合展示字段
       properties:
         id:
           type: string
@@ -555,9 +592,15 @@ components:
         status:
           type: string
           description: 用户状态
-        plan_code:
+        plan_id:
           type: string
-          description: 当前套餐编码
+          format: uuid
+          nullable: true
+          description: 当前套餐 ID（UUID 外键 → plans.id）
+        plan_name:
+          type: string
+          nullable: true
+          description: 当前套餐中文名（从 plans 表关联查询）
         created_at:
           type: string
           format: date-time
@@ -565,15 +608,41 @@ components:
         updated_at:
           type: string
           format: date-time
+          nullable: true
           description: 最近更新时间
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 最后登录时间（来自 auth_sessions 表）
+        device_count:
+          type: integer
+          description: 绑定设备数（来自 devices 表）
+        credit_balance:
+          type: integer
+          nullable: true
+          description: 额度余额（来自 credit_accounts 表）
+        role_names:
+          type: string
+          nullable: true
+          description: RBAC 角色名称，逗号分隔（来自 user_roles/roles 表）
+        monthly_usage:
+          type: integer
+          description: 本月消费额度（来自 credit_ledger 表）
+        audit_count:
+          type: integer
+          description: 操作审计次数（来自 admin_audit_logs 表）
+        period_end:
+          type: string
+          format: date-time
+          nullable: true
+          description: 套餐到期时间（来自 credit_accounts 表）
       required:
         - id
         - account
         - role
         - status
-        - plan_code
         - created_at
-        - updated_at
 
     CreateUserRequest:
       type: object
@@ -587,20 +656,28 @@ components:
           description: 登录密码（明文，服务端 bcrypt 哈希存储）
         display_name:
           type: string
-          nullable: true
-          description: 展示名称
+          description: 展示名称（必填）
         role:
           type: string
           description: 用户角色（默认 user）
           enum: [user, admin]
           default: user
-        plan_code:
+        plan_id:
           type: string
-          description: 套餐编码（默认 free）
-          default: free
+          format: uuid
+          nullable: true
+          description: 套餐 ID（UUID 外键 → plans.id），普通用户（role=user）必选
+        role_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          nullable: true
+          description: RBAC 角色 ID 列表，管理员（role=admin）必选
       required:
         - account
         - password
+        - display_name
 
     UpdateUserRequest:
       type: object
@@ -610,9 +687,11 @@ components:
           type: string
           nullable: true
           description: 展示名称
-        plan_code:
+        plan_id:
           type: string
-          description: 套餐编码
+          format: uuid
+          nullable: true
+          description: 套餐 ID（UUID 外键 → plans.id）
         role:
           type: string
           description: 用户角色

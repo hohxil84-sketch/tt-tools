@@ -21,11 +21,11 @@
 | display_name | varchar(100) | nullable | 展示名称 |
 | role | varchar(50) | not null default `user` | 用户角色 |
 | status | varchar(50) | not null default `active` | active / blocked / deleted |
-| plan_code | varchar(50) | not null default `free` | 当前套餐 |
+| plan_id | uuid | fk plans.id, nullable | 当前套餐 ID（UUID 外键） |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |
 
-索引：unique `account`，index `status`，index `plan_code`
+索引：unique `account`，index `status`，index `plan_id`
 
 ## devices
 
@@ -62,7 +62,6 @@
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
 | id | uuid | pk | 套餐 ID |
-| code | varchar(50) | unique, not null | 套餐编码 |
 | name | varchar(100) | not null | 套餐名称 |
 | monthly_grant | integer | not null default 0 | 每周期赠送 AI 额度 |
 | enabled_features_json | jsonb | not null default `{}` | 功能开关 |
@@ -76,7 +75,7 @@
 |---|---|---|---|
 | id | uuid | pk | 账户 ID |
 | user_id | uuid | unique, fk users.id, not null | 用户 ID |
-| plan_code | varchar(50) | not null | 当前套餐 |
+| plan_id | uuid | fk plans.id, nullable | 当前套餐 ID（UUID 外键） |
 | balance | integer | not null default 0 | 当前 AI 额度 |
 | monthly_grant | integer | not null default 0 | 周期赠送额度 |
 | period_start | timestamptz | nullable | 周期开始 |
@@ -254,6 +253,7 @@
 | base_url | varchar(500) | nullable | API 基础 URL |
 | models_json | jsonb | nullable | 模型配置 JSON |
 | is_enabled | boolean | not null default true | 是否启用 |
+| priority | integer | not null default 0 | 优先级，数字越大越优先调用 |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |
 

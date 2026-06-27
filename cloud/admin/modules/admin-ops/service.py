@@ -673,6 +673,7 @@ async def get_feature_flags(
             plan_name=p.name,
             enabled_features_json=p.enabled_features_json or {},
             plan_status=p.status,
+            monthly_grant=p.monthly_grant,
         )
         for p in plans
     ]
@@ -713,6 +714,29 @@ async def update_feature_flags(
             message=f"套餐 {plan_id} 不存在",
             status_code=404,
         )
+
+    # 合并更新前校验传入的功能码是否全部存在且为 active
+    if _FeatureCode is not None and enabled_features_json:
+        incoming_codes = list(enabled_features_json.keys())
+        fc_result = await db.execute(
+            select(_FeatureCode.code, _FeatureCode.is_active).where(
+                _FeatureCode.code.in_(incoming_codes)
+            )
+        )
+        fc_rows = {row[0]: row[1] for row in fc_result.all()}
+        for code in incoming_codes:
+            if code not in fc_rows:
+                raise AppError(
+                    code="FEATURE_CODE_NOT_FOUND",
+                    message=f"功能码 '{code}' 不存在",
+                    status_code=400,
+                )
+            if not fc_rows[code]:
+                raise AppError(
+                    code="FEATURE_CODE_INACTIVE",
+                    message=f"功能码 '{code}' 未激活",
+                    status_code=400,
+                )
 
     # 合并更新：以现有配置为基础，用传入的 key 覆盖
     current_features = dict(plan.enabled_features_json or {})

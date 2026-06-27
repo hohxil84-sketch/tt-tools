@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Tuple
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloud.shared import ErrorCode, AppError
@@ -191,12 +191,19 @@ async def get_or_create_credit_account(
         monthly_grant = plan.monthly_grant if plan else 0
 
     now = datetime.now(timezone.utc)
-    # 计费周期：当前月第一天到下月第一天
-    period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # 计费周期：从创建日起算，满一个月（周年计费）
+    import calendar as _cal
+    period_start = now
     if now.month == 12:
-        period_end = period_start.replace(year=now.year + 1, month=1)
+        next_year, next_month = now.year + 1, 1
     else:
-        period_end = period_start.replace(month=now.month + 1)
+        next_year, next_month = now.year, now.month + 1
+    last_day = _cal.monthrange(next_year, next_month)[1]
+    period_end = now.replace(
+        year=next_year, month=next_month,
+        day=min(now.day, last_day),
+        hour=0, minute=0, second=0, microsecond=0,
+    )
 
     account = CreditAccount(
         user_id=user_id,
@@ -369,6 +376,20 @@ async def check_entitlement(
     Returns:
         EntitlementCheckData（allowed、feature、plan_id、remaining_free_quota、reason）
     """
+    # 0. 检查功能码是否全局启用
+    fc_result = await db.execute(
+        text("SELECT is_active FROM feature_codes WHERE code = :fcode"),
+        {"fcode": feature},
+    )
+    fc_row = fc_result.fetchone()
+    if fc_row is None or not fc_row[0]:
+        return EntitlementCheckData(
+            allowed=False,
+            feature=feature,
+            plan_id=plan_id,
+            reason=f"该功能（{feature}）暂未开放",
+        )
+
     # 1. 查询套餐信息
     plan_result = await db.execute(
         select(Plan).where(Plan.id == plan_id, Plan.status == "active")
@@ -480,15 +501,15 @@ async def consume_credits(
     source_id: Optional[str] = None,
     description: Optional[str] = None,
 ) -> CreditAccount:
-    """扣减用户 AI 额度。
+    """扣减用户 AI 额度（原子操作，防并发超扣）。
 
-    检查余额是否足够，不足则抛出 CREDITS_NOT_ENOUGH 错误。
-    扣费成功后写入 credit_ledger 流水。
+    使用原子 UPDATE WHERE balance >= amount 确保不会超扣到负数。
+    如果账户不存在则直接报错，不自动创建（防止无套餐用户免费获取额度）。
 
     Args:
         db: 数据库异步会话
         user_id: 用户 ID
-        amount: 扣费金额（正整数，内部转为负数记录）
+        amount: 扣费金额（正整数）
         source_type: 来源类型，默认 provider_call
         source_id: 来源 ID（如 provider_call_log.id）
         description: 中文说明
@@ -497,7 +518,7 @@ async def consume_credits(
         更新后的 CreditAccount
 
     Raises:
-        AppError: 额度不足或账户异常
+        AppError: 额度不足或账户不存在
     """
     if amount <= 0:
         raise AppError(
@@ -506,27 +527,50 @@ async def consume_credits(
             status_code=400,
         )
 
-    # 获取账户
-    account = await get_or_create_credit_account(db, user_id)
+    now = datetime.now(timezone.utc)
 
-    # 检查余额
-    if account.balance < amount:
+    # 原子扣费：UPDATE WHERE balance >= amount，通过 rowcount 判断结果
+    result = await db.execute(
+        text(
+            "UPDATE credit_accounts SET balance = balance - :amt, updated_at = :now "
+            "WHERE user_id = :uid AND status = 'active' AND balance >= :amt "
+            "RETURNING id, balance"
+        ),
+        {"amt": amount, "now": now, "uid": user_id},
+    )
+    updated = result.fetchone()
+
+    if updated is None:
+        # 扣费失败：可能账户不存在、已冻结或余额不足
+        check = await db.execute(
+            select(CreditAccount).where(CreditAccount.user_id == user_id)
+        )
+        account = check.scalar_one_or_none()
+        if account is None:
+            raise AppError(
+                code=ErrorCode.CREDITS_NOT_ENOUGH,
+                message="未找到额度账户，请先分配套餐",
+                status_code=402,
+            )
+        if account.status == "frozen":
+            raise AppError(
+                code=ErrorCode.PLAN_REQUIRED,
+                message="账户已被冻结，请联系客服",
+                status_code=403,
+            )
         raise AppError(
             code=ErrorCode.CREDITS_NOT_ENOUGH,
-            message="AI 额度不足，请充值后再试",
+            message=f"AI 额度不足（当前 {account.balance}，需要 {amount}），请充值后再试",
             status_code=402,
         )
 
-    # 扣减余额
-    new_balance = account.balance - amount
-    account.balance = new_balance
-    account.updated_at = datetime.now(timezone.utc)
+    account_id, new_balance = updated[0], updated[1]
 
     # 写入流水（金额为负数）
     await _create_ledger_entry(
         db,
         user_id=user_id,
-        account_id=account.id,
+        account_id=account_id,
         change_type="consume",
         amount=-amount,
         balance_after=new_balance,
@@ -536,7 +580,11 @@ async def consume_credits(
     )
 
     await db.flush()
-    return account
+    # 重新查询返回最新账户
+    result2 = await db.execute(
+        select(CreditAccount).where(CreditAccount.id == account_id)
+    )
+    return result2.scalar_one()
 
 
 async def grant_credits(
@@ -547,9 +595,9 @@ async def grant_credits(
     source_id: Optional[str] = None,
     description: Optional[str] = None,
 ) -> CreditAccount:
-    """赠送/充值 AI 额度。
+    """赠送/充值 AI 额度（原子操作）。
 
-    写入 credit_ledger 流水，change_type 为 grant（赠送）或 recharge（充值）。
+    若账户不存在则自动创建。正数 amount 直接累加到余额。
 
     Args:
         db: 数据库异步会话
@@ -571,9 +619,17 @@ async def grant_credits(
 
     account = await get_or_create_credit_account(db, user_id)
 
-    new_balance = account.balance + amount
-    account.balance = new_balance
-    account.updated_at = datetime.now(timezone.utc)
+    # 原子累加余额
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        text(
+            "UPDATE credit_accounts SET balance = balance + :amt, updated_at = :now "
+            "WHERE id = :aid RETURNING balance"
+        ),
+        {"amt": amount, "now": now, "aid": account.id},
+    )
+    updated = result.fetchone()
+    new_balance = updated[0] if updated else account.balance + amount
 
     # 根据来源类型决定 change_type
     change_type = "recharge" if source_type == "order" else "grant"
@@ -591,7 +647,10 @@ async def grant_credits(
     )
 
     await db.flush()
-    return account
+    result2 = await db.execute(
+        select(CreditAccount).where(CreditAccount.id == account.id)
+    )
+    return result2.scalar_one()
 
 
 async def refund_credits(
@@ -601,10 +660,10 @@ async def refund_credits(
     source_id: Optional[str] = None,
     description: Optional[str] = None,
 ) -> CreditAccount:
-    """退款：扣除已充值的 AI 额度。
+    """退款：扣除已充值的 AI 额度（原子操作）。
 
     写入 credit_ledger 流水，change_type 为 refund。
-    用于管理员退款操作。
+    不自动创建账户——退款仅针对已有账户。
 
     Args:
         db: 数据库异步会话
@@ -617,7 +676,7 @@ async def refund_credits(
         更新后的 CreditAccount
 
     Raises:
-        AppError: 额度不足或金额无效
+        AppError: 额度不足或账户不存在
     """
     if amount <= 0:
         raise AppError(
@@ -626,25 +685,44 @@ async def refund_credits(
             status_code=400,
         )
 
-    account = await get_or_create_credit_account(db, user_id)
+    now = datetime.now(timezone.utc)
 
-    if account.balance < amount:
+    # 原子扣费
+    result = await db.execute(
+        text(
+            "UPDATE credit_accounts SET balance = balance - :amt, updated_at = :now "
+            "WHERE user_id = :uid AND status = 'active' AND balance >= :amt "
+            "RETURNING id, balance"
+        ),
+        {"amt": amount, "now": now, "uid": user_id},
+    )
+    updated = result.fetchone()
+
+    if updated is None:
+        check = await db.execute(
+            select(CreditAccount).where(CreditAccount.user_id == user_id)
+        )
+        account = check.scalar_one_or_none()
+        if account is None:
+            raise AppError(
+                code=ErrorCode.BILLING_FAILED,
+                message="用户没有额度账户，无法退款",
+                status_code=400,
+            )
         raise AppError(
             code=ErrorCode.BILLING_FAILED,
             message=f"用户余额不足，当前余额 {account.balance}，退款需要 {amount}",
             status_code=400,
         )
 
-    new_balance = account.balance - amount
-    account.balance = new_balance
-    account.updated_at = datetime.now(timezone.utc)
+    account_id, new_balance = updated[0], updated[1]
 
     await _create_ledger_entry(
         db,
         user_id=user_id,
-        account_id=account.id,
+        account_id=account_id,
         change_type="refund",
-        amount=-amount,  # 负数表示扣除
+        amount=-amount,
         balance_after=new_balance,
         source_type="admin",
         source_id=source_id,
@@ -652,7 +730,10 @@ async def refund_credits(
     )
 
     await db.flush()
-    return account
+    result2 = await db.execute(
+        select(CreditAccount).where(CreditAccount.id == account_id)
+    )
+    return result2.scalar_one()
 
 
 # ============================================================
@@ -717,30 +798,35 @@ async def _maybe_refresh_monthly_grant(
     db: AsyncSession,
     account: CreditAccount,
 ) -> CreditAccount:
-    """检查是否需要跨周期刷新月度赠送额度。
+    """检查是否需要跨周期刷新。
 
-    如果当前时间已超过 period_end，则：
-    1. 重置计费周期
-    2. 按当前套餐重新赠送 monthly_grant 额度
-    3. 写入赠送流水
+    如果当前时间已超过 period_end，则推进计费周期，但不自动赠送额度。
+    套餐到期后不续费——用户额度保持原样，余额不足即无法调用 AI。
 
     Args:
         db: 数据库异步会话
         account: 用户额度账户
 
     Returns:
-        更新后的 CreditAccount
+        CreditAccount（可能已更新周期）
     """
     now = datetime.now(timezone.utc)
     period_end = account.period_end
 
     if period_end is None:
-        # 没有周期信息，设置初始周期
-        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # 没有周期信息，设置初始周期（周年计费）
+        import calendar as _cal
+        period_start = now
         if now.month == 12:
-            period_end_new = period_start.replace(year=now.year + 1, month=1)
+            next_year, next_month = now.year + 1, 1
         else:
-            period_end_new = period_start.replace(month=now.month + 1)
+            next_year, next_month = now.year, now.month + 1
+        last_day = _cal.monthrange(next_year, next_month)[1]
+        period_end_new = now.replace(
+            year=next_year, month=next_month,
+            day=min(now.day, last_day),
+            hour=0, minute=0, second=0, microsecond=0,
+        )
         account.period_start = period_start
         account.period_end = period_end_new
         await db.flush()
@@ -752,35 +838,40 @@ async def _maybe_refresh_monthly_grant(
     now_naive = now.replace(tzinfo=None)
 
     if now_naive < period_end:
-        # 还在当前周期内，无需刷新
+        # 还在当前周期内
         return account
 
-    # 跨周期：刷新赠送额度
+    # 跨周期：清零额度，推进周期（订阅制：当月额度当月用，到期清零）
+    import calendar as _cal
+    old_balance = account.balance
     new_period_start = period_end
     if period_end.month == 12:
-        new_period_end = period_end.replace(year=period_end.year + 1, month=1)
+        next_year, next_month = period_end.year + 1, 1
     else:
-        new_period_end = period_end.replace(month=period_end.month + 1)
+        next_year, next_month = period_end.year, period_end.month + 1
+    last_day = _cal.monthrange(next_year, next_month)[1]
+    new_period_end = period_end.replace(
+        year=next_year, month=next_month,
+        day=min(period_end.day, last_day),
+    )
 
-    monthly_grant = account.monthly_grant
-
-    # 更新账户周期和余额
     account.period_start = new_period_start
     account.period_end = new_period_end
-    account.balance += monthly_grant
+    account.balance = 0
     account.updated_at = now
 
-    # 写入赠送流水
-    await _create_ledger_entry(
-        db,
-        user_id=account.user_id,
-        account_id=account.id,
-        change_type="grant",
-        amount=monthly_grant,
-        balance_after=account.balance,
-        source_type="system",
-        description=f"月度赠送 {monthly_grant} 额度",
-    )
+    # 记录清零流水
+    if old_balance > 0:
+        await _create_ledger_entry(
+            db,
+            user_id=account.user_id,
+            account_id=account.id,
+            change_type="adjust",
+            amount=-old_balance,
+            balance_after=0,
+            source_type="system",
+            description=f"套餐周期到期，{old_balance} 额度清零",
+        )
 
     await db.flush()
     return account

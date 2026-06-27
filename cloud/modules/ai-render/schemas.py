@@ -99,5 +99,5 @@ class RenderContext(BaseModel):
     user_id: str = Field(..., description="用户 ID")
     device_id: Optional[str] = Field(default=None, description="设备 ID")
     role: str = Field(default="user", description="用户角色")
-    plan_code: str = Field(default="free", description="当前套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
     request_id: str = Field(..., description="云端请求追踪 ID")

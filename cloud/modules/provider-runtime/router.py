@@ -1,8 +1,8 @@
 """
 Provider 路由器。
 
-负责根据模型名称选择对应的 Provider 实例，执行调用，
-并处理失败重试、超时和错误标准化。
+从数据库加载 Provider 配置，按 capability + priority 路由，
+主 Provider 失败时自动降级到下一个。
 """
 from __future__ import annotations
 
@@ -13,97 +13,102 @@ from base import BaseProvider
 from cost import estimate_cost
 from errors import ProviderError, map_provider_error
 from models import ProviderCallRequest, ProviderResult, ProviderUsage
-from mock import MockProvider
 
-# 模块日志
 _logger = logging.getLogger(__name__)
 
 
-# ============================================================
-# 模型 → Provider 映射
-# ============================================================
-
-# 模型名称前缀映射表：
-#   当模型名以某前缀开头时，路由到对应的 Provider。
-#   完整的 SDK Provider（如 OpenAIProvider、DeepSeekProvider）后续开发；
-#   当前阶段全部路由到 MockProvider。
-_DEFAULT_MODEL_ROUTING: dict[str, str] = {
-    "deepseek": "deepseek",
-    "gpt-": "openai",
-    "o1": "openai",
-    "o3": "openai",
-    "o4": "openai",
-    "claude": "anthropic",
-}
-
-# 默认 Provider 名称（当模型没有匹配任何前缀时使用）
-_DEFAULT_PROVIDER_NAME = "mock"
-
-
-def get_provider_name_for_model(model: str) -> str:
-    """根据模型名称获取 Provider 标识名。
-
-    按前缀匹配 _DEFAULT_MODEL_ROUTING 表。
-    未匹配时返回 "mock"。
-
-    Args:
-        model: 模型名称，如 "deepseek-chat"、"gpt-4o"
-
-    Returns:
-        Provider 标识名，如 "deepseek"、"openai"、"mock"
-    """
-    model_lower = model.lower()
-    for prefix, provider_name in _DEFAULT_MODEL_ROUTING.items():
-        if model_lower.startswith(prefix):
-            return provider_name
-    return _DEFAULT_PROVIDER_NAME
-
-
-# ============================================================
-# ProviderRouter
-# ============================================================
-
-
 class ProviderRouter:
-    """Provider 路由器。
+    """Provider 路由器（DB 驱动）。
 
-    管理 Provider 实例注册和模型路由。
-    上层业务模块通过 call() 方法执行调用。
+    所有 Provider 从数据库加载，不再硬编码。
+    路由：capability 匹配 → priority 降序 → 失败自动降级。
 
     使用示例：
         router = ProviderRouter()
-        router.register("mock", MockProvider())
-        result = await router.call(request)
+        await router.load_from_db(db_session)
+        result = await router.call_by_capability(request, capability="text")
     """
 
     def __init__(self):
-        """初始化路由器，Provider 映射表为空。"""
         self._providers: dict[str, BaseProvider] = {}
+        # 元数据：name → {"models_json": {...}, "priority": 0}
+        self._meta: dict[str, dict] = {}
 
-    def register(self, name: str, provider: BaseProvider) -> None:
-        """注册一个 Provider 实例。
+    # ============================================================
+    # 注册 / 清理
+    # ============================================================
+
+    def clear(self) -> None:
+        """清空所有已注册 Provider。"""
+        self._providers.clear()
+        self._meta.clear()
+
+    def register(
+        self, name: str, provider: BaseProvider,
+        models_json: dict | None = None,
+        priority: int = 0,
+    ) -> None:
+        """注册 Provider 及其元数据。
 
         Args:
-            name: Provider 标识名（与 provider.provider_name 一致）
+            name: Provider 名称
             provider: Provider 实例
+            models_json: 模型配置（如 {"text": "deepseek-chat", "image": "dall-e-3"}）
+            priority: 优先级，数字越大越优先
         """
         self._providers[name] = provider
-        _logger.info("Provider 已注册: %s -> %s", name, type(provider).__name__)
+        self._meta[name] = {"models_json": models_json or {}, "priority": priority}
+        caps = list((models_json or {}).keys())
+        _logger.info("Provider 已注册: %s (priority=%d, caps=%s)", name, priority, caps)
 
     def get_provider(self, name: str) -> Optional[BaseProvider]:
-        """获取已注册的 Provider 实例。
-
-        Args:
-            name: Provider 标识名
-
-        Returns:
-            Provider 实例，未注册时返回 None
-        """
         return self._providers.get(name)
 
     def list_providers(self) -> list[str]:
-        """列出所有已注册的 Provider 名称。"""
         return list(self._providers.keys())
+
+    # ============================================================
+    # Capability 路由
+    # ============================================================
+
+    def get_providers_for_capability(
+        self, capability: str
+    ) -> list[tuple[str, str]]:
+        """获取支持某 capability 的 Provider 列表，按 priority 降序。
+
+        Args:
+            capability: 如 "text"、"image_generation"、"image_edit"
+
+        Returns:
+            [(provider_name, model_name), ...] 按 priority DESC 排序
+        """
+        candidates = []
+        for name, meta in self._meta.items():
+            models = meta.get("models_json") or {}
+            if capability in models:
+                candidates.append((name, models[capability], meta.get("priority", 0)))
+        candidates.sort(key=lambda x: x[2], reverse=True)
+        return [(n, m) for n, m, _ in candidates]
+
+    # ============================================================
+    # DB 加载
+    # ============================================================
+
+    async def load_from_db(self, db_session) -> int:
+        """从数据库加载所有已启用 Provider 并注册到 Router。
+
+        Args:
+            db_session: 异步数据库会话（由调用方提供）
+
+        Returns:
+            成功加载的 Provider 数量
+        """
+        from registry import load_providers_from_db
+        return await load_providers_from_db(db_session, self)
+
+    # ============================================================
+    # 调用
+    # ============================================================
 
     async def call(
         self,
@@ -112,131 +117,125 @@ class ProviderRouter:
     ) -> ProviderResult:
         """执行 Provider 调用。
 
-        优先使用 provider 参数传入的实例；否则根据 request.model
-        在注册表中查找对应 Provider。
+        优先使用 provider 参数；否则按 request.model 查找注册表。
 
         Args:
             request: Provider 调用请求
-            provider: 可选，直接指定 Provider 实例（绕过路由）
+            provider: 可选，直接指定 Provider 实例
 
         Returns:
-            统一的 ProviderResult 结构（含成功和失败状态）
-
-        Raises:
-            ProviderError: 当 Provider 未注册且未传入实例时抛出
+            ProviderResult
         """
-        # 选择 Provider
         if provider is None:
-            provider_name = get_provider_name_for_model(request.model)
-            provider = self._providers.get(provider_name)
+            # 按 model 名查找
+            provider = self._find_by_name(request.model)
+            if provider is None:
+                # 查找第一个可用的 Provider 作为兜底
+                for p in self._providers.values():
+                    provider = p
+                    break
             if provider is None:
                 raise ProviderError(
                     code="PROVIDER_NOT_REGISTERED",
-                    message=f"模型 '{request.model}' 对应的 Provider '{provider_name}' 未注册",
+                    message="没有可用的 AI Provider，请在后台添加并启用",
                     status_code=500,
                 )
-
-        _logger.debug(
-            "调用 Provider: %s, 模型: %s, 功能码: %s, request_id: %s",
-            provider.provider_name,
-            request.model,
-            request.feature,
-            request.request_id,
-        )
 
         try:
             result = await provider.call(request)
         except Exception as exc:
-            _logger.warning(
-                "Provider 调用异常: provider=%s, model=%s, error=%s",
-                provider.provider_name,
-                request.model,
-                str(exc),
-            )
-            # 将原始异常映射为统一 ProviderResult（失败状态）
-            result = _exception_to_result(
-                exc=exc,
-                provider_name=provider.provider_name,
-                model=request.model,
-            )
+            _logger.warning("Provider 调用异常: %s, error=%s", provider.provider_name, str(exc))
+            result = _exception_to_result(exc=exc, provider_name=provider.provider_name, model=request.model)
             return result
 
-        # 成功时补充成本估算
         result.estimated_cost = estimate_cost(
-            provider=result.provider,
-            model=result.model,
-            usage=result.usage,
+            provider=result.provider, model=result.model, usage=result.usage,
         )
-
-        _logger.debug(
-            "Provider 调用成功: provider=%s, model=%s, tokens=%d, cost=%.6f, latency=%dms",
-            result.provider,
-            result.model,
-            result.usage.total_tokens,
-            result.estimated_cost,
-            result.latency_ms,
-        )
-
+        _logger.debug("Provider 调用成功: %s, model=%s, tokens=%d", result.provider, result.model, result.usage.total_tokens)
         return result
 
+    async def call_by_capability(
+        self,
+        request: ProviderCallRequest,
+        capability: str = "text",
+    ) -> ProviderResult:
+        """按 capability + priority 路由调用，失败自动降级。
+
+        选择最高优先级 Provider 调用；若失败则尝试下一个，
+        直到成功或无可用 Provider。
+
+        Args:
+            request: Provider 调用请求
+            capability: 能力类型（text / image_generation / image_edit）
+
+        Returns:
+            ProviderResult（状态为 failed 表示全部降级失败）
+        """
+        candidates = self.get_providers_for_capability(capability)
+
+        if not candidates:
+            return ProviderResult(
+                provider="",
+                model=request.model or "",
+                status="failed",
+                usage=ProviderUsage(),
+                error_code="NO_PROVIDER",
+                error_message=f"没有可用的 Provider 处理 capability '{capability}'，请在后台添加并启用",
+            )
+
+        last_result = None
+        for provider_name, model in candidates:
+            provider = self._providers.get(provider_name)
+            if provider is None:
+                continue
+
+            _logger.info("尝试 Provider: %s (model=%s, capability=%s)", provider_name, model, capability)
+            routed_request = request.model_copy(
+                update={"model": model, "capability": capability}
+            )
+            result = await self.call(request=routed_request, provider=provider)
+
+            if result.status == "success":
+                return result
+
+            _logger.warning("Provider %s 调用失败，尝试降级: %s", provider_name, result.error_message)
+            last_result = result
+
+        # 所有 Provider 都失败了
+        if last_result:
+            last_result.error_message = f"所有 Provider 均调用失败（capability={capability}）: " + (last_result.error_message or "")
+            return last_result
+
+        return ProviderResult(
+            provider="",
+            model="",
+            status="failed",
+            usage=ProviderUsage(),
+            error_code="ALL_PROVIDERS_FAILED",
+            error_message=f"所有 Provider 均调用失败（capability={capability}）",
+        )
+
+    # 兼容旧接口
     async def call_by_route(
         self,
         request: ProviderCallRequest,
         capability: str = "text",
         tier: str = "cheap",
     ) -> ProviderResult:
-        """Execute a call using capability/tier routing.
+        """旧接口兼容，直接委托到 call_by_capability。"""
+        return await self.call_by_capability(request=request, capability=capability)
 
-        Business modules should prefer this method. It resolves
-        capability + tier + feature to provider/model, then delegates to call().
-        """
-        try:
-            from registry import resolve_route
-        except ModuleNotFoundError:
-            import os
-            import sys
-
-            # 清理可能冲突的模块缓存（如 config 可能已被其他模块导入）
-            # 确保重新导入时从本模块目录加载，而非从 sys.modules 缓存中获取
-            # 注意：不能删除 "router" — 调用本模块的上层模块可能已导入自己的 router
-            _conflict_names = {
-                "models", "mock", "base", "errors", "cost",
-                "registry", "config", "deepseek", "doubao", "http_utils",
-            }
-            for _key in list(sys.modules.keys()):
-                if _key in _conflict_names or any(
-                    _key.startswith(_cn + ".") for _cn in _conflict_names
-                ):
-                    del sys.modules[_key]
-
-            module_dir = os.path.dirname(__file__)
-            if module_dir not in sys.path:
-                sys.path.insert(0, module_dir)
-            from registry import resolve_route
-
-        route = resolve_route(
-            capability=capability,
-            tier=tier,
-            feature=request.feature,
-        )
-        routed_request = request.model_copy(
-            update={
-                "model": route.model,
-                "capability": capability,
-                "tier": tier,
-            }
-        )
-        provider = self._providers.get(route.provider)
-        if provider is None:
-            raise ProviderError(
-                code="PROVIDER_NOT_REGISTERED",
-                message=(
-                    f"Capability '{capability}' tier '{tier}' routes to provider "
-                    f"'{route.provider}', but it is not registered"
-                ),
-                status_code=500,
-            )
-        return await self.call(request=routed_request, provider=provider)
+    def _find_by_name(self, model: str) -> Optional[BaseProvider]:
+        """按模型名匹配 Provider（用于 call() 的兜底查找）。"""
+        # 先精确匹配 provider name
+        if model in self._providers:
+            return self._providers[model]
+        # 再按 models_json 中的 model 名匹配
+        for name, meta in self._meta.items():
+            models = meta.get("models_json") or {}
+            if model in models.values():
+                return self._providers.get(name)
+        return None
 
 
 # ============================================================
@@ -267,17 +266,8 @@ async def get_provider_for_model(
     model: str,
     router: ProviderRouter,
 ) -> Optional[BaseProvider]:
-    """根据模型名称获取已注册的 Provider 实例。
-
-    Args:
-        model: 模型名称
-        router: ProviderRouter 实例
-
-    Returns:
-        Provider 实例，未注册时返回 None
-    """
-    provider_name = get_provider_name_for_model(model)
-    return router.get_provider(provider_name)
+    """根据模型名称获取已注册的 Provider 实例。"""
+    return router._find_by_name(model)
 
 
 # ============================================================

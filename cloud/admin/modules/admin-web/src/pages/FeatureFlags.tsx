@@ -5,11 +5,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api/client';
-import { Sheet, priBtn, secBtn, inpS } from '../components/shared';
+import { Sheet, ActBtn, priBtn, secBtn, inpS, showToast } from '../components/shared';
 
 interface Feat {
   plan_id: string; plan_name: string;
   enabled_features_json: Record<string, unknown>; plan_status: string;
+  monthly_grant?: number;
 }
 
 interface FeatureCode {
@@ -64,7 +65,7 @@ export default function FeatureFlags() {
       try {
         const data = await apiRequest<{ items: FeatureCode[] }>('/admin/feature-codes/list', { params: { limit: 200 } });
         setAllFeatureCodes(data.items);
-      } catch { /* 加载失败时保持为空 */ }
+      } catch { showToast('功能码列表加载失败', 'error'); }
     })();
   }, []);
 
@@ -99,7 +100,9 @@ export default function FeatureFlags() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
                 <h4 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 2px 0' }}>{it.plan_name}</h4>
-                <code style={{ fontSize: 12, color: 'var(--blue)' }}>{it.plan_id}</code>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--orange)' }}>
+                  赠送 {it.monthly_grant ?? 0} 额度
+                </span>
                 <span style={{
                   marginLeft: 8, fontSize: 11, fontWeight: 500,
                   color: it.plan_status === 'active' ? '#34c759' : 'var(--gray-400)',
@@ -107,7 +110,7 @@ export default function FeatureFlags() {
                   {it.plan_status === 'active' ? '● 启用' : '○ 停用'}
                 </span>
               </div>
-              <button onClick={() => setEdit(it)} style={{ ...secBtn, fontSize: 11, padding: '4px 14px' }}>编辑</button>
+              <ActBtn kind="edit" onClick={() => setEdit(it)}>编辑</ActBtn>
             </div>
             {/* 开关预览 */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -179,15 +182,17 @@ function EditModal({ item, allFeatureCodes, labelMap, close, done }: {
         body: { enabled_features_json: featuresToJson(entries) },
       });
       done();
-    } catch (e: unknown) { alert(e instanceof Error ? e.message : '保存失败'); }
+    } catch (e: unknown) { showToast(e instanceof Error ? e.message : '保存失败', 'error'); }
     finally { setSaving(false); }
   };
 
   return (
     <Sheet title={`功能开关: ${item.plan_name}`} close={close}>
       <div style={{ marginBottom: 16 }}>
-        <code style={{ fontSize: 12, color: 'var(--blue)' }}>{item.plan_id}</code>
-        <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--gray-400)' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--orange)' }}>
+          赠送 {item.monthly_grant ?? 0} 额度
+        </span>
+        <span style={{ marginLeft: 12, fontSize: 11, color: 'var(--gray-400)' }}>
           {item.plan_status === 'active' ? '已启用' : '已停用'}
         </span>
       </div>

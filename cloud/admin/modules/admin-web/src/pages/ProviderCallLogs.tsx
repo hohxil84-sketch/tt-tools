@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, Badge, LBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS } from '../components/shared';
+import { Card, Tbl, Badge, ActBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS } from '../components/shared';
 
 interface Log { id: string; request_id: string; user_id: string; user_account: string | null; feature: string; feature_name?: string | null; provider: string; model: string; status: string; error_code: string | null; input_tokens: number; output_tokens: number; total_tokens: number; estimated_cost: number; credits_charged: number; latency_ms: number | null; created_at: string; user_display_name?: string | null; }
 interface List { items: Log[]; total: number; limit: number; offset: number; }
@@ -25,7 +25,7 @@ export default function ProviderCallLogs() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <input placeholder="用户 ID" value={uid} onChange={e => { setUid(e.target.value); setPg(0); }} style={inpS} />
         <input placeholder="功能码" value={feat} onChange={e => { setFeat(e.target.value); setPg(0); }} style={inpS} />
-        <input placeholder="Provider" value={prov} onChange={e => { setProv(e.target.value); setPg(0); }} style={inpS} />
+        <select value={prov} onChange={e => { setProv(e.target.value); setPg(0); }} style={selS}><option value="">全部 Provider</option><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="doubao">豆包</option><option value="mock">Mock</option></select>
         <select value={sf} onChange={e => { setSf(e.target.value); setPg(0); }} style={selS}><option value="">全部</option><option value="success">成功</option><option value="failed">失败</option><option value="timeout">超时</option></select>
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
@@ -49,7 +49,7 @@ export default function ProviderCallLogs() {
             <td style={{ fontWeight: 600 }}>{l.credits_charged}</td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{l.latency_ms != null ? `${l.latency_ms}ms` : '—'}</td>
             <td style={{ fontSize: 11, color: 'var(--gray-500)' }}>{new Date(l.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ textAlign: 'right' }}><LBtn onClick={() => setDetail(l)}>详情</LBtn></td>
+            <td style={{ textAlign: 'right' }}><ActBtn kind="detail" onClick={() => setDetail(l)}>详情</ActBtn></td>
           </tr>
         ))}
       </Tbl></Card>

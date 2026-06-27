@@ -37,6 +37,32 @@ async def _lifespan(app: FastAPI):
     """应用生命周期管理：启动时初始化资源，关闭时清理资源。"""
     from cloud.shared.database import init_db, close_db
     await init_db()
+
+    # 启动时从数据库加载 Provider 到全局 Router
+    try:
+        from cloud.shared.database import _get_session_factory
+        _pr_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "provider-runtime")
+        if _pr_dir not in sys.path:
+            sys.path.insert(0, _pr_dir)
+        # 清理 sys.modules 中的冲突缓存，确保 provider-runtime 导入自己的 models
+        for _key in list(sys.modules.keys()):
+            if _key in ("models", "service", "schemas", "router", "mock", "base", "errors", "cost", "registry", "config", "deepseek", "doubao", "http_utils") or _key.startswith(("models.", "mock.", "base.", "errors.", "cost.", "registry.", "config.", "deepseek.", "doubao.", "http_utils.")):
+                del sys.modules[_key]
+        from registry import get_global_router  # noqa: E402
+        router = get_global_router()
+        session_factory = _get_session_factory()
+        async with session_factory() as session:
+            loaded = await router.load_from_db(session)
+            if loaded == 0:
+                import logging as _log
+                _log.getLogger("app-shell").warning(
+                    "没有已启用的 Provider，AI 功能将不可用。"
+                    "请在后台「Provider 管理」中添加并启用至少一个 Provider。"
+                )
+    except Exception:
+        import logging as _log
+        _log.getLogger("app-shell").exception("Provider 加载失败")
+
     yield
     # 关闭：释放数据库连接池
     await close_db()
@@ -104,6 +130,16 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as auth_device_router  # noqa: E402
     app.include_router(auth_device_router, prefix="/api/v1")
+
+    # 注册 admin-feature-codes 动态功能码管理模块路由（必须在 credits-billing 之前，其 FK 引用 feature_codes 表）
+    _admin_fc_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-feature-codes")
+    if _admin_fc_dir not in sys.path:
+        sys.path.insert(0, _admin_fc_dir)
+    for _key in list(sys.modules.keys()):
+        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
+            del sys.modules[_key]
+    from router import router as admin_feature_codes_router  # noqa: E402
+    app.include_router(admin_feature_codes_router, prefix="/api/v1")
 
     # 注册 credits-billing 额度/权限模块路由
     _credits_billing_dir = os.path.join(os.path.dirname(__file__), "..", "modules", "credits-billing")
@@ -259,16 +295,6 @@ def create_app() -> FastAPI:
             del sys.modules[_key]
     from router import router as admin_providers_router  # noqa: E402
     app.include_router(admin_providers_router, prefix="/api/v1")
-
-    # 注册 admin-feature-codes 动态功能码管理模块路由
-    _admin_fc_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-feature-codes")
-    if _admin_fc_dir not in sys.path:
-        sys.path.insert(0, _admin_fc_dir)
-    for _key in list(sys.modules.keys()):
-        if _key in ("router", "service", "schemas", "models") or _key.startswith(("router.", "service.", "schemas.", "models.")):
-            del sys.modules[_key]
-    from router import router as admin_feature_codes_router  # noqa: E402
-    app.include_router(admin_feature_codes_router, prefix="/api/v1")
 
     # 注册 admin-roles RBAC 权限管理模块路由
     _admin_roles_dir = os.path.join(os.path.dirname(__file__), "..", "admin", "modules", "admin-roles")

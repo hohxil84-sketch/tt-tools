@@ -23,7 +23,7 @@ async def export_users_csv(db: AsyncSession, status: Optional[str] = None) -> St
         params["status"] = status
 
     result = await db.execute(
-        text(f"SELECT id, account, display_name, role, status, plan_code, created_at FROM users {where} ORDER BY created_at"),
+        text(f"SELECT id, account, display_name, role, status, plan_id, created_at FROM users {where} ORDER BY created_at"),
         params,
     )
     rows = result.all()

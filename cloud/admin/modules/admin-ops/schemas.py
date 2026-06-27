@@ -197,6 +197,7 @@ class PlanFeatureFlagsItem(BaseModel):
         default_factory=dict, description="功能开关配置"
     )
     plan_status: str = Field(..., description="套餐状态：active / disabled")
+    monthly_grant: int = Field(default=0, description="每周期赠送额度")
 
 
 class FeatureFlagsListData(BaseModel):

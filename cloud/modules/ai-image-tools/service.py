@@ -32,6 +32,7 @@ import sys
 import os
 import uuid
 import json
+import calendar as _cal
 from datetime import datetime, timezone
 from typing import Optional, List
 
@@ -121,11 +122,8 @@ ProviderCallRequest, ChatMessage = _import_from_provider_runtime(
 MockProvider = _import_from_provider_runtime(
     "mock", "MockProvider",
 )
-ProviderRouter = _import_from_provider_runtime(
-    "router", "ProviderRouter",
-)
-create_default_router, IMAGE_EDIT, BALANCED = _import_from_provider_runtime(
-    "registry", "create_default_router", "IMAGE_EDIT", "BALANCED",
+get_global_router = _import_from_provider_runtime(
+    "registry", "get_global_router",
 )
 
 
@@ -370,7 +368,7 @@ async def create_image_tool_task(
     credits_per_call = _FEATURE_CREDITS.get(req.feature, _DEFAULT_CREDITS_PER_CALL)
 
     # ---- 步骤 1: 套餐权限检查 ----
-    await _check_feature_permission(db, ctx.plan_code, req.feature)
+    await _check_feature_permission(db, ctx.plan_id, req.feature)
 
     # ---- 步骤 2: 额度预检查 ----
     await _check_credits_balance(db, ctx.user_id, credits_per_call)
@@ -582,7 +580,7 @@ async def query_image_tool_task(
 
 async def _check_feature_permission(
     db: AsyncSession,
-    plan_code: str,
+    plan_id: Optional[str],
     feature: str,
 ) -> None:
     """检查当前套餐是否支持指定的功能码。
@@ -592,18 +590,38 @@ async def _check_feature_permission(
 
     Args:
         db: 数据库异步会话
-        plan_code: 用户当前套餐编码
+        plan_id: 用户当前套餐 ID（UUID）
         feature: 要检查的功能码
 
     Raises:
         AppError: 套餐不存在或不支持此功能
     """
+    if not plan_id:
+        raise AppError(
+            code=ErrorCode.PLAN_REQUIRED,
+            message="当前套餐不支持此功能，请升级套餐",
+            status_code=403,
+        )
+
+    # 检查功能码是否全局启用
+    fc_result = await db.execute(
+        text("SELECT is_active FROM feature_codes WHERE code = :fcode"),
+        {"fcode": feature},
+    )
+    fc_row = fc_result.fetchone()
+    if fc_row is None or not fc_row[0]:
+        raise AppError(
+            code=ErrorCode.PERMISSION_DENIED,
+            message=f"该功能（{feature}）暂未开放",
+            status_code=403,
+        )
+
     result = await db.execute(
         text(
             "SELECT enabled_features_json FROM plans "
-            "WHERE code = :code AND status = 'active'"
+            "WHERE id = :pid AND status = 'active'"
         ),
-        {"code": plan_code},
+        {"pid": plan_id},
     )
     row = result.fetchone()
 
@@ -666,15 +684,15 @@ async def _check_credits_balance(
     else:
         # 自动创建额度账户（获取用户套餐以确定赠额）
         user_result = await db.execute(
-            text("SELECT plan_code FROM users WHERE id = :uid"),
+            text("SELECT plan_id FROM users WHERE id = :uid"),
             {"uid": user_id},
         )
         user_row = user_result.fetchone()
-        plan_code = user_row[0] if user_row else "free"
+        plan_id = user_row[0] if user_row else None
 
         plan_result = await db.execute(
-            text("SELECT monthly_grant FROM plans WHERE code = :code AND status = 'active'"),
-            {"code": plan_code},
+            text("SELECT monthly_grant FROM plans WHERE id = :pid AND status = 'active'"),
+            {"pid": plan_id},
         )
         plan_row = plan_result.fetchone()
         monthly_grant = plan_row[0] if plan_row else 0
@@ -683,22 +701,33 @@ async def _check_credits_balance(
         now = _utcnow()
         balance = monthly_grant
 
-        # 插入额度账户
+        # 插入额度账户（按周年计费：从今天起 1 个月）
+        period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if now.month == 12:
+            next_year, next_month = now.year + 1, 1
+        else:
+            next_year, next_month = now.year, now.month + 1
+        last_day = _cal.monthrange(next_year, next_month)[1]
+        period_end = now.replace(
+            year=next_year, month=next_month,
+            day=min(now.day, last_day),
+            hour=0, minute=0, second=0, microsecond=0,
+        )
         await db.execute(
             text(
                 "INSERT INTO credit_accounts "
-                "(id, user_id, plan_code, balance, monthly_grant, "
+                "(id, user_id, plan_id, balance, monthly_grant, "
                 " period_start, period_end, status, created_at, updated_at) "
-                "VALUES (:id, :uid, :pc, :bal, :mg, :ps, :pe, 'active', :now, :now)"
+                "VALUES (:id, :uid, :pid, :bal, :mg, :ps, :pe, 'active', :now, :now)"
             ),
             {
                 "id": account_id,
                 "uid": user_id,
-                "pc": plan_code,
+                "pid": plan_id,
                 "bal": balance,
                 "mg": monthly_grant,
-                "ps": now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
-                "pe": _next_month_start(now),
+                "ps": period_start,
+                "pe": period_end,
                 "now": now,
             },
         )
@@ -906,11 +935,10 @@ async def _call_provider(
         request_id=request_id,
     )
 
-    router = create_default_router(ProviderRouter)
-    result = await router.call_by_route(
+    router = get_global_router()
+    result = await router.call_by_capability(
         request=call_request,
-        capability=IMAGE_EDIT,
-        tier=BALANCED,
+        capability="image_edit",
     )
 
     return result
@@ -992,9 +1020,9 @@ async def _consume_credits(
     source_id: str,
     description: str,
 ) -> None:
-    """扣除 AI 额度。
+    """扣除 AI 额度（原子 UPDATE，防止并发超扣）。
 
-    使用 raw SQL 更新 credit_accounts 表并写入 credit_ledger 流水。
+    使用 raw SQL 原子更新 credit_accounts 表并写入 credit_ledger 流水。
     对齐 DATABASE_SCHEMA.md 写入边界规则：credit_ledger 由计费服务写入。
 
     Args:
@@ -1005,43 +1033,49 @@ async def _consume_credits(
         description: 中文说明
 
     Raises:
-        AppError: 额度不足
+        AppError: 额度不足或账户异常
     """
-    # 查询当前余额和账户 ID
+    if amount <= 0:
+        return
+
+    now = _utcnow()
+    # 原子 UPDATE：余额 >= amount 时才执行，避免并发超扣
     result = await db.execute(
         text(
-            "SELECT id, balance FROM credit_accounts "
-            "WHERE user_id = :user_id AND status = 'active'"
+            "UPDATE credit_accounts SET balance = balance - :amt, updated_at = :now "
+            "WHERE user_id = :uid AND status = 'active' AND balance >= :amt "
+            "RETURNING id, balance"
         ),
-        {"user_id": user_id},
+        {"amt": amount, "now": now, "uid": user_id},
     )
-    row = result.fetchone()
-    if row is None:
-        raise AppError(
-            code=ErrorCode.CREDITS_NOT_ENOUGH,
-            message="未找到有效的额度账户",
-            status_code=402,
+    updated = result.fetchone()
+    if updated is None:
+        # 更新失败，检查具体原因
+        check_result = await db.execute(
+            text("SELECT id, balance, status FROM credit_accounts WHERE user_id = :uid"),
+            {"uid": user_id},
         )
-    account_id, balance = row[0], row[1]
-
-    if balance < amount:
+        row = check_result.fetchone()
+        if row is None:
+            raise AppError(
+                code=ErrorCode.CREDITS_NOT_ENOUGH,
+                message="未找到有效的额度账户",
+                status_code=402,
+            )
+        acct_id, balance, status = row[0], row[1], row[2]
+        if status != "active":
+            raise AppError(
+                code=ErrorCode.PLAN_REQUIRED,
+                message="账户已被冻结，请联系客服",
+                status_code=403,
+            )
         raise AppError(
             code=ErrorCode.CREDITS_NOT_ENOUGH,
             message=f"AI 额度不足（当前 {balance}，需要 {amount}）",
             status_code=402,
         )
 
-    new_balance = balance - amount
-    now = _utcnow()
-
-    # 更新余额
-    await db.execute(
-        text(
-            "UPDATE credit_accounts SET balance = :bal, updated_at = :now "
-            "WHERE id = :aid"
-        ),
-        {"bal": new_balance, "now": now, "aid": account_id},
-    )
+    account_id, new_balance = updated[0], updated[1]
 
     # 写入额度流水
     await db.execute(
@@ -1087,20 +1121,6 @@ def _is_feature_enabled(value) -> bool:
         # dict 格式（如本地付费功能的配额配置），非空即视为启用
         return bool(value)
     return False
-
-
-def _next_month_start(dt: datetime) -> datetime:
-    """计算下一个月的第一天。
-
-    Args:
-        dt: 当前日期时间
-
-    Returns:
-        下个月第一天的 UTC datetime
-    """
-    if dt.month == 12:
-        return dt.replace(year=dt.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    return dt.replace(month=dt.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
 def _get_mock_result_files(feature: str) -> List[dict]:

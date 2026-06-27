@@ -28,7 +28,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cloud.shared import ErrorCode, AppError
@@ -302,6 +302,42 @@ async def get_plan_detail(db: AsyncSession, plan_id: str) -> PlanDetail:
     )
 
 
+async def _validate_features(db: AsyncSession, features: dict) -> None:
+    """校验功能开关中的功能码均为全局启用的功能码。
+
+    Args:
+        db: 数据库异步会话
+        features: 功能开关 dict（如 {"ai_copy_cloud": true}）
+
+    Raises:
+        AppError: 存在未启用或未知的功能码
+    """
+    if not features:
+        return
+    fc_keys = list(features.keys())
+    # 使用 IN 子句兼容 SQLite 和 PostgreSQL
+    placeholders = ", ".join(f":fc{i}" for i in range(len(fc_keys)))
+    params = {f"fc{i}": fc_keys[i] for i in range(len(fc_keys))}
+    result = await db.execute(
+        text(f"SELECT code, is_active FROM feature_codes WHERE code IN ({placeholders})"),
+        params,
+    )
+    active_map = {row[0]: row[1] for row in result.all()}
+    for code in fc_keys:
+        if code not in active_map:
+            raise AppError(
+                code="FEATURE_NOT_FOUND",
+                message=f"功能码 {code} 不存在于功能码表中",
+                status_code=422,
+            )
+        if not active_map[code]:
+            raise AppError(
+                code="FEATURE_NOT_ACTIVE",
+                message=f"功能码 {code} 已被全局关闭，不能加入套餐",
+                status_code=422,
+            )
+
+
 async def create_plan(
     db: AsyncSession,
     name: str,
@@ -311,6 +347,7 @@ async def create_plan(
     """创建新套餐。
 
     使用套餐名称作为唯一标识。创建前检查同名 active 套餐是否已存在。
+    功能开关中所有功能码必须在 feature_codes 表中且 is_active=true。
 
     Args:
         db: 数据库异步会话
@@ -323,8 +360,13 @@ async def create_plan(
 
     Raises:
         AppError: 套餐名称已存在时抛出 409
+        AppError: 功能码未启用或不存在时抛出 422
     """
     _load_module_models()
+
+    # 校验功能码合法性
+    if enabled_features_json:
+        await _validate_features(db, enabled_features_json)
 
     # 检查同名 active 套餐是否已存在
     existing = await db.execute(
@@ -402,6 +444,7 @@ async def update_plan(
     if monthly_grant is not None:
         plan.monthly_grant = monthly_grant
     if enabled_features_json is not None:
+        await _validate_features(db, enabled_features_json)
         plan.enabled_features_json = enabled_features_json
 
     plan.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)

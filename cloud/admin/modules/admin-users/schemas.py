@@ -28,6 +28,15 @@ class UserItem(BaseModel):
     plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
     plan_name: Optional[str] = Field(default=None, description="当前套餐中文名（从 plans 表关联查询）")
     created_at: datetime = Field(..., description="注册时间")
+    # === 新增聚合展示字段 ===
+    updated_at: Optional[datetime] = Field(default=None, description="最近更新时间")
+    last_login_at: Optional[datetime] = Field(default=None, description="最后登录时间（来自 auth_sessions 表）")
+    device_count: int = Field(default=0, description="绑定设备数（来自 devices 表）")
+    credit_balance: Optional[int] = Field(default=None, description="额度余额（来自 credit_accounts 表，仅普通用户有值）")
+    role_names: Optional[str] = Field(default=None, description="RBAC 角色名称，逗号分隔（来自 user_roles/roles 表，仅系统用户有值）")
+    monthly_usage: int = Field(default=0, description="本月消费额度（来自 credit_ledger 表，仅普通用户有值）")
+    audit_count: int = Field(default=0, description="操作审计次数（来自 admin_audit_logs 表，仅系统用户有值）")
+    period_end: Optional[datetime] = Field(default=None, description="套餐到期时间（来自 credit_accounts 表，仅普通用户有值）")
 
 
 class UserDetail(BaseModel):
@@ -41,7 +50,15 @@ class UserDetail(BaseModel):
     plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
     plan_name: Optional[str] = Field(default=None, description="当前套餐中文名（从 plans 表关联查询）")
     created_at: datetime = Field(..., description="注册时间")
-    updated_at: datetime = Field(..., description="最近更新时间")
+    updated_at: Optional[datetime] = Field(default=None, description="最近更新时间")
+    # === 新增聚合展示字段 ===
+    last_login_at: Optional[datetime] = Field(default=None, description="最后登录时间（来自 auth_sessions 表）")
+    device_count: int = Field(default=0, description="绑定设备数（来自 devices 表）")
+    credit_balance: Optional[int] = Field(default=None, description="额度余额（来自 credit_accounts 表）")
+    role_names: Optional[str] = Field(default=None, description="RBAC 角色名称，逗号分隔（来自 user_roles/roles 表）")
+    monthly_usage: int = Field(default=0, description="本月消费额度（来自 credit_ledger 表）")
+    audit_count: int = Field(default=0, description="操作审计次数（来自 admin_audit_logs 表）")
+    period_end: Optional[datetime] = Field(default=None, description="套餐到期时间（来自 credit_accounts 表）")
 
 
 class CreateUserRequest(BaseModel):
@@ -49,9 +66,10 @@ class CreateUserRequest(BaseModel):
 
     account: str = Field(..., description="登录账号")
     password: str = Field(..., description="登录密码（明文，服务端 bcrypt 哈希存储）")
-    display_name: Optional[str] = Field(default=None, description="展示名称")
+    display_name: str = Field(..., min_length=1, description="展示名称（必填）")
     role: str = Field(default="user", description="用户角色：user / admin", pattern="^(user|admin)$")
-    plan_id: Optional[str] = Field(default=None, description="套餐 ID（UUID）")
+    plan_id: Optional[str] = Field(default=None, description="套餐 ID（UUID），普通用户必选")
+    role_ids: Optional[list[str]] = Field(default=None, description="RBAC 角色 ID 列表，管理员必选")
 
 
 class UpdateUserRequest(BaseModel):

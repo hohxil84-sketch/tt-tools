@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, Badge, LBtn, Pager, Sheet, secBtn, inpS, selS } from '../components/shared';
+import { Card, Tbl, Badge, ActBtn, Pager, Sheet, secBtn, inpS, selS } from '../components/shared';
 
 interface Risk { id: string; user_id: string | null; user_account: string | null; device_id: string | null; device_name?: string | null; risk_type: string; severity: string; created_at: string; user_display_name?: string | null; details_json?: Record<string, unknown>; }
 interface List { items: Risk[]; total: number; limit: number; offset: number; }
@@ -38,7 +38,7 @@ export default function RiskLogs() {
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{r.user_account || r.user_id?.substring(0, 8) || '—'}</td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{r.device_name || (r.device_id ? r.device_id.substring(0, 8) + '…' : '—')}</td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(r.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ textAlign: 'right' }}><LBtn onClick={() => setDetail(r)}>详情</LBtn></td>
+            <td style={{ textAlign: 'right' }}><ActBtn kind="detail" onClick={() => setDetail(r)}>详情</ActBtn></td>
           </tr>
         ))}
       </Tbl></Card>

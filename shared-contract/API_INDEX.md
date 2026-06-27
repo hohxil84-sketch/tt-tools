@@ -387,13 +387,13 @@ Query: `limit`、`offset`、`status`、`search`
 
 Response `data`: `items`、`total`、`limit`、`offset`
 
-Item fields: `id`、`account`、`display_name`、`role`、`status`、`plan_code`、`created_at`
+Item fields: `id`、`account`、`display_name`、`role`、`status`、`plan_id`、`plan_name`、`created_at`、`updated_at`、`last_login_at`、`device_count`、`credit_balance`、`role_names`、`monthly_usage`、`audit_count`、`period_end`
 
 ### POST `/api/v1/admin/users`
 
 创建新用户。
 
-Request: `account`、`password`、`display_name`（可选）、`role`（可选，默认 user）、`plan_code`（可选，默认 free）
+Request: `account`、`password`、`display_name`（必填）、`role`（可选，默认 user）、`plan_id`（普通用户必选，UUID）、`role_ids`（管理员必选，UUID 列表）
 
 Response `data`: 同 UserDetail。
 
@@ -401,13 +401,13 @@ Response `data`: 同 UserDetail。
 
 查询用户详情。
 
-Response `data`: `id`、`account`、`display_name`、`role`、`status`、`plan_code`、`created_at`、`updated_at`
+Response `data`: `id`、`account`、`display_name`、`role`、`status`、`plan_id`、`plan_name`、`created_at`、`updated_at`、`last_login_at`、`device_count`、`credit_balance`、`role_names`、`monthly_usage`、`audit_count`、`period_end`
 
 ### PATCH `/api/v1/admin/users/{user_id}`
 
 编辑用户信息（展示名称、套餐、角色）。
 
-Request: `display_name`、`plan_code`、`role`（均可选，只更新传入字段）
+Request: `display_name`、`plan_id`、`role`（均可选，只更新传入字段）
 
 Response `data`: 同 UserDetail。
 

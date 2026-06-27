@@ -4,7 +4,7 @@ admin-providers ORM 模型。
 from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, JSON, Boolean
+from sqlalchemy import String, DateTime, JSON, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from cloud.shared.database import Base
 
@@ -23,6 +23,7 @@ class Provider(Base):
     base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     models_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    priority: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )

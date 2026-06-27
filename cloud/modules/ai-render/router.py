@@ -77,7 +77,7 @@ async def ai_render_create_task(
             user_id=current_user.user_id,
             device_id=current_user.device_id,
             role=current_user.role,
-            plan_code=current_user.plan_code,
+            plan_id=current_user.plan_id,
             request_id=request_id,
         )
 

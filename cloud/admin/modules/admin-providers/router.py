@@ -26,7 +26,7 @@ async def admin_list_providers(
 @router.post("/admin/providers")
 async def admin_create_provider(body: CreateProviderRequest, request_id: str = Depends(get_request_id), current_user: TokenData = Depends(require_permission("providers.manage")), db: AsyncSession = Depends(get_db)):
     try:
-        data = await create_provider(db, body.name, body.provider_type, api_key_encrypted=body.api_key_encrypted, base_url=body.base_url, models_json=body.models_json, is_enabled=body.is_enabled)
+        data = await create_provider(db, body.name, body.provider_type, api_key_encrypted=body.api_key_encrypted, base_url=body.base_url, models_json=body.models_json, is_enabled=body.is_enabled, priority=body.priority)
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
         return JSONResponse(content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details), status_code=e.status_code)

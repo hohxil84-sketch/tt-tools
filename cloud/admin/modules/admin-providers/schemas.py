@@ -7,13 +7,13 @@ from pydantic import BaseModel, Field
 
 
 class ProviderItem(BaseModel):
-    id: str; name: str; provider_type: str; is_enabled: bool; created_at: str
+    id: str; name: str; provider_type: str; is_enabled: bool; priority: int = 0; created_at: str
 
 
 class ProviderDetail(BaseModel):
     id: str; name: str; provider_type: str; api_key_encrypted: Optional[str] = None
     base_url: Optional[str] = None; models_json: Optional[dict] = None
-    is_enabled: bool; created_at: str; updated_at: str
+    is_enabled: bool; priority: int = 0; created_at: str; updated_at: str
 
 
 class ProviderListData(BaseModel):
@@ -27,6 +27,7 @@ class CreateProviderRequest(BaseModel):
     base_url: Optional[str] = None
     models_json: Optional[dict] = None
     is_enabled: bool = True
+    priority: int = Field(default=0, description="优先级，数字越大越优先")
 
 
 class UpdateProviderRequest(BaseModel):
@@ -36,3 +37,4 @@ class UpdateProviderRequest(BaseModel):
     base_url: Optional[str] = None
     models_json: Optional[dict] = None
     is_enabled: Optional[bool] = None
+    priority: Optional[int] = None

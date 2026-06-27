@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, Badge, LBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS } from '../components/shared';
+import { Card, Tbl, Badge, ActBtn, Pager, Sheet, DetailRows, secBtn, inpS, selS } from '../components/shared';
 
 interface Log { id: string; admin_user_id: string; admin_account: string; admin_display_name?: string | null; action: string; target_type: string; target_id: string | null; summary: string; ip_address: string | null; created_at: string; details_json?: any; }
 interface List { items: Log[]; total: number; limit: number; offset: number; }
@@ -17,17 +17,17 @@ const TARGET_LABELS: Record<string, string> = {
 
 export default function AuditLogs() {
   const [d, setD] = useState<List | null>(null);
-  const [action, setAction] = useState(''); const [targetType, setTargetType] = useState('');
+  const [search, setSearch] = useState(''); const [action, setAction] = useState(''); const [targetType, setTargetType] = useState('');
   const [pg, setPg] = useState(0); const [err, setErr] = useState(''); const [detail, setDetail] = useState<Log | null>(null);
 
   const load = useCallback(async () => {
     setErr('');
     try {
       setD(await apiRequest<List>('/admin/audit-logs', {
-        params: { limit: PAGE, offset: pg * PAGE, action: action || undefined, target_type: targetType || undefined },
+        params: { limit: PAGE, offset: pg * PAGE, search: search || undefined, action: action || undefined, target_type: targetType || undefined },
       }));
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, action, targetType]);
+  }, [pg, search, action, targetType]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / PAGE) : 0;
 
@@ -47,6 +47,7 @@ export default function AuditLogs() {
     <div>
       <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 20 }}>审计日志</h2>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+        <input placeholder="搜索管理员..." value={search} onChange={e => { setSearch(e.target.value); setPg(0); }} style={inpS} />
         <select value={action} onChange={e => { setAction(e.target.value); setPg(0); }} style={selS}>
           <option value="">全部操作</option>
           <option value="create">创建</option><option value="update">更新</option>
@@ -75,7 +76,7 @@ export default function AuditLogs() {
             <td style={{ fontSize: 12 }}>{(TARGET_LABELS[l.target_type] || l.target_type) + (l.target_id ? ` (${l.target_id.substring(0, 8)}...)` : '')}</td>
             <td style={{ fontSize: 12, maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.summary}</td>
             <td style={{ fontSize: 11, color: 'var(--gray-400)', fontFamily: 'monospace' }}>{l.ip_address || '—'}</td>
-            <td style={{ textAlign: 'right' }}><LBtn onClick={() => loadDetail(l.id)}>详情</LBtn></td>
+            <td style={{ textAlign: 'right' }}><ActBtn kind="detail" onClick={() => loadDetail(l.id)}>详情</ActBtn></td>
           </tr>
         ))}
       </Tbl></Card>

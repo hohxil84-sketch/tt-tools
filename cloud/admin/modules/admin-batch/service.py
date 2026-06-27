@@ -53,13 +53,15 @@ async def batch_adjust_credits(
 
     for user_id in req.user_ids:
         try:
-            # 查询用户
+            # 查询用户（同时获取 plan_id）
             user_result = await db.execute(
-                text("SELECT id FROM users WHERE id = :uid"), {"uid": user_id}
+                text("SELECT id, plan_id FROM users WHERE id = :uid"), {"uid": user_id}
             )
-            if user_result.first() is None:
+            user_row = user_result.first()
+            if user_row is None:
                 results.append(BatchResultItem(id=user_id, success=False, message="用户不存在"))
                 continue
+            user_plan_id = user_row[1]  # 可能为 NULL
 
             # 查询或创建额度账户
             acct_result = await db.execute(
@@ -71,9 +73,9 @@ async def batch_adjust_credits(
                 # 创建新账户
                 acct_id = str(_uuid.uuid4())
                 await db.execute(
-                    text("INSERT INTO credit_accounts (id, user_id, balance, plan_code, status, created_at, updated_at) "
-                         "VALUES (:id, :uid, 0, 'free', 'active', :now, :now)"),
-                    {"id": acct_id, "uid": user_id, "now": now_utc},
+                    text("INSERT INTO credit_accounts (id, user_id, balance, plan_id, status, created_at, updated_at) "
+                         "VALUES (:id, :uid, 0, :plan_id, 'active', :now, :now)"),
+                    {"id": acct_id, "uid": user_id, "plan_id": user_plan_id, "now": now_utc},
                 )
                 current_balance = 0
                 account_id = acct_id

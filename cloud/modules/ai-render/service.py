@@ -25,6 +25,7 @@ import sys
 import os
 import uuid
 import json
+import calendar as _cal
 from datetime import datetime, timezone
 from typing import Optional, List
 
@@ -111,11 +112,8 @@ def _import_from_provider_runtime(source_name: str, *names: str):
 ProviderCallRequest, ChatMessage = _import_from_provider_runtime(
     "models", "ProviderCallRequest", "ChatMessage",
 )
-ProviderRouter = _import_from_provider_runtime(
-    "router", "ProviderRouter",
-)
-create_default_router, IMAGE_GENERATION, CHEAP = _import_from_provider_runtime(
-    "registry", "create_default_router", "IMAGE_GENERATION", "CHEAP",
+get_global_router = _import_from_provider_runtime(
+    "registry", "get_global_router",
 )
 
 
@@ -243,7 +241,7 @@ async def create_render_task(
         CreatedTaskData（包含 task_id、status、feature、estimated_credits）
     """
     # ---- 步骤 1: 套餐权限检查 ----
-    await _check_feature_permission(db, ctx.plan_code)
+    await _check_feature_permission(db, ctx.plan_id)
 
     # ---- 步骤 2: 额度预检查 ----
     await _check_credits_balance(db, ctx.user_id, _DEFAULT_CREDITS_PER_CALL)
@@ -448,7 +446,7 @@ async def query_render_task(
 
 async def _check_feature_permission(
     db: AsyncSession,
-    plan_code: str,
+    plan_id: Optional[str],
 ) -> None:
     """检查当前套餐是否支持 ai_render_cloud 功能。
 
@@ -457,17 +455,37 @@ async def _check_feature_permission(
 
     Args:
         db: 数据库异步会话
-        plan_code: 用户当前套餐编码
+        plan_id: 用户当前套餐 ID（UUID）
 
     Raises:
         AppError: 套餐不存在或不支持此功能
     """
+    if not plan_id:
+        raise AppError(
+            code=ErrorCode.PLAN_REQUIRED,
+            message="当前套餐不支持 AI 效果图功能，请升级套餐",
+            status_code=403,
+        )
+
+    # 检查功能码是否全局启用
+    fc_result = await db.execute(
+        text("SELECT is_active FROM feature_codes WHERE code = :fcode"),
+        {"fcode": "ai_render_cloud"},
+    )
+    fc_row = fc_result.fetchone()
+    if fc_row is None or not fc_row[0]:
+        raise AppError(
+            code=ErrorCode.PERMISSION_DENIED,
+            message="AI 效果图功能暂未开放",
+            status_code=403,
+        )
+
     result = await db.execute(
         text(
             "SELECT enabled_features_json FROM plans "
-            "WHERE code = :code AND status = 'active'"
+            "WHERE id = :pid AND status = 'active'"
         ),
-        {"code": plan_code},
+        {"pid": plan_id},
     )
     row = result.fetchone()
 
@@ -537,15 +555,15 @@ async def _check_credits_balance(
     else:
         # 自动创建额度账户（获取用户套餐以确定赠额）
         user_result = await db.execute(
-            text("SELECT plan_code FROM users WHERE id = :uid"),
+            text("SELECT plan_id FROM users WHERE id = :uid"),
             {"uid": user_id},
         )
         user_row = user_result.fetchone()
-        plan_code = user_row[0] if user_row else "free"
+        plan_id = user_row[0] if user_row else None
 
         plan_result = await db.execute(
-            text("SELECT monthly_grant FROM plans WHERE code = :code AND status = 'active'"),
-            {"code": plan_code},
+            text("SELECT monthly_grant FROM plans WHERE id = :pid AND status = 'active'"),
+            {"pid": plan_id},
         )
         plan_row = plan_result.fetchone()
         monthly_grant = plan_row[0] if plan_row else 0
@@ -554,22 +572,34 @@ async def _check_credits_balance(
         now = _utcnow()
         balance = monthly_grant
 
-        # 插入额度账户
+        # 插入额度账户（周年计费：从今天到一个月后的同一天）
+        period_start = now
+        if now.month == 12:
+            next_year, next_month = now.year + 1, 1
+        else:
+            next_year, next_month = now.year, now.month + 1
+        last_day = _cal.monthrange(next_year, next_month)[1]
+        period_end = now.replace(
+            year=next_year, month=next_month,
+            day=min(now.day, last_day),
+            hour=0, minute=0, second=0, microsecond=0,
+        )
+
         await db.execute(
             text(
                 "INSERT INTO credit_accounts "
-                "(id, user_id, plan_code, balance, monthly_grant, "
+                "(id, user_id, plan_id, balance, monthly_grant, "
                 " period_start, period_end, status, created_at, updated_at) "
-                "VALUES (:id, :uid, :pc, :bal, :mg, :ps, :pe, 'active', :now, :now)"
+                "VALUES (:id, :uid, :pid, :bal, :mg, :ps, :pe, 'active', :now, :now)"
             ),
             {
                 "id": account_id,
                 "uid": user_id,
-                "pc": plan_code,
+                "pid": plan_id,
                 "bal": balance,
                 "mg": monthly_grant,
-                "ps": now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
-                "pe": _next_month_start(now),
+                "ps": period_start,
+                "pe": period_end,
                 "now": now,
             },
         )
@@ -749,8 +779,8 @@ async def _call_provider(
 ):
     """调用 Provider Runtime 生成效果图。
 
-    优先使用 create_default_router + call_by_route 走真实图片生成路由
-    （如 doubao 图片生成）。当真实 Provider 未配置时自动回退 MockProvider。
+    使用全局 Router 走真实图片生成路由。
+    所有 Provider 从数据库加载，不再硬编码。
 
     Doubao 图片生成端从 messages 中提取 user 消息作为 prompt，
     system 消息会被忽略，因此 system_prompt 中的风格指引
@@ -775,21 +805,11 @@ async def _call_provider(
         request_id=request_id,
     )
 
-    router = create_default_router(ProviderRouter)
-
-    # 尝试走真实图片生成路由，失败时回退 MockProvider
-    try:
-        result = await router.call_by_route(
-            request=call_request,
-            capability=IMAGE_GENERATION,
-            tier=CHEAP,
-        )
-    except Exception:
-        # 真实 Provider 未配置或调用失败 → 回退 Mock
-        MockProvider = _import_from_provider_runtime("mock", "MockProvider")
-        mock = MockProvider()
-        result = await router.call(request=call_request, provider=mock)
-
+    router = get_global_router()
+    result = await router.call_by_capability(
+        request=call_request,
+        capability="image_generation",
+    )
     return result
 
 
@@ -883,41 +903,49 @@ async def _consume_credits(
     Raises:
         AppError: 额度不足
     """
-    # 查询当前余额和账户 ID
+    if amount <= 0:
+        return
+
+    now = _utcnow()
+
+    # 原子扣减：在 UPDATE 中检查余额 >= amount，避免并发超扣
     result = await db.execute(
         text(
-            "SELECT id, balance FROM credit_accounts "
-            "WHERE user_id = :user_id AND status = 'active'"
+            "UPDATE credit_accounts SET balance = balance - :amt, updated_at = :now "
+            "WHERE user_id = :uid AND status = 'active' AND balance >= :amt "
+            "RETURNING id, balance"
         ),
-        {"user_id": user_id},
+        {"amt": amount, "now": now, "uid": user_id},
     )
-    row = result.fetchone()
-    if row is None:
-        raise AppError(
-            code=ErrorCode.CREDITS_NOT_ENOUGH,
-            message="未找到有效的额度账户",
-            status_code=402,
-        )
-    account_id, balance = row[0], row[1]
+    updated = result.fetchone()
 
-    if balance < amount:
+    if updated is None:
+        # 扣减失败，区分无账户 / 冻结 / 余额不足
+        check_result = await db.execute(
+            text("SELECT id, balance, status FROM credit_accounts WHERE user_id = :uid"),
+            {"uid": user_id},
+        )
+        row = check_result.fetchone()
+        if row is None:
+            raise AppError(
+                code=ErrorCode.CREDITS_NOT_ENOUGH,
+                message="未找到有效的额度账户",
+                status_code=402,
+            )
+        acct_id, balance, status = row[0], row[1], row[2]
+        if status != "active":
+            raise AppError(
+                code=ErrorCode.PLAN_REQUIRED,
+                message="账户已被冻结，请联系客服",
+                status_code=403,
+            )
         raise AppError(
             code=ErrorCode.CREDITS_NOT_ENOUGH,
             message=f"AI 额度不足（当前 {balance}，需要 {amount}）",
             status_code=402,
         )
 
-    new_balance = balance - amount
-    now = _utcnow()
-
-    # 更新余额
-    await db.execute(
-        text(
-            "UPDATE credit_accounts SET balance = :bal, updated_at = :now "
-            "WHERE id = :aid"
-        ),
-        {"bal": new_balance, "now": now, "aid": account_id},
-    )
+    account_id, new_balance = updated[0], updated[1]
 
     # 写入额度流水
     await db.execute(
@@ -944,20 +972,6 @@ async def _consume_credits(
 # ============================================================
 # 工具函数
 # ============================================================
-
-
-def _next_month_start(dt: datetime) -> datetime:
-    """计算下一个月的第一天。
-
-    Args:
-        dt: 当前日期时间
-
-    Returns:
-        下个月第一天的 UTC datetime
-    """
-    if dt.month == 12:
-        return dt.replace(year=dt.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    return dt.replace(month=dt.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
 def _build_mock_result_files() -> List[dict]:

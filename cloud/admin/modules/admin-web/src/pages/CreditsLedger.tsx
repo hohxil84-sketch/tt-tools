@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, Badge, Pager, Modal, Fld, priBtn, secBtn, inpS, selS, finpS } from '../components/shared';
+import { Card, Tbl, Badge, Pager, Modal, Fld, priBtn, secBtn, inpS, selS, finpS, showToast } from '../components/shared';
 
 interface Led { id: string; user_id: string; user_account: string | null; account_id: string; change_type: string; amount: number; balance_after: number; source_type: string; source_id: string | null; description: string | null; created_at: string; }
 interface List { items: Led[]; total: number; limit: number; offset: number; }
@@ -58,8 +58,8 @@ function AdjustModal({ close, done }: { close: () => void; done: () => void }) {
   const [saving, setSaving] = useState(false); const [confirmed, setConfirmed] = useState(false);
 
   const submit = async () => { setSaving(true);
-    try { await apiRequest('/admin/credits/adjust', { method: 'POST', body: { user_id: uid, amount: amt, description: desc || undefined } }); done(); }
-    catch (e: unknown) { alert(e instanceof Error ? e.message : '调整失败'); }
+    try { await apiRequest('/admin/credits/adjust', { method: 'POST', body: { user_id: uid, amount: amt, description: desc || undefined } }); showToast('额度调整成功', 'success'); done(); }
+    catch (e: unknown) { showToast(e instanceof Error ? e.message : '调整失败', 'error'); }
     finally { setSaving(false); }
   };
 

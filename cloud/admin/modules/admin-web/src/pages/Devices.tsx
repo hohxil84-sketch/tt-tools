@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
-import { Card, Tbl, Badge, LBtn, Pager, Sheet, Modal, secBtn, inpS, selS } from '../components/shared';
+import { Card, Tbl, Badge, ActBtn, Pager, Sheet, Modal, secBtn, inpS, selS, showToast } from '../components/shared';
 
 interface Dev { id: string; user_id: string; user_account?: string | null; device_name: string | null; client_version: string | null; status: string; bound_at: string; last_seen_at: string | null; created_at?: string; updated_at?: string; }
 interface List { items: Dev[]; total: number; limit: number; offset: number; }
@@ -10,26 +10,27 @@ const SC: Record<string, string> = { active: '#34c759', blocked: '#ff9500', remo
 
 export default function Devices() {
   const [d, setD] = useState<List | null>(null);
-  const [sf, setSf] = useState(''); const [pg, setPg] = useState(0);
+  const [search, setSearch] = useState(''); const [sf, setSf] = useState(''); const [pg, setPg] = useState(0);
   const [err, setErr] = useState(''); const [detail, setDetail] = useState<Dev | null>(null);
   const [ca, setCa] = useState<{ id: string; s: string } | null>(null);
   const [cd, setCd] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/devices', { params: { limit: PAGE, offset: pg * PAGE, status: sf || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/devices', { params: { limit: PAGE, offset: pg * PAGE, search: search || undefined, status: sf || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, sf]);
+  }, [pg, search, sf]);
   useEffect(() => { load(); }, [load]);
 
-  const upd = async (id: string, ns: string) => { await apiRequest(`/admin/devices/${id}/status`, { method: 'PATCH', body: { status: ns } }); setCa(null); load(); };
-  const del = async () => { if (!cd) return; await apiRequest(`/admin/devices/${cd}`, { method: 'DELETE' }); setCd(null); load(); };
+  const upd = async (id: string, ns: string) => { try { await apiRequest(`/admin/devices/${id}/status`, { method: 'PATCH', body: { status: ns } }); showToast('操作成功', 'success'); setCa(null); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '操作失败', 'error'); } };
+  const del = async () => { if (!cd) return; try { await apiRequest(`/admin/devices/${cd}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setCd(null); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); } };
   const TP = d ? Math.ceil(d.total / PAGE) : 0;
 
   return (
     <div>
       <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 20 }}>设备管理</h2>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        <input placeholder="搜索用户..." value={search} onChange={e => { setSearch(e.target.value); setPg(0); }} style={inpS} />
         <select value={sf} onChange={e => { setSf(e.target.value); setPg(0); }} style={selS}><option value="">全部</option><option value="active">正常</option><option value="blocked">已封禁</option><option value="removed">已移除</option></select>
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
@@ -44,10 +45,10 @@ export default function Devices() {
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{new Date(x.bound_at).toLocaleString('zh-CN')}</td>
             <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{x.last_seen_at ? new Date(x.last_seen_at).toLocaleString('zh-CN') : '—'}</td>
             <td style={{ textAlign: 'right' }}>
-              <LBtn onClick={() => setDetail(x)}>详情</LBtn>
-              {x.status === 'active' && <LBtn c="#ff9500" onClick={() => setCa({ id: x.id, s: 'blocked' })}>封禁</LBtn>}
-              {x.status === 'blocked' && <LBtn c="#34c759" onClick={() => setCa({ id: x.id, s: 'active' })}>解封</LBtn>}
-              <LBtn c="#ff3b30" onClick={() => setCd(x.id)}>删除</LBtn>
+              <ActBtn kind="detail" onClick={() => setDetail(x)}>详情</ActBtn>
+              {x.status === 'active' && <ActBtn kind="block" onClick={() => setCa({ id: x.id, s: 'blocked' })}>封禁</ActBtn>}
+              {x.status === 'blocked' && <ActBtn kind="unblock" onClick={() => setCa({ id: x.id, s: 'active' })}>解封</ActBtn>}
+              <ActBtn kind="delete" onClick={() => setCd(x.id)}>删除</ActBtn>
             </td>
           </tr>
         ))}
