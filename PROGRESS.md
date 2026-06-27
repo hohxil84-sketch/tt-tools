@@ -35,7 +35,7 @@
 | cloud-admin-providers | cloud/admin/modules/admin-providers | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
 | cloud-admin-feature-codes | cloud/admin/modules/admin-feature-codes | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
 | cloud-admin-roles | cloud/admin/modules/admin-roles | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
-| 数据库外键规范化 | 全项目 | feat/db-fk-normalization | DEVELOPMENT_COMPLETE | 179/179 通过 | 2026-06-28 已推送，待合并 |
+| 数据库外键规范化 | 全项目 | feat/db-fk-normalization | DEVELOPMENT_COMPLETE | 179/179 通过 | 2026-06-28 已合并 |
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 37/37 通过 | 2026-06-25 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
