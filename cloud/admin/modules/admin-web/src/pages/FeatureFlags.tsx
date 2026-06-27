@@ -48,7 +48,12 @@ function featuresToJson(entries: FeatureEntry[]): Record<string, unknown> {
 const FEATURE_LABELS: Record<string, string> = {
   ai_copy_cloud: 'AI 文案生成',
   ai_render_cloud: 'AI 效果图',
-  ai_image_tools_cloud: 'AI 高级图片',
+  ai_image_tools_cloud: 'AI 高级图片',  // 已弃用，使用下方独立子功能
+  upscale_image_cloud: 'AI 高清修复',
+  vectorize_image_cloud: 'AI 转矢量',
+  ai_edit_image_cloud: 'AI 改图',
+  remove_bg_cloud: 'AI 高级抠图',
+  ocr_cloud: 'AI 高级 OCR',
   resize_image_local_paid: '本地图片处理',
   priority_queue: '优先队列',
   reseller_panel: '经销商面板',

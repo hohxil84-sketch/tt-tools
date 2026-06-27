@@ -243,7 +243,7 @@ async def standard_user(db_session: AsyncSession, seed_plans_fixture):
     """创建一个标准套餐测试用户。
 
     密码为 "test123"，已 bcrypt 哈希。
-    标准套餐的 ai_image_tools_cloud 功能已启用。
+    标准套餐的各 AI 图片子功能已启用。
     """
     user = User(
         account="standard@example.com",
@@ -267,7 +267,7 @@ async def standard_user(db_session: AsyncSession, seed_plans_fixture):
 async def free_user(db_session: AsyncSession, seed_plans_fixture):
     """创建一个免费套餐测试用户。
 
-    免费套餐的 ai_image_tools_cloud 功能未启用，应返回权限错误。
+    免费套餐的各 AI 图片子功能未启用，应返回权限错误。
     """
     user = User(
         account="free@example.com",

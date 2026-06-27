@@ -6,7 +6,7 @@
 - **桌面端目录**: `desktop/modules/ai-image-tools-client/`
 - **云端接口**: `POST/GET /api/v1/ai/image-tools/tasks`
 - **契约文件**: `shared-contract/openapi/ai-image-tools.yaml`
-- **功能码**: `ai_image_tools_cloud`
+- **功能码**: `upscale_image_cloud` / `vectorize_image_cloud` / `ai_edit_image_cloud` / `remove_bg_cloud` / `ocr_cloud`（各子功能独立控制）
 - **分支**: `feature/desktop-ai-image-tools-client`
 
 ## 功能概述

@@ -501,7 +501,7 @@ async def test_free_user_permission_denied(
     free_auth_headers: dict,
     valid_remove_bg_request: dict,
 ):
-    """免费用户权限被拒绝——免费套餐不支持 ai_image_tools_cloud。"""
+    """免费用户权限被拒绝——免费套餐不支持 AI 图片子功能。"""
     response = await client.post(
         "/api/v1/ai/image-tools/tasks",
         json=valid_remove_bg_request,

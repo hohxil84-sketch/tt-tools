@@ -193,14 +193,14 @@ async def seed_all():
         plan_data = [
             ("free", "免费套餐", 10, {"resize_image_local_paid": {"daily_limit": 3}}, "active"),
             ("standard", "标准套餐", 500, {"ai_copy_cloud": True, "resize_image_local_paid": {"daily_limit": 10}}, "active"),
-            ("pro", "专业套餐", 2000, {"ai_copy_cloud": True, "ai_render_cloud": True, "ai_image_tools_cloud": True}, "active"),
-            ("enterprise", "企业套餐", 10000, {"ai_copy_cloud": True, "ai_render_cloud": True, "ai_image_tools_cloud": True, "priority_queue": True}, "active"),
+            ("pro", "专业套餐", 2000, {"ai_copy_cloud": True, "ai_render_cloud": True, "upscale_image_cloud": True, "vectorize_image_cloud": True, "ai_edit_image_cloud": True, "remove_bg_cloud": True, "ocr_cloud": True}, "active"),
+            ("enterprise", "企业套餐", 10000, {"ai_copy_cloud": True, "ai_render_cloud": True, "upscale_image_cloud": True, "vectorize_image_cloud": True, "ai_edit_image_cloud": True, "remove_bg_cloud": True, "ocr_cloud": True, "priority_queue": True}, "active"),
             ("starter", "入门套餐", 50, {"ai_copy_cloud": True}, "active"),
-            ("designer", "设计师套餐", 800, {"ai_render_cloud": True, "ai_image_tools_cloud": True}, "active"),
+            ("designer", "设计师套餐", 800, {"ai_render_cloud": True, "upscale_image_cloud": True, "vectorize_image_cloud": True, "ai_edit_image_cloud": True, "remove_bg_cloud": True, "ocr_cloud": True}, "active"),
             ("basic_v2", "基础版 v2", 30, {"ai_copy_cloud": True, "resize_image_local_paid": {"daily_limit": 5}}, "disabled"),
             ("trial", "试用套餐", 5, {"resize_image_local_paid": {"daily_limit": 1}}, "active"),
             ("premium_old", "高级版(旧)", 1500, {"ai_copy_cloud": True, "ai_render_cloud": True}, "disabled"),
-            ("reseller", "经销商套餐", 3000, {"ai_copy_cloud": True, "ai_render_cloud": True, "ai_image_tools_cloud": True, "reseller_panel": True}, "active"),
+            ("reseller", "经销商套餐", 3000, {"ai_copy_cloud": True, "ai_render_cloud": True, "upscale_image_cloud": True, "vectorize_image_cloud": True, "ai_edit_image_cloud": True, "remove_bg_cloud": True, "ocr_cloud": True, "reseller_panel": True}, "active"),
         ]
         plans = [
             Plan(
@@ -307,8 +307,8 @@ async def seed_all():
         # ========== 7. provider_call_log (10) ==========
         print("   [provider_call_log] 插入中...")
         pcl_ids = [_rand_str("pcl-") for _ in range(10)]
-        features = ["ai_copy_cloud", "ai_render_cloud", "ai_copy_cloud", "ai_image_tools_cloud",
-                     "ai_copy_cloud", "ai_render_cloud", "ai_copy_cloud", "ai_image_tools_cloud",
+        features = ["ai_copy_cloud", "ai_render_cloud", "ai_copy_cloud", "upscale_image_cloud",
+                     "ai_copy_cloud", "ai_render_cloud", "ai_copy_cloud", "vectorize_image_cloud",
                      "ai_render_cloud", "ai_copy_cloud"]
         providers = ["deepseek", "openai", "deepseek", "doubao", "deepseek",
                       "openai", "deepseek", "doubao", "openai", "deepseek"]
@@ -410,7 +410,7 @@ async def seed_all():
                      "local_success", "cloud_success", "entitlement_granted", "local_start",
                      "local_success", "cloud_success"]
         ue_features = ["ai_copy_cloud", "resize_image_local_paid", "ai_render_cloud", "ai_copy_cloud",
-                        "resize_image_local_paid", "ai_image_tools_cloud", "ai_copy_cloud", "ai_copy_cloud",
+                        "resize_image_local_paid", "remove_bg_cloud", "ai_copy_cloud", "ai_copy_cloud",
                         "resize_image_local_paid", "ai_render_cloud"]
         ues = [
             UsageEvent(

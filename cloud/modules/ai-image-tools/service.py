@@ -617,13 +617,7 @@ async def _check_feature_permission(
     # enabled_features_json 在 SQLite 中存储为 TEXT/JSON 字符串
     features = _parse_json_field(row[0])
 
-    # 优先检查伞形功能开关 ai_image_tools_cloud（plans 中的顶层开关）
-    # 如果伞形开关打开，则所有子功能（upscale / vectorize / ai_edit / remove_bg / ocr）均可用
-    umbrella_enabled = features.get("ai_image_tools_cloud", False)
-    if _is_feature_enabled(umbrella_enabled):
-        return
-
-    # 伞形开关未打开时，检查具体子功能是否单独启用（支持更细粒度的权限控制）
+    # 直接检查子功能码是否启用（每个子功能独立控制）
     feature_enabled = features.get(feature, False)
     if not _is_feature_enabled(feature_enabled):
         raise AppError(

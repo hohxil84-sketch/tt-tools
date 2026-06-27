@@ -18,5 +18,5 @@ resize_image_local_paid（图片改尺寸）、pdf_image_convert_local_paid（PD
 
 云端执行，需要权限、额度预检查、Provider 调用、成本估算、扣费、日志。
 
-ai_copy_cloud、ai_render_cloud、ai_image_tools_cloud。
+ai_copy_cloud、ai_render_cloud、upscale_image_cloud、vectorize_image_cloud、ai_edit_image_cloud、remove_bg_cloud、ocr_cloud。
 

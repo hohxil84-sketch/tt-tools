@@ -24,7 +24,7 @@
   - remove_bg_cloud（高级抠图）：扣 2 额度，返回透明背景 PNG + 抠图信息
   - ocr_cloud（高级 OCR）：扣 2 额度，返回文本识别结果（text_lines）+ 识别结果文件
 - 标准云端 AI 调用链（对齐 MODULE_INTERFACES.md）：
-  1. 套餐权限检查（伞形开关 ai_image_tools_cloud + 子功能码细粒度检查）
+  1. 套餐权限检查（各子功能码独立粒度检查）
   2. 额度预检查
   3. 创建任务记录（ai_tasks 表）
   4. 调用 Provider Runtime（MockProvider）

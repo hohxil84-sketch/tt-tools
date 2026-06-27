@@ -241,11 +241,11 @@ class TestUpdatePlan:
         """更新功能开关应成功。"""
         resp = await admin_client.patch(
             "/api/v1/admin/plans/plan-standard",
-            json={"enabled_features_json": {"ai_image_tools_cloud": True}},
+            json={"enabled_features_json": {"upscale_image_cloud": True}},
         )
         assert resp.status_code == 200
         data = _assert_success_response(resp.json())
-        assert data["enabled_features_json"]["ai_image_tools_cloud"] is True
+        assert data["enabled_features_json"]["upscale_image_cloud"] is True
 
     async def test_plan_not_found(self, admin_client: AsyncClient):
         """更新不存在的套餐应返回 404。"""

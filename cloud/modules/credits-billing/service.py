@@ -45,7 +45,11 @@ _FREE_FEATURES = {
     "pdf_image_convert_local_paid": {"daily_limit": 2},
     "ai_copy_cloud": False,
     "ai_render_cloud": False,
-    "ai_image_tools_cloud": False,
+    "upscale_image_cloud": False,
+    "vectorize_image_cloud": False,
+    "ai_edit_image_cloud": False,
+    "remove_bg_cloud": False,
+    "ocr_cloud": False,
 }
 
 # 标准套餐功能配置：本地功能全开且无限制，AI 功能全开
@@ -54,7 +58,11 @@ _STANDARD_FEATURES = {
     "pdf_image_convert_local_paid": True,
     "ai_copy_cloud": True,
     "ai_render_cloud": True,
-    "ai_image_tools_cloud": True,
+    "upscale_image_cloud": True,
+    "vectorize_image_cloud": True,
+    "ai_edit_image_cloud": True,
+    "remove_bg_cloud": True,
+    "ocr_cloud": True,
 }
 
 # 专业套餐功能配置：同标准套餐，月赠额度更高
@@ -63,7 +71,11 @@ _PRO_FEATURES = {
     "pdf_image_convert_local_paid": True,
     "ai_copy_cloud": True,
     "ai_render_cloud": True,
-    "ai_image_tools_cloud": True,
+    "upscale_image_cloud": True,
+    "vectorize_image_cloud": True,
+    "ai_edit_image_cloud": True,
+    "remove_bg_cloud": True,
+    "ocr_cloud": True,
 }
 
 # 默认套餐定义

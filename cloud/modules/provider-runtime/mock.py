@@ -32,9 +32,25 @@ _MOCK_RESPONSES: dict[str, dict[str, str]] = {
         "gpt-4o": "Render task created successfully. Estimated completion in 30 seconds.",
     },
     # 图片工具
-    "ai_image_tools_cloud": {
-        "deepseek-chat": "图片处理任务已提交，正在处理中。",
-        "gpt-4o": "Image processing task submitted and running.",
+    "upscale_image_cloud": {
+        "deepseek-chat": "高清修复任务已提交，正在处理中。",
+        "gpt-4o": "Image upscaling task submitted and running.",
+    },
+    "vectorize_image_cloud": {
+        "deepseek-chat": "矢量化任务已提交，正在处理中。",
+        "gpt-4o": "Vectorization task submitted and running.",
+    },
+    "ai_edit_image_cloud": {
+        "deepseek-chat": "AI 改图任务已提交，正在处理中。",
+        "gpt-4o": "AI image editing task submitted and running.",
+    },
+    "remove_bg_cloud": {
+        "deepseek-chat": "高级抠图任务已提交，正在处理中。",
+        "gpt-4o": "Background removal task submitted and running.",
+    },
+    "ocr_cloud": {
+        "deepseek-chat": "OCR 识别任务已提交，正在处理中。",
+        "gpt-4o": "OCR task submitted and running.",
     },
 }
 
