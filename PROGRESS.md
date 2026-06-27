@@ -35,6 +35,7 @@
 | cloud-admin-providers | cloud/admin/modules/admin-providers | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
 | cloud-admin-feature-codes | cloud/admin/modules/admin-feature-codes | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
 | cloud-admin-roles | cloud/admin/modules/admin-roles | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
+| 数据库外键规范化 | 全项目 | feat/db-fk-normalization | DEVELOPMENT_COMPLETE | 179/179 通过 | 2026-06-28 已推送，待合并 |
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 37/37 通过 | 2026-06-25 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
@@ -241,3 +242,58 @@
 - cloud-credits-billing: 30/30 通过
 - cloud-admin-billing: 67/67 通过
 - DTO ai_image_tools: 100/100 通过
+
+## 数据库外键规范化 + plan_code 移除 (2026-06-28)
+
+**分支**: feat/db-fk-normalization
+**提交**: 04e4e7b
+**状态**: DEVELOPMENT_COMPLETE（已推送）
+
+### 改造范围
+
+#### plan_code 彻底删除
+1. **数据库** — 删除 `plans.code` 列及唯一约束，删除 `users.plan_code`、`credit_accounts.plan_code` 列
+2. **ORM 模型** — `Plan` 移除 `code`，`User`/`UserAdmin`/`CreditAccount` 移除 `plan_code`，统一使用 `plan_id` UUID FK → `plans.id`
+3. **JWT** — `TokenData` 和 `create_access_token()` 移除 `plan_code`，仅保留 `plan_id`
+4. **所有 Service/Schema** — 所有 plan 查询从 `code` 改为 `id`/`name`，创建套餐按名称去重
+5. **前端** — Plans.tsx 移除编码列，Users.tsx/CreditsAccounts.tsx/FeatureFlags.tsx 移除 plan_code 展示和筛选
+6. **种子脚本** — 创建套餐不再使用 code
+
+#### 后台管理增强
+7. **审计日志** — `audit_middleware.py` 重写，查询 admin display_name，生成具体操作摘要（如"创建用户「zhangsan@tt.com」成功"），`admin_display_name` 列
+8. **菜单合并** — 系统用户 + 客户端用户统一为"用户管理"一级菜单
+9. **系统用户角色编辑** — Users.tsx 新增 RoleAssignmentModal（紫色"角色"按钮，加载所有角色，checkbox 分配）
+10. **客户端用户额度编辑** — Users.tsx 新增 CreditAdjustModal（橙色"额度"按钮，显示余额，正数赠送负数扣除）
+11. **用户编辑套餐下拉框** — UserForm 加载 `GET /admin/plans/options` 联表查询，显示套餐中文名
+
+#### 路由顺序修复
+12. **admin-billing/router.py** — `GET /admin/plans/options` 移至 `GET /admin/plans/{plan_id}` 之前，防止 "options" 被当作 plan_id 参数 → 404
+
+#### 安全模型加载
+13. **admin-ops/service.py + admin-billing/service.py** — 新增 `_safe_load_model()`，优先检查 `sys.modules` → `Base.metadata.tables` → importlib 回退，避免 `Table already defined` 错误
+
+#### RBAC 种子数据正式化
+14. **seed_new_tables.py** — 动态查询 admin 用户，`ON CONFLICT DO UPDATE` 幂等执行，5 角色 + 26 权限 + 67 关联，admin 用户绑定超级管理员
+
+#### 数据库迁移脚本（5 个）
+15. `migrate_phase1_feature_fk.sql` — provider_call_log/usage_events/ai_tasks 加 feature_code_id FK
+16. `migrate_phase2_provider_fk.sql` — provider_call_log 加 provider_id FK
+17. `migrate_phase3_plan_fk.sql` — users/credit_accounts 加 plan_id FK
+18. `migrate_phase4_audit_display_name.sql` — admin_audit_logs 加 admin_display_name 列
+19. `migrate_phase5_drop_plan_code.sql` — 删除 users/credit_accounts 的 plan_code 列
+
+### 修改文件统计
+- 后端 Service/Model/Schema/Router: ~24 个文件
+- 前端页面: 11 个文件
+- 测试: ~15 个文件
+- 迁移脚本: 5 个 SQL 文件
+- 种子脚本: 2 个 Python 文件
+- 规格文档: 3 个文件
+
+### 测试结果
+- admin-billing: 67/67 通过
+- admin-users: 50/50 通过
+- admin-ops: 48/48 通过
+- admin-shell: 14/14 通过
+- admin-audit: 4/4 通过
+- 前端: TypeScript 编译 0 错误，Vite 构建成功
