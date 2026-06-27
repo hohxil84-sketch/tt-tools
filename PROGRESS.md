@@ -29,12 +29,12 @@
 | cloud-admin-users | cloud/admin/modules/admin-users | feature/admin-users | DEVELOPMENT_COMPLETE | 50/50 通过 | 2026-06-24 已合并 |
 | cloud-admin-billing | cloud/admin/modules/admin-billing | feature/admin-billing | DEVELOPMENT_COMPLETE | 67/67 通过 | 2026-06-24 已合并 |
 | cloud-admin-ops | cloud/admin/modules/admin-ops | feature/admin-ops | DEVELOPMENT_COMPLETE | 48/48 通过 | 2026-06-24 已合并 |
-| cloud-admin-audit | cloud/admin/modules/admin-audit | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 4/4 通过 | 2026-06-27 已推送 |
-| cloud-admin-batch | cloud/admin/modules/admin-batch | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
-| cloud-admin-export | cloud/admin/modules/admin-export | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
-| cloud-admin-providers | cloud/admin/modules/admin-providers | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
-| cloud-admin-feature-codes | cloud/admin/modules/admin-feature-codes | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
-| cloud-admin-roles | cloud/admin/modules/admin-roles | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
+| cloud-admin-audit | cloud/admin/modules/admin-audit | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 4/4 通过 | 2026-06-27 已合并 |
+| cloud-admin-batch | cloud/admin/modules/admin-batch | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
+| cloud-admin-export | cloud/admin/modules/admin-export | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
+| cloud-admin-providers | cloud/admin/modules/admin-providers | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
+| cloud-admin-feature-codes | cloud/admin/modules/admin-feature-codes | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
+| cloud-admin-roles | cloud/admin/modules/admin-roles | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已合并 |
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 37/37 通过 | 2026-06-25 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
