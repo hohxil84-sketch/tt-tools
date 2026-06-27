@@ -29,6 +29,12 @@
 | cloud-admin-users | cloud/admin/modules/admin-users | feature/admin-users | DEVELOPMENT_COMPLETE | 50/50 通过 | 2026-06-24 已合并 |
 | cloud-admin-billing | cloud/admin/modules/admin-billing | feature/admin-billing | DEVELOPMENT_COMPLETE | 67/67 通过 | 2026-06-24 已合并 |
 | cloud-admin-ops | cloud/admin/modules/admin-ops | feature/admin-ops | DEVELOPMENT_COMPLETE | 48/48 通过 | 2026-06-24 已合并 |
+| cloud-admin-audit | cloud/admin/modules/admin-audit | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 4/4 通过 | 2026-06-27 已推送 |
+| cloud-admin-batch | cloud/admin/modules/admin-batch | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
+| cloud-admin-export | cloud/admin/modules/admin-export | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
+| cloud-admin-providers | cloud/admin/modules/admin-providers | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
+| cloud-admin-feature-codes | cloud/admin/modules/admin-feature-codes | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
+| cloud-admin-roles | cloud/admin/modules/admin-roles | feature/admin-backend-improvements | DEVELOPMENT_COMPLETE | 待补测试 | 2026-06-27 已推送 |
 | local-worker-ocr | local-worker/modules/ocr | feature/local-ocr | DEVELOPMENT_COMPLETE | 37/37 通过 | 2026-06-25 已合并 |
 | local-worker-preflight-check | local-worker/modules/preflight-check | feature/local-preflight-check | DEVELOPMENT_COMPLETE | 29/29 通过 | 2026-06-20 已合并 |
 | local-worker-id-photo | local-worker/modules/id-photo | feature/local-id-photo | DEVELOPMENT_COMPLETE | 58/58 通过 | 2026-06-20 已合并 |
@@ -106,7 +112,8 @@
 ## 后台管理系统完善记录 (2026-06-27)
 
 **分支**: feature/admin-backend-improvements
-**状态**: DEVELOPMENT_COMPLETE（待提交）
+**提交**: f6e1efb
+**状态**: DEVELOPMENT_COMPLETE（已推送）
 
 ### 修复/新增范围
 
@@ -164,6 +171,14 @@
    - Roles CRUD、Permissions 查询
    - 角色-权限关联: `POST /admin/roles/{id}/permissions`
    - 用户-角色关联: `GET/POST /admin/users/{id}/roles`
+   - `cloud/shared/auth.py`: `require_permission(permission_code)` 依赖工厂（替代 require_admin）
+   - 60+ 后台端点全部迁移到细粒度权限码
+   - 27 个权限码（users.read/create/update/delete/manage, orders.read/refund/cancel, credits.read/adjust, etc.）
+   - 5 个预设角色（admin/operator/auditor/finance/viewer）
+   - 向后兼容：users.role=admin 且无 user_roles 记录 → 超级管理员
+   - 菜单按权限动态过滤（`get_menu(user_permissions)`）
+   - 登录响应返回用户权限列表
+   - 前端: permissions 存储/读取/权限检查
 
 ### 规格文档更新
 - `cloud/DATABASE_SCHEMA.md`: 新增 7 个表定义
@@ -198,8 +213,13 @@
 - `shared-contract/API_INDEX.md` (审计日志 API)
 
 ### 测试结果
+- admin-shell: 14/14 通过
+- admin-users: 50/50 通过
+- admin-billing: 67/67 通过
+- admin-ops: 48/48 通过
+- admin-audit: 4/4 通过
 - cloud-auth-device: 20/20 通过（无回归）
-- admin-shell 测试: 14 失败（均为预存问题，非本次引入）
+- 全部 203 个测试通过
 
 ## Bug 修复记录 (2026-06-27)
 
