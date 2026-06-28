@@ -205,7 +205,7 @@ public partial class MainWindow : Window
     {
         _currentTheme = _currentTheme == "Light" ? "Dark" : "Light";
         App.ApplyTheme(_currentTheme);
-        ThemeToggleButton.Content = _currentTheme == "Dark" ? "☀️" : "🌙";
+        ThemeToggleButton.Content = _currentTheme == "Dark" ? "" : "";
     }
 
     /// <summary>

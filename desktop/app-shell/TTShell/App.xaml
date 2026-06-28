@@ -3,6 +3,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <ResourceDictionary>
+            <!-- 全局文字渲染：Display 模式 + ClearType，避免模糊 -->
+            <Style TargetType="TextBlock">
+                <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+                <Setter Property="TextOptions.TextHintingMode" Value="Fixed" />
+            </Style>
+            <Style TargetType="TextBox">
+                <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+                <Setter Property="TextOptions.TextHintingMode" Value="Fixed" />
+            </Style>
+            <Style TargetType="Label">
+                <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+                <Setter Property="TextOptions.TextHintingMode" Value="Fixed" />
+            </Style>
+            <!-- 全局禁用按钮黑色虚线焦点框，改用各 ControlTemplate 内 Focused 触发器 -->
+            <Style TargetType="Button">
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            </Style>
             <ResourceDictionary.MergedDictionaries>
                 <!-- 默认加载浅色主题 -->
                 <ResourceDictionary Source="Resources/LightTheme.xaml" />

@@ -22,13 +22,19 @@
         Height="768"
         Width="1200"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource BackgroundBrush}">
+        Background="{DynamicResource BackgroundBrush}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed">
 
     <!-- WindowChrome：完全自定义标题栏，系统按钮由 WPF 绘制 -->
     <WindowChrome.WindowChrome>
         <WindowChrome GlassFrameThickness="0"
                       CaptionHeight="32"
-                      ResizeBorderThickness="6"
+                      ResizeBorderThickness="4"
+                      CornerRadius="0"
                       UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
 
@@ -60,7 +66,8 @@
                     <Image Source="pack://siteoforigin:,,,/Resources/app-icon.png"
                            Width="18" Height="18"
                            VerticalAlignment="Center"
-                           Margin="0,0,6,0" />
+                           Margin="0,0,6,0"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
                     <TextBlock Text="Alphoria"
                                FontSize="13"
                                FontWeight="SemiBold"
@@ -81,13 +88,14 @@
                         Cursor="Hand" Click="OnUserEntryClick"
                         ToolTip="登录 / 设备状态" />
 
-                <!-- 切换主题 -->
+                <!-- 切换主题（Segoe MDL2 Assets 矢量图标，清晰无锯齿） -->
                 <Button Grid.Column="3"
                         x:Name="ThemeToggleButton"
                         WindowChrome.IsHitTestVisibleInChrome="True"
-                        Content="🌙"
+                        Content="&#xE708;"
                         Width="28" Height="26"
-                        FontSize="13"
+                        FontSize="12"
+                        FontFamily="Segoe MDL2 Assets"
                         Background="Transparent" BorderThickness="0"
                         Cursor="Hand" Click="OnThemeToggle"
                         ToolTip="切换浅色/深色主题" />
@@ -100,7 +108,7 @@
                         x:Name="MinimizeButton"
                         WindowChrome.IsHitTestVisibleInChrome="True"
                         Content="&#xE921;"
-                        Width="46" Height="32"
+                        Width="48" Height="32"
                         FontFamily="Segoe MDL2 Assets"
                         FontSize="10"
                         Background="Transparent" BorderThickness="0"
@@ -115,7 +123,7 @@
                         x:Name="MaxRestoreButton"
                         WindowChrome.IsHitTestVisibleInChrome="True"
                         Content="&#xE922;"
-                        Width="46" Height="32"
+                        Width="48" Height="32"
                         FontFamily="Segoe MDL2 Assets"
                         FontSize="10"
                         Background="Transparent" BorderThickness="0"
@@ -130,7 +138,7 @@
                         x:Name="CloseButton"
                         WindowChrome.IsHitTestVisibleInChrome="True"
                         Content="&#xE8BB;"
-                        Width="46" Height="32"
+                        Width="48" Height="32"
                         FontFamily="Segoe MDL2 Assets"
                         FontSize="10"
                         Background="Transparent" BorderThickness="0"
@@ -151,7 +159,8 @@
             </Grid.ColumnDefinitions>
 
             <!-- 导航侧栏 -->
-            <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}">
+            <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}"
+                    SnapsToDevicePixels="True" UseLayoutRounding="True">
                 <StackPanel Margin="0,4,0,0">
                     <!-- 首页 -->
                     <Button x:Name="NavHome" Style="{StaticResource NavButtonStyle}"
