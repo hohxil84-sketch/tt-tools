@@ -84,7 +84,7 @@ async def get_feature_plans(db: AsyncSession, fc_id: str) -> list[dict]:
 
 async def list_feature_codes(db: AsyncSession, limit=20, offset=0, category: Optional[str]=None, order: str = "desc") -> FeatureCodeListData:
     limit = max(1, min(limit, MAX_LIMIT)); offset = max(0, offset)
-    q = select(FeatureCode)
+    q = select(FeatureCode).where(FeatureCode.is_active == True)  # 默认只返回启用中的功能码
     if category: q = q.where(FeatureCode.category == category)
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
     rows = (await db.execute(q.order_by(FeatureCode.created_at.desc() if order == "desc" else FeatureCode.created_at.asc()).offset(offset).limit(limit))).scalars().all()
@@ -94,7 +94,7 @@ async def list_feature_codes(db: AsyncSession, limit=20, offset=0, category: Opt
 
     items = [FeatureCodeItem(
         id=r.id, code=r.code, name=r.name, category=r.category,
-        is_active=r.is_active, plan_count=plan_counts.get(r.code, 0),
+        status=r.status, is_active=r.is_active, plan_count=plan_counts.get(r.code, 0),
         created_at=_fmt_ts(r.created_at),
     ) for r in rows]
     return FeatureCodeListData(items=items, total=total, limit=limit, offset=offset)
@@ -136,9 +136,10 @@ async def delete_feature_code(db: AsyncSession, fc_id: str) -> dict:
     """
     fc = (await db.execute(select(FeatureCode).where(FeatureCode.id == fc_id))).scalar_one_or_none()
     if not fc: raise AppError(code="FEATURE_CODE_NOT_FOUND", message="功能码不存在", status_code=404)
+    fc.status = "disabled"
     fc.is_active = False
     await db.flush()
     return {"deleted": True}
 
 def _to_detail(fc: FeatureCode) -> FeatureCodeDetail:
-    return FeatureCodeDetail(id=fc.id, code=fc.code, name=fc.name, category=fc.category, description=fc.description, is_active=fc.is_active, created_at=_fmt_ts(fc.created_at))
+    return FeatureCodeDetail(id=fc.id, code=fc.code, name=fc.name, category=fc.category, description=fc.description, status=fc.status, is_active=fc.is_active, created_at=_fmt_ts(fc.created_at))

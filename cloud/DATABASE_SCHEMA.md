@@ -308,6 +308,7 @@ provider_type 决定使用哪个 Provider 类。未列出的类型自动回退�
 | name | varchar(100) | not null | 功能名称 |
 | category | varchar(50) | not null | local_free / local_paid / cloud_ai |
 | description | text | nullable | 功能说明 |
+| status | varchar(50) | not null default 'active' | active / disabled |
 | is_active | boolean | not null default true | 是否启用 |
 | created_at | timestamptz | not null | 创建时间 |
 
@@ -328,6 +329,35 @@ Provider 模型定价表，替代代码硬编码。运营后台可编辑，即�
 | updated_at | timestamptz | not null | |
 
 索引：UNIQUE `(provider_id, model_name)`
+
+## ai_capability
+
+AI 能力表，替代硬编码 capability 字符串。调度时按 code 匹配。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | 能力 ID |
+| code | varchar(64) | unique, not null | 能力编码（如 text、vision） |
+| name | varchar(64) | not null | 能力名称（如"文本生成"） |
+| description | text | nullable | 能力说明 |
+| is_active | boolean | not null default true | 是否启用 |
+| created_at | timestamptz | not null | 创建时间 |
+| updated_at | timestamptz | not null | 更新时间 |
+
+索引：unique `code`
+
+## provider_model_capability
+
+Provider 模型 ↔ 能力 多对多关联表。替代原 provider_model_pricing.capability 单值字段。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | 关联 ID |
+| provider_model_id | uuid | fk provider_model_pricing.id, not null | 模型定价 ID |
+| capability_id | uuid | fk ai_capability.id, not null | 能力 ID |
+| created_at | timestamptz | not null | 创建时间 |
+
+索引：UNIQUE `(provider_model_id, capability_id)`，index `provider_model_id`，index `capability_id`
 
 ## feature_pricing
 

@@ -38,6 +38,7 @@ _model_dirs = [
     'cloud/admin/modules/admin-providers',
     'cloud/admin/modules/admin-feature-codes',
     'cloud/admin/modules/admin-roles',
+    'cloud/admin/modules/admin-billing',
 ]
 for _d in _model_dirs:
     _mpath = os.path.join(_project_root, _d, 'models.py')
@@ -380,6 +381,53 @@ async def seed():
             "UPDATE plans SET price_cents = 9900 WHERE plan_tier = 'pro' AND price_cents = 0"
         ))
         print("[OK] plans migrated: plan_tier + price_cents set")
+
+        # ============================================================
+        # 13. ai_capability — 默认能力种子数据
+        # ============================================================
+        cap_data = [
+            ("text", "文本生成", "文本对话、补全、翻译等"),
+            ("image_generation", "图片生成", "文生图、图生图"),
+            ("image_edit", "图片编辑", "图片修复、扩展、风格迁移"),
+            ("vision", "图片理解", "多模态图片识别与理解"),
+            ("embedding", "向量", "文本嵌入向量化"),
+            ("rerank", "重排序", "搜索结果重排序"),
+            ("speech_to_text", "语音转文字", "语音识别转录"),
+            ("text_to_speech", "文字转语音", "文本合成语音"),
+            ("ocr", "OCR", "光学字符识别"),
+        ]
+        for code, name, desc in cap_data:
+            await db.execute(text(
+                "INSERT INTO ai_capability (id, code, name, description, is_active, created_at, updated_at) "
+                "VALUES (:id, :code, :name, :desc, TRUE, :ts, :ts) "
+                "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description"
+            ), {"id": str(uuid.uuid4()), "code": code, "name": name, "desc": desc, "ts": _now()})
+        print(f"[OK] ai_capability: {len(cap_data)} rows")
+
+        # ============================================================
+        # 14. 旧 capability 数据迁移 → M2M
+        # ============================================================
+        old_cap_rows = (await db.execute(text(
+            "SELECT id, capability FROM provider_model_pricing WHERE capability IS NOT NULL AND capability != ''"
+        ))).all()
+        migrated = 0
+        for model_id, cap_code in old_cap_rows:
+            # 查找能力 ID
+            cap_row = (await db.execute(
+                text("SELECT id FROM ai_capability WHERE code = :code"),
+                {"code": cap_code},
+            )).fetchone()
+            if not cap_row:
+                continue
+            # 插入关联（ON CONFLICT 跳过重复）
+            await db.execute(text(
+                "INSERT INTO provider_model_capability (id, provider_model_id, capability_id, created_at) "
+                "VALUES (:id, :mid, :cid, :ts) "
+                "ON CONFLICT (provider_model_id, capability_id) DO NOTHING"
+            ), {"id": str(uuid.uuid4()), "mid": model_id, "cid": cap_row[0], "ts": _now()})
+            migrated += 1
+        if migrated > 0:
+            print(f"[OK] migrated {migrated} old capability → M2M")
 
         await db.commit()
         print("\nAll seed data inserted!")

@@ -2,12 +2,14 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, ActBtn, Sheet, Fld, priBtn, secBtn, inpS, finpS, showToast } from '../components/shared';
 
+interface CapInfo { id: string; code: string; name: string; }
 interface Pricing {
   id: string; provider_id: string;
-  provider_name: string; model_name: string; capability?: string;
+  provider_name: string; model_name: string;
   input_price: number; output_price: number;
   currency: string; is_active: boolean;
   created_at: string; updated_at?: string;
+  capabilities?: CapInfo[];
 }
 
 interface Provider { id: string; name: string; }
@@ -15,6 +17,7 @@ interface Provider { id: string; name: string; }
 export default function ProviderModelPricing() {
   const [items, setItems] = useState<Pricing[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [allCaps, setAllCaps] = useState<CapInfo[]>([]);
   const [err, setErr] = useState('');
   const [edit, setEdit] = useState<Pricing | null>(null);
   const [showNew, setShowNew] = useState(false);
@@ -23,12 +26,14 @@ export default function ProviderModelPricing() {
   const load = useCallback(async () => {
     setErr('');
     try {
-      const [d, pd] = await Promise.all([
+      const [d, pd, cd] = await Promise.all([
         apiRequest<{ items: Pricing[] }>('/admin/billing/model-pricing'),
         apiRequest<{ items: Provider[] }>('/admin/providers'),
+        apiRequest<{ items: CapInfo[] }>('/admin/billing/capabilities'),
       ]);
       setItems(d.items);
       setProviders(pd.items?.filter((p: any) => p.is_enabled) || []);
+      setAllCaps(cd.items || []);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
   }, [refreshKey]);
   useEffect(() => { load(); }, [load]);
@@ -40,12 +45,19 @@ export default function ProviderModelPricing() {
         <button onClick={() => setShowNew(true)} style={priBtn}>+ 新增模型定价</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['Provider', '模型', '能力', '输入价(¥/百万)', '输出价(¥/百万)', '币种', '状态', '']} colAligns={['l', 'l', 'c', 'r', 'r', 'c', 'c', 'r']}>
+      <Card><Tbl heads={['Provider', '模型', '能力', '输入价(¥/百万)', '输出价(¥/百万)', '币种', '状态', '']} colAligns={['l', 'l', 'l', 'r', 'r', 'c', 'c', 'r']}>
         {items.map(p => (
           <tr key={p.id}>
             <td style={{ fontWeight: 600, fontSize: 13 }}>{p.provider_name}</td>
             <td style={{ fontSize: 13, fontFamily: 'monospace' }}>{p.model_name}</td>
-            <td style={{ fontSize: 12, textAlign: 'center', color: 'var(--gray-500)' }}>{p.capability || 'text'}</td>
+            <td style={{ fontSize: 12, color: 'var(--gray-600)' }}>
+              {(p.capabilities || []).length > 0
+                ? p.capabilities!.map(c => (
+                  <span key={c.code} style={{ display: 'inline-block', margin: '1px 2px', padding: '1px 6px', borderRadius: 8, background: 'var(--blue-50)', color: 'var(--blue)', fontSize: 11, fontWeight: 500 }}>{c.name}</span>
+                ))
+                : <span style={{ color: 'var(--gray-400)' }}>—</span>
+              }
+            </td>
             <td style={{ fontSize: 13, textAlign: 'right' }}>{p.input_price.toFixed(4)}</td>
             <td style={{ fontSize: 13, textAlign: 'right' }}>{p.output_price.toFixed(4)}</td>
             <td style={{ fontSize: 12, textAlign: 'center', color: 'var(--gray-500)' }}>{p.currency}</td>
@@ -56,24 +68,41 @@ export default function ProviderModelPricing() {
             </td>
             <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
               <ActBtn kind="edit" onClick={() => setEdit(p)}>编辑</ActBtn>
+              <ActBtn kind="delete" onClick={async () => {
+                if (!confirm(`确定删除 ${p.provider_name}/${p.model_name} 的定价？`)) return;
+                try {
+                  await apiRequest(`/admin/billing/model-pricing/${p.id}`, { method: 'DELETE' });
+                  showToast('已删除', 'success');
+                  setRefreshKey(k => k + 1);
+                } catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); }
+              }}>删除</ActBtn>
             </td>
           </tr>
         ))}
       </Tbl></Card>
-      {(edit || showNew) && <PricingForm item={edit} providers={providers} close={() => { setEdit(null); setShowNew(false); }} done={() => { setEdit(null); setShowNew(false); setRefreshKey(k => k + 1); }} />}
+      {(edit || showNew) && <PricingForm item={edit} providers={providers} allCaps={allCaps} close={() => { setEdit(null); setShowNew(false); }} done={() => { setEdit(null); setShowNew(false); setRefreshKey(k => k + 1); }} />}
     </div>
   );
 }
 
-function PricingForm({ item, providers, close, done }: { item?: Pricing | null; providers: Provider[]; close: () => void; done: () => void }) {
+function PricingForm({ item, providers, allCaps, close, done }: { item?: Pricing | null; providers: Provider[]; allCaps: CapInfo[]; close: () => void; done: () => void }) {
   const isEdit = !!item;
   const [providerId, setProviderId] = useState(item?.provider_id || '');
   const [modelName, setModelName] = useState(item?.model_name || '');
   const [inputPrice, setInputPrice] = useState(item?.input_price?.toString() || '1.0');
   const [outputPrice, setOutputPrice] = useState(item?.output_price?.toString() || '2.0');
   const [currency, setCurrency] = useState(item?.currency || 'CNY');
-  const [capability, setCapability] = useState(item?.capability || 'text');
+  const initCaps = item?.capabilities?.map(c => c.id) || [];
+  const [selectedCapIds, setSelectedCapIds] = useState<Set<string>>(new Set(initCaps));
   const [saving, setSaving] = useState(false);
+
+  const toggleCap = (id: string) => {
+    setSelectedCapIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const submit = async (e: React.FormEvent) => { e.preventDefault(); setSaving(true);
     try {
@@ -82,13 +111,20 @@ function PricingForm({ item, providers, close, done }: { item?: Pricing | null; 
           method: 'PUT',
           body: { input_price: parseFloat(inputPrice), output_price: parseFloat(outputPrice), currency, is_active: item!.is_active },
         });
+        // 更新能力关联
+        await apiRequest(`/admin/billing/model-pricing/${item!.id}/capabilities`, {
+          method: 'PUT',
+          body: { capability_ids: [...selectedCapIds] },
+        });
+        showToast('保存成功', 'success'); done();
       } else {
+        if (selectedCapIds.size === 0) { showToast('请至少选择一个能力', 'error'); setSaving(false); return; }
         await apiRequest('/admin/billing/model-pricing', {
           method: 'POST',
-          body: { provider_id: providerId, model_name: modelName, capability, input_price: parseFloat(inputPrice), output_price: parseFloat(outputPrice), currency },
+          body: { provider_id: providerId, model_name: modelName.trim(), input_price: parseFloat(inputPrice), output_price: parseFloat(outputPrice), currency, capability_ids: [...selectedCapIds] },
         });
+        showToast('创建成功', 'success'); done();
       }
-      showToast('保存成功', 'success'); done();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '保存失败', 'error'); }
     finally { setSaving(false); }
   };
@@ -103,14 +139,22 @@ function PricingForm({ item, providers, close, done }: { item?: Pricing | null; 
           </select>
         </Fld>
         <Fld label="模型名称"><input value={modelName} onChange={e => setModelName(e.target.value)} required style={finpS} placeholder="如 deepseek-chat, gpt-4o" /></Fld>
-        <Fld label="能力类型">
-          <select value={capability} onChange={e => setCapability(e.target.value)} style={{ padding: '7px 12px', width: '100%', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-sm)', fontSize: 13, background: 'var(--white)' }}>
-            <option value="text">text（文本生成）</option>
-            <option value="image_generation">image_generation（图片生成）</option>
-            <option value="image_edit">image_edit（图片编辑）</option>
-          </select>
-        </Fld>
       </>}
+      <Fld label={isEdit ? '能力（可多选）' : '能力类型（可多选）'}>
+        {allCaps.length === 0 ? (
+          <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>暂无可用的能力，请先初始化 ai_capability 数据</span>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '4px 0' }}>
+            {allCaps.map(cap => (
+              <label key={cap.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer', padding: '4px 10px', borderRadius: 6, background: selectedCapIds.has(cap.id) ? 'var(--blue-50)' : 'var(--gray-50)', border: selectedCapIds.has(cap.id) ? '1px solid var(--blue)' : '1px solid var(--gray-200)' }}>
+                <input type="checkbox" checked={selectedCapIds.has(cap.id)} onChange={() => toggleCap(cap.id)} />
+                <span style={{ fontWeight: 500 }}>{cap.name}</span>
+                <code style={{ fontSize: 10, color: 'var(--gray-400)', marginLeft: 2 }}>{cap.code}</code>
+              </label>
+            ))}
+          </div>
+        )}
+      </Fld>
       <Fld label="输入单价 (¥/百万token)"><input type="number" step="0.0001" value={inputPrice} onChange={e => setInputPrice(e.target.value)} required style={finpS} /></Fld>
       <Fld label="输出单价 (¥/百万token)"><input type="number" step="0.0001" value={outputPrice} onChange={e => setOutputPrice(e.target.value)} required style={finpS} /></Fld>
       <Fld label="币种"><input value={currency} onChange={e => setCurrency(e.target.value)} style={finpS} /></Fld>

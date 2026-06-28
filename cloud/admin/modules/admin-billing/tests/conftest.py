@@ -334,8 +334,8 @@ async def _seed_test_data(session_factory) -> None:
         for fc_id, fc_code, fc_name, fc_cat in _feature_codes:
             await session.execute(
                 _txt(
-                    "INSERT INTO feature_codes (id, code, name, category, is_active, created_at) "
-                    "VALUES (:id, :code, :name, :cat, true, :now)"
+                    "INSERT INTO feature_codes (id, code, name, category, status, is_active, created_at) "
+                    "VALUES (:id, :code, :name, :cat, 'active', true, :now)"
                 ),
                 {"id": fc_id, "code": fc_code, "name": fc_name, "cat": fc_cat, "now": _now()},
             )

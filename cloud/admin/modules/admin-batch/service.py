@@ -26,10 +26,22 @@ async def batch_update_user_status(
                 results.append(BatchResultItem(id=user_id, success=False, message="用户不存在"))
                 continue
 
-            await db.execute(
-                text("UPDATE users SET status = :status, updated_at = :now WHERE id = :uid"),
-                {"status": req.status, "now": now_utc, "uid": user_id},
-            )
+            # 状态变更同步 is_active：恢复→True，删除→False
+            if req.status == "active":
+                await db.execute(
+                    text("UPDATE users SET status = :status, is_active = TRUE, updated_at = :now WHERE id = :uid"),
+                    {"status": req.status, "now": now_utc, "uid": user_id},
+                )
+            elif req.status == "deleted":
+                await db.execute(
+                    text("UPDATE users SET status = :status, is_active = FALSE, updated_at = :now WHERE id = :uid"),
+                    {"status": req.status, "now": now_utc, "uid": user_id},
+                )
+            else:
+                await db.execute(
+                    text("UPDATE users SET status = :status, updated_at = :now WHERE id = :uid"),
+                    {"status": req.status, "now": now_utc, "uid": user_id},
+                )
             results.append(BatchResultItem(id=user_id, success=True))
             succeeded += 1
         except Exception as e:

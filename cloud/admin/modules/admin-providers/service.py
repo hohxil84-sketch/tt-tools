@@ -41,8 +41,9 @@ async def _reload_router(db: AsyncSession) -> None:
 
 async def list_providers(db: AsyncSession, limit: int = 20, offset: int = 0, order: str = "desc") -> ProviderListData:
     limit = max(1, min(limit, MAX_LIMIT)); offset = max(0, offset)
-    total = (await db.execute(select(func.count()).select_from(Provider))).scalar_one()
-    rows = (await db.execute(select(Provider).order_by(Provider.created_at.desc() if order == "desc" else Provider.created_at.asc()).offset(offset).limit(limit))).scalars().all()
+    base = select(Provider).where(Provider.is_enabled == True)
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    rows = (await db.execute(base.order_by(Provider.created_at.desc() if order == "desc" else Provider.created_at.asc()).offset(offset).limit(limit))).scalars().all()
     items = [ProviderItem(id=r.id, name=r.name, provider_type=r.provider_type, is_enabled=r.is_enabled, priority=r.priority, created_at=_fmt_ts(r.created_at)) for r in rows]
     return ProviderListData(items=items, total=total, limit=limit, offset=offset)
 

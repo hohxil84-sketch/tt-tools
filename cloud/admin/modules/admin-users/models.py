@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy import String, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from cloud.shared import Base
@@ -55,6 +55,8 @@ class UserAdmin(Base):
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="user")
     # 用户状态：active / blocked / deleted
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
+    # 是否启用（软删除标记，统一列表过滤）
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # 套餐外键 ID（→ plans.id）
     plan_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("plans.id"), nullable=True
@@ -106,6 +108,8 @@ class DeviceAdmin(Base):
     client_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # 设备状态：active / blocked / removed
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="active")
+    # 是否启用（软删除标记，统一列表过滤）
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # 绑定时间
     bound_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     # 最近活跃时间

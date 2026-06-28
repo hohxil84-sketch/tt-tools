@@ -50,6 +50,7 @@ export default function Devices() {
               <ActBtn kind="detail" onClick={() => setDetail(x)}>详情</ActBtn>
               {x.status === 'active' && <ActBtn kind="block" onClick={() => setCa({ id: x.id, s: 'blocked' })}>封禁</ActBtn>}
               {x.status === 'blocked' && <ActBtn kind="unblock" onClick={() => setCa({ id: x.id, s: 'active' })}>解封</ActBtn>}
+              {x.status === 'removed' && <ActBtn kind="unblock" onClick={() => setCa({ id: x.id, s: 'active' })}>恢复</ActBtn>}
               <ActBtn kind="delete" onClick={() => setCd(x.id)}>删除</ActBtn>
             </td>
           </tr>

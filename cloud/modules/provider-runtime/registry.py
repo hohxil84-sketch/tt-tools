@@ -144,20 +144,22 @@ async def load_providers_from_db(db_session, router) -> int:
     result = await db_session.execute(
         text(
             "SELECT p.name, p.provider_type, p.api_key_encrypted, p.base_url, "
-            "p.priority, pmp.model_name, pmp.capability "
+            "p.priority, pmp.model_name, ac.code "
             "FROM providers p "
             "INNER JOIN provider_model_pricing pmp ON pmp.provider_id = p.id "
-            "WHERE p.is_enabled = true AND pmp.is_active = true "
+            "INNER JOIN provider_model_capability pmc ON pmc.provider_model_id = pmp.id "
+            "INNER JOIN ai_capability ac ON ac.id = pmc.capability_id "
+            "WHERE p.is_enabled = true AND pmp.is_active = true AND ac.is_active = true "
             "ORDER BY p.priority DESC, p.name ASC"
         )
     )
     rows = result.all()
     if not rows:
-        _logger.warning("数据库中没有已启用的 Provider（需在 provider_model_pricing 中配置模型），AI 功能将不可用")
+        _logger.warning("数据库中没有已启用的 Provider（需在 provider_model_pricing 中配置模型并绑定能力），AI 功能将不可用")
 
     router.clear()
     loaded = 0
-    # 按 provider name 分组组装 models_json
+    # 按 provider name 分组组装 models_json：{capability: model_name}
     prov_data: dict[str, dict] = {}
     for row in rows:
         pname = row[0]
@@ -170,7 +172,10 @@ async def load_providers_from_db(db_session, router) -> int:
                 "priority": row[4],
                 "models_json": {},
             }
-        prov_data[pname]["models_json"][row[6] or "text"] = row[5]
+        # ac.code → model_name（同一 capability 多条时先到先得）
+        cap_code = row[6] or "text"
+        if cap_code not in prov_data[pname]["models_json"]:
+            prov_data[pname]["models_json"][cap_code] = row[5]
 
     for pname, row_dict in prov_data.items():
         instance = _create_provider_instance(row_dict)

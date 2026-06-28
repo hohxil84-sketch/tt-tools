@@ -1,26 +1,28 @@
 """
 admin-billing 业务逻辑层。
 
-提供后台套餐管理、订单管理和额度管理的核心逻辑：
+提供后台套餐管理、订单管理、额度管理和模型定价管理的核心逻辑：
 - 套餐：列表、详情、创建、更新、状态切换
 - 订单：跨用户列表查询、详情查询
 - 额度：跨用户账户列表、账户详情、流水查询、手动调整
+- 模型定价：CRUD + 能力关联（ai_capability / provider_model_capability）
 
-模型复用策略：
-本模块不定义 ORM 模型，直接通过 importlib 加载已有模块的模型：
-- Plan / CreditAccount / CreditLedger ← cloud/modules/credits-billing/models.py
+模型策略：
+- Plan / CreditAccount / CreditLedger / Order 等从已有模块 importlib 加载
+- AiCapability / ProviderModelCapability 由本模块 models.py 定义
+- Plan / CreditAccount / CreditLedger ← cloud/modules/credits-billing/models.py（_load_module_models 惰性加载）
 - Order ← cloud/modules/orders_recharge/models.py
 - User ← cloud/admin/modules/admin-users/models.py
-
-调用方（conftest）需要预先将模型类注册到 sys.modules 的别名键下，
-service.py 通过 _get_model() 惰性加载。
 
 手动调整额度时：
 - 正数 amount：调用 credits-billing 的 grant_credits()
 - 负数 amount：调用 credits-billing 的 consume_credits()（取绝对值）
 - source_type 统一为 "admin"，description 记录调整原因
 """
+
 from __future__ import annotations
+
+import models  # noqa: E402 — 注册 ai_capability / provider_model_capability 到 Base.metadata
 
 import importlib.util
 import os
@@ -248,7 +250,7 @@ async def list_plans(db: AsyncSession) -> PlanListData:
     _load_module_models()
 
     result = await db.execute(
-        select(_Plan).order_by(_Plan.created_at.desc())
+        select(_Plan).where(_Plan.is_active == True).order_by(_Plan.created_at.desc())
     )
     plans = result.scalars().all()
 
@@ -757,6 +759,7 @@ async def delete_plan(db: AsyncSession, plan_id: str) -> dict:
         )
 
     plan.status = "disabled"
+    plan.is_active = False
     await db.flush()
 
     return {"deleted": True}
@@ -791,7 +794,7 @@ async def list_credit_accounts(
     limit = max(1, min(limit, MAX_LIMIT))
     offset = max(0, offset)
 
-    conditions = []
+    conditions = [_CreditAccount.is_active == True]  # 默认只返回启用中的账户
     if status:
         conditions.append(_CreditAccount.status == status)
     if plan_id:
@@ -800,16 +803,14 @@ async def list_credit_accounts(
         conditions.append(_CreditAccount.user_id == user_id)
 
     # 查询总数
-    count_query = select(func.count()).select_from(_CreditAccount)
-    if conditions:
-        count_query = count_query.where(and_(*conditions))
+    count_query = select(func.count()).select_from(_CreditAccount).where(and_(*conditions))
     total_result = await db.execute(count_query)
     total = total_result.scalar_one()
 
     # 查询分页数据
     query = (
         select(_CreditAccount)
-        .where(and_(*conditions) if conditions else True)
+        .where(and_(*conditions))
         .order_by(_CreditAccount.created_at.desc() if order == "desc" else _CreditAccount.created_at.asc())
         .offset(offset)
         .limit(limit)
@@ -1190,7 +1191,74 @@ async def _get_order_function(func_name: str):
 
 
 # ============================================================
-# 模型定价管理（provider_model_pricing 表 CRUD）
+# AI 能力管理（ai_capability 表）
+# ============================================================
+
+
+async def list_capabilities(
+    db: AsyncSession, is_active: Optional[bool] = None,
+) -> list[dict]:
+    """列出 AI 能力（供前端多选框使用）。"""
+    from sqlalchemy import text as _t
+    sql = "SELECT id, code, name, description, is_active FROM ai_capability"
+    params = {}
+    if is_active is not None:
+        sql += " WHERE is_active = :ia"
+        params["ia"] = is_active
+    sql += " ORDER BY code"
+    result = await db.execute(_t(sql), params)
+    return [
+        {"id": r[0], "code": r[1], "name": r[2], "description": r[3], "is_active": r[4]}
+        for r in result.all()
+    ]
+
+
+async def _batch_model_capabilities(
+    db: AsyncSession, model_ids: list[str],
+) -> dict[str, list[dict]]:
+    """批量查询模型的能力列表。"""
+    if not model_ids:
+        return {}
+    from sqlalchemy import text as _t
+    result = await db.execute(
+        _t(
+            "SELECT pmc.provider_model_id, ac.id, ac.code, ac.name "
+            "FROM provider_model_capability pmc "
+            "JOIN ai_capability ac ON ac.id = pmc.capability_id "
+            "WHERE pmc.provider_model_id = ANY(:mids) AND ac.is_active = TRUE "
+            "ORDER BY ac.code"
+        ),
+        {"mids": model_ids},
+    )
+    cap_map: dict[str, list[dict]] = {mid: [] for mid in model_ids}
+    for row in result.all():
+        cap_map[row[0]].append({"id": row[1], "code": row[2], "name": row[3]})
+    return cap_map
+
+
+async def _set_model_capabilities(
+    db: AsyncSession, model_id: str, capability_ids: list[str],
+) -> None:
+    """替换模型的能力关联（先删后插）。"""
+    from sqlalchemy import text as _t
+    await db.execute(
+        _t("DELETE FROM provider_model_capability WHERE provider_model_id = :mid"),
+        {"mid": model_id},
+    )
+    now = datetime.now(timezone.utc)
+    for cid in capability_ids:
+        import uuid as _uuid
+        await db.execute(
+            _t(
+                "INSERT INTO provider_model_capability (id, provider_model_id, capability_id, created_at) "
+                "VALUES (:id, :mid, :cid, :now)"
+            ),
+            {"id": str(_uuid.uuid4()), "mid": model_id, "cid": cid, "now": now},
+        )
+
+
+# ============================================================
+# 模型定价管理（provider_model_pricing 表 CRUD + M2M 能力）
 # ============================================================
 
 
@@ -1199,16 +1267,16 @@ async def list_model_pricing(
     provider_id: Optional[str] = None,
     is_active: Optional[bool] = None,
 ) -> list[dict]:
-    """列出所有 Provider 模型定价（JOIN providers 获取名称）。"""
+    """列出 Provider 模型定价（JOIN providers 获取名称，默认只返回启用中的）。"""
     from sqlalchemy import text as _t
-    conditions = ["1=1"]
-    params: dict = {}
+    # 默认只显示启用中的模型，is_active=False 时不过滤
+    if is_active is None:
+        is_active = True
+    conditions = ["pmp.is_active = :ia"]
+    params: dict = {"ia": is_active}
     if provider_id:
         conditions.append("pmp.provider_id = :pid")
         params["pid"] = provider_id
-    if is_active is not None:
-        conditions.append("pmp.is_active = :ia")
-        params["ia"] = is_active
 
     result = await db.execute(
         _t(
@@ -1222,6 +1290,9 @@ async def list_model_pricing(
         params,
     )
     rows = result.all()
+    # 批量查能力
+    model_ids = [r[0] for r in rows]
+    cap_map = await _batch_model_capabilities(db, model_ids) if model_ids else {}
     return [
         {
             "id": r[0], "provider_name": r[1], "model_name": r[2],
@@ -1230,6 +1301,7 @@ async def list_model_pricing(
             "currency": r[5], "is_active": r[6],
             "created_at": r[7].isoformat() if r[7] else None,
             "updated_at": r[8].isoformat() if r[8] else None,
+            "capabilities": cap_map.get(r[0], []),
         }
         for r in rows
     ]
@@ -1242,29 +1314,78 @@ async def create_model_pricing(
     input_price: float,
     output_price: float,
     currency: str = "CNY",
-    capability: str = "text",
+    capability_ids: list[str] | None = None,
 ) -> dict:
-    """新增模型定价（关联 Provider UUID + capability）。"""
+    """新增模型定价（关联 Provider UUID + M2M 能力）。"""
     import uuid as _uuid
     from sqlalchemy import text as _t
     now = datetime.now(timezone.utc)
     id_ = str(_uuid.uuid4())
 
-    await db.execute(
-        _t(
-            "INSERT INTO provider_model_pricing "
-            "(id, provider_id, model_name, capability, input_price, output_price, currency, created_at, updated_at) "
-            "VALUES (:id, :pid, :mn, :cap, :ip, :op, :cur, :now, :now)"
-        ),
-        {"id": id_, "pid": provider_id, "mn": model_name, "cap": capability,
-         "ip": input_price, "op": output_price, "cur": currency, "now": now},
-    )
-    await db.flush()
-    # 查 provider name 返回
+    # 查 provider name（provider_name 列仍为 NOT NULL，需填充）
     result = await db.execute(_t("SELECT name FROM providers WHERE id = :pid"), {"pid": provider_id})
     row = result.fetchone()
     pname = row[0] if row else ""
+
+    # 预查是否已存在相同 provider + model 的定价
+    dup = await db.execute(
+        _t(
+            "SELECT id FROM provider_model_pricing "
+            "WHERE provider_id = :pid AND model_name = :mn"
+        ),
+        {"pid": provider_id, "mn": model_name},
+    )
+    if dup.fetchone():
+        raise AppError(
+            code="MODEL_PRICING_EXISTS",
+            message=f"Provider '{pname}' 下已有模型 '{model_name}'，请勿重复添加",
+            status_code=409,
+        )
+
+    # provider_model_pricing.capability 保留首个能力名称（向后兼容）
+    first_cap = ""
+    if capability_ids:
+        cap_result = await db.execute(
+            _t("SELECT code FROM ai_capability WHERE id = ANY(:cids) ORDER BY code LIMIT 1"),
+            {"cids": capability_ids},
+        )
+        cap_row = cap_result.fetchone()
+        first_cap = cap_row[0] if cap_row else ""
+
+    await db.execute(
+        _t(
+            "INSERT INTO provider_model_pricing "
+            "(id, provider_id, provider_name, model_name, capability, input_price, output_price, currency, is_active, created_at, updated_at) "
+            "VALUES (:id, :pid, :pn, :mn, :cap, :ip, :op, :cur, TRUE, :now, :now)"
+        ),
+        {"id": id_, "pid": provider_id, "pn": pname, "mn": model_name, "cap": first_cap,
+         "ip": input_price, "op": output_price, "cur": currency, "now": now},
+    )
+    await db.flush()
+
+    # 保存 M2M 能力关联
+    if capability_ids:
+        await _set_model_capabilities(db, id_, capability_ids)
+
     return {"id": id_, "provider_name": pname, "model_name": model_name}
+
+
+async def delete_model_pricing(
+    db: AsyncSession, pricing_id: str,
+) -> dict:
+    """软删除模型定价（is_active = False）。"""
+    from sqlalchemy import text as _t
+    result = await db.execute(
+        _t("UPDATE provider_model_pricing SET is_active = FALSE, updated_at = :now WHERE id = :id"),
+        {"id": pricing_id, "now": datetime.now(timezone.utc)},
+    )
+    if result.rowcount == 0:
+        raise AppError(
+            code="MODEL_PRICING_NOT_FOUND",
+            message=f"模型定价 {pricing_id} 不存在",
+            status_code=404,
+        )
+    return {"deleted": True}
 
 
 async def update_model_pricing(
@@ -1423,6 +1544,19 @@ async def create_credit_package(
     from sqlalchemy import text as _t
     now = datetime.now(timezone.utc)
     id_ = str(_uuid.uuid4())
+
+    # 预查 product_code 是否重复
+    dup = await db.execute(
+        _t("SELECT id FROM credit_packages WHERE product_code = :pc"),
+        {"pc": product_code},
+    )
+    if dup.fetchone():
+        raise AppError(
+            code="CREDIT_PACKAGE_EXISTS",
+            message=f"充值套餐 '{product_code}' 已存在，请勿重复添加",
+            status_code=409,
+        )
+
     await db.execute(
         _t(
             "INSERT INTO credit_packages "

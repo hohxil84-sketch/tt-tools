@@ -114,14 +114,65 @@ async def init_db() -> None:
         # 创建新表（已存在的表会跳过）
         await conn.run_sync(Base.metadata.create_all)
 
-        # 安全迁移：给已有表加列（ADD COLUMN IF NOT EXISTS，幂等操作）
+        # 安全迁移：给已有表加列 / 建新表（幂等操作）
         from sqlalchemy import text as _sql_text
         _migrations = [
-            # roles 软删除标记
+            # 统一软删除标记
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE devices ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE plans ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE credit_accounts ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE feature_codes ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'active'",
             "ALTER TABLE roles ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+            # ai_capability 能力表
+            """CREATE TABLE IF NOT EXISTS ai_capability (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                code VARCHAR(64) UNIQUE NOT NULL,
+                name VARCHAR(64) NOT NULL,
+                description TEXT,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )""",
+            # provider_model_capability M2M 关联表
+            """CREATE TABLE IF NOT EXISTS provider_model_capability (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                provider_model_id UUID NOT NULL REFERENCES provider_model_pricing(id) ON DELETE CASCADE,
+                capability_id UUID NOT NULL REFERENCES ai_capability(id) ON DELETE CASCADE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(provider_model_id, capability_id)
+            )""",
         ]
         for _sql in _migrations:
             await conn.execute(_sql_text(_sql))
+
+        # 旧数据同步：之前标记为"已删除"的记录，is_active 应设为 FALSE
+        _data_syncs = [
+            "UPDATE users SET is_active = FALSE WHERE status = 'deleted' AND is_active = TRUE",
+            "UPDATE devices SET is_active = FALSE WHERE status = 'removed' AND is_active = TRUE",
+            "UPDATE plans SET is_active = FALSE WHERE status = 'disabled' AND is_active = TRUE",
+        ]
+        for _sql in _data_syncs:
+            await conn.execute(_sql_text(_sql))
+
+        # 默认能力种子数据（幂等 INSERT ON CONFLICT）
+        _caps = [
+            ("text", "文本生成", "文本对话、补全、翻译等"),
+            ("image_generation", "图片生成", "文生图、图生图"),
+            ("image_edit", "图片编辑", "图片修复、扩展、风格迁移"),
+            ("vision", "图片理解", "多模态图片识别与理解"),
+            ("embedding", "向量", "文本嵌入向量化"),
+            ("rerank", "重排序", "搜索结果重排序"),
+            ("speech_to_text", "语音转文字", "语音识别转录"),
+            ("text_to_speech", "文字转语音", "文本合成语音"),
+            ("ocr", "OCR", "光学字符识别"),
+        ]
+        for _code, _name, _desc in _caps:
+            await conn.execute(_sql_text(
+                "INSERT INTO ai_capability (id, code, name, description, is_active, created_at, updated_at) "
+                "VALUES (gen_random_uuid(), :code, :name, :desc, TRUE, NOW(), NOW()) "
+                "ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description"
+            ), {"code": _code, "name": _name, "desc": _desc})
 
 
 async def close_db() -> None:

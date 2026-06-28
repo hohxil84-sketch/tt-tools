@@ -60,9 +60,12 @@ from service import (
     list_all_credit_ledger,
     adjust_credits,
     # 新增定价管理
+    list_capabilities,
     list_model_pricing,
     create_model_pricing,
     update_model_pricing,
+    delete_model_pricing,
+    _set_model_capabilities,
     list_feature_pricing,
     update_feature_pricing,
     get_system_config,
@@ -573,6 +576,43 @@ async def admin_adjust_credits(
 # ============================================================
 
 
+@router.get("/admin/billing/capabilities")
+async def admin_list_capabilities(
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出所有 AI 能力（供模型定价多选框使用）。"""
+    try:
+        items = await list_capabilities(db, is_active=True)
+        return success_response({"items": items}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+@router.put("/admin/billing/model-pricing/{pricing_id}/capabilities")
+async def admin_set_model_capabilities(
+    pricing_id: str,
+    body: dict,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """设置模型定价的能力（替换式）。"""
+    try:
+        capability_ids = body.get("capability_ids", [])
+        await _set_model_capabilities(db, pricing_id, capability_ids)
+        return success_response({"id": pricing_id}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
 @router.get("/admin/billing/model-pricing")
 async def admin_list_model_pricing(
     request_id: str = Depends(get_request_id),
@@ -606,6 +646,7 @@ async def admin_create_model_pricing(
             input_price=float(body["input_price"]),
             output_price=float(body["output_price"]),
             currency=body.get("currency", "CNY"),
+            capability_ids=body.get("capability_ids"),
         )
         return success_response(data, request_id)
     except AppError as e:
@@ -627,6 +668,24 @@ async def admin_update_model_pricing(
     try:
         await update_model_pricing(db, pricing_id, **body)
         return success_response({"id": pricing_id}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+@router.delete("/admin/billing/model-pricing/{pricing_id}")
+async def admin_delete_model_pricing(
+    pricing_id: str,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除模型定价（软删除，设为停用）。"""
+    try:
+        data = await delete_model_pricing(db, pricing_id)
+        return success_response(data, request_id)
     except AppError as e:
         return JSONResponse(
             content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),

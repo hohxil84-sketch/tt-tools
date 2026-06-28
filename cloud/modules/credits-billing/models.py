@@ -64,6 +64,8 @@ class Plan(Base):
     price_cents = Column(Integer, nullable=False, default=0)
     # 套餐状态：active / disabled
     status = Column(String(50), nullable=False, default="active")
+    # 是否启用（软删除标记，统一列表过滤）
+    is_active = Column(Boolean, nullable=False, default=True)
     # 时间戳
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
     updated_at = Column(
@@ -103,6 +105,8 @@ class CreditAccount(Base):
     period_end = Column(DateTime(timezone=True), nullable=True)
     # 账户状态：active / frozen
     status = Column(String(50), nullable=False, default="active")
+    # 是否启用（软删除标记，统一列表过滤）
+    is_active = Column(Boolean, nullable=False, default=True)
     # 时间戳
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
     updated_at = Column(

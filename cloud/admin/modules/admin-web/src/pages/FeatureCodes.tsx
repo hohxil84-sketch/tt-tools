@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, ActBtn, Pager, Sheet, Modal, secBtn, inpS, selS, priBtn, showToast } from '../components/shared';
 
-interface FC { id: string; code: string; name: string; category: string; is_active: boolean; plan_count?: number; description?: string | null; created_at: string; }
+interface FC { id: string; code: string; name: string; category: string; status?: string; is_active: boolean; plan_count?: number; description?: string | null; created_at: string; }
 interface PlanRef { id: string; name: string; monthly_grant: number; status: string; }
 interface List { items: FC[]; total: number; limit: number; offset: number; }
 const CATS: Record<string, string> = { local_free: '本地免费', local_paid: '本地付费', cloud_ai: '云端AI' };
@@ -114,7 +114,7 @@ export default function FeatureCodes() {
                 onClick={()=>setCreditEdit({code:fc.code,name:fc.name,val:pricing[fc.code]||0})}>
               {pricing[fc.code] ?? '—'}
             </td>
-            <td style={{ fontSize:13, width:'8%', textAlign:'center' }}><span style={{ fontSize:12, fontWeight:500, color:fc.is_active?'#34c759':'var(--gray-400)', cursor:'pointer' }} onClick={()=>setToggleTarget(fc)}>{fc.is_active?'启用':'禁用'}</span></td>
+            <td style={{ fontSize:13, width:'8%', textAlign:'center' }}><span style={{ fontSize:12, fontWeight:500, color:fc.is_active?'#34c759':'var(--gray-400)', cursor:'pointer' }} onClick={()=>setToggleTarget(fc)}>{SLS[fc.status || ''] || (fc.is_active?'启用':'禁用')}</span></td>
             <td style={{ fontSize:13, width:'8%', textAlign:'center', paddingRight:24 }}><span style={{ fontSize:13, fontWeight:600, color:(fc.plan_count||0)>0?'var(--blue)':'var(--gray-400)' }}>{fc.plan_count??0}</span></td>
             <td style={{ fontSize:12, color:'var(--gray-500)', width:'14%', textAlign:'center' }}>{new Date(fc.created_at).toLocaleString('zh-CN')}</td>
             <td style={{ textAlign:'right', width:'16%', whiteSpace:'nowrap' }}>

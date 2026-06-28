@@ -473,7 +473,7 @@ async def list_users(
     # 构建基础查询（排除 password_hash 字段，不返回给客户端）
     query = select(User).options(
         # 使用 load_only 只加载需要的列，排除 password_hash
-    )
+    ).where(User.is_active == True)  # 默认只返回启用中的用户
 
     # 角色筛选
     if role is not None:
@@ -504,7 +504,7 @@ async def list_users(
         )
 
     # 查询总数
-    count_query = select(func.count()).select_from(User)
+    count_query = select(func.count()).select_from(User).where(User.is_active == True)
     if role is not None:
         count_query = count_query.where(User.role == role)
     if status is not None:
@@ -705,6 +705,9 @@ async def update_user_status(
     # 更新状态和时间
     user.status = new_status
     user.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    # 恢复为 active 时同步恢复 is_active（从软删除中恢复）
+    if new_status == "active":
+        user.is_active = True
     await db.flush()
 
     return await _build_user_detail(
@@ -919,6 +922,7 @@ async def delete_user(db: AsyncSession, user_id: str) -> dict:
 
     # 软删除用户
     user.status = "deleted"
+    user.is_active = False
     user.updated_at = now
 
     # 软删除关联设备
@@ -1048,8 +1052,8 @@ async def list_devices(
     limit = max(1, min(limit, MAX_LIMIT))
     offset = max(0, offset)
 
-    # 构建查询
-    query = select(Device)
+    # 构建查询（默认只返回启用中的设备）
+    query = select(Device).where(Device.is_active == True)
 
     # 状态筛选
     if status is not None:
@@ -1062,7 +1066,7 @@ async def list_devices(
         query = query.where(Device.status == status)
 
     # 查询总数
-    count_query = select(func.count()).select_from(Device)
+    count_query = select(func.count()).select_from(Device).where(Device.is_active == True)
     if status is not None:
         count_query = count_query.where(Device.status == status)
     total_result = await db.execute(count_query)
@@ -1174,6 +1178,9 @@ async def update_device_status(
     # 更新状态和时间
     device.status = new_status
     device.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    # 恢复为 active 时同步恢复 is_active（从软删除中恢复）
+    if new_status == "active":
+        device.is_active = True
     await db.flush()
 
     user_map = await _batch_user_info(db, [device.user_id])
@@ -1226,6 +1233,7 @@ async def delete_device(db: AsyncSession, device_id: str) -> dict:
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     device.status = "removed"
+    device.is_active = False
     device.updated_at = now
     await db.flush()
 
