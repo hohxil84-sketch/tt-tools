@@ -188,6 +188,20 @@ def get_menu(user_permissions: set | None = None) -> MenuData:
                     path="/admin/credits/ledger",
                     required_permission="credits.read",
                 ),
+                MenuItem(
+                    id="model-pricing",
+                    title="模型定价",
+                    icon="dollar",
+                    path="/admin/billing/model-pricing",
+                    required_permission="plans.read",
+                ),
+                MenuItem(
+                    id="feature-pricing",
+                    title="功能定价 & 汇率",
+                    icon="setting",
+                    path="/admin/billing/feature-pricing",
+                    required_permission="plans.read",
+                ),
             ],
         ),
         MenuItem(
