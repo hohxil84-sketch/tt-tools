@@ -39,6 +39,12 @@ public class AiCopyViewModel : BaseViewModel
     private string _extraRequirements = string.Empty;
     private string _newSellingPoint = string.Empty;
 
+    // ---- 预估信息 ----
+    private int _estimatedMinCredits;
+    private int _estimatedMaxCredits;
+    private string _estimatedLatency = string.Empty;
+    private string _estimateSummary = string.Empty;
+
     // ---- 生成结果 ----
     private string _generatedText = string.Empty;
     private string _selectedVariant = string.Empty;
@@ -234,6 +240,37 @@ public class AiCopyViewModel : BaseViewModel
     /// <summary>是否有生成的文案文本（用于复制按钮）</summary>
     public bool HasGeneratedText => !string.IsNullOrEmpty(GeneratedText);
 
+    /// <summary>预估最小扣点</summary>
+    public int EstimatedMinCredits
+    {
+        get => _estimatedMinCredits;
+        set => SetProperty(ref _estimatedMinCredits, value);
+    }
+
+    /// <summary>预估最大扣点</summary>
+    public int EstimatedMaxCredits
+    {
+        get => _estimatedMaxCredits;
+        set => SetProperty(ref _estimatedMaxCredits, value);
+    }
+
+    /// <summary>预估耗时显示文本</summary>
+    public string EstimatedLatency
+    {
+        get => _estimatedLatency;
+        set => SetProperty(ref _estimatedLatency, value);
+    }
+
+    /// <summary>预估摘要（完整展示文本）</summary>
+    public string EstimateSummary
+    {
+        get => _estimateSummary;
+        set => SetProperty(ref _estimateSummary, value);
+    }
+
+    /// <summary>是否有预估信息可展示</summary>
+    public bool HasEstimate => !string.IsNullOrEmpty(EstimateSummary);
+
     /// <summary>是否正在调用云端生成</summary>
     public bool IsRunning
     {
@@ -384,12 +421,34 @@ public class AiCopyViewModel : BaseViewModel
 
         IsRunning = true;
         ErrorMessage = null;
-        StatusMessage = "正在调用云端 AI 生成文案...";
+        StatusMessage = "正在获取预估...";
 
         _currentCts = new CancellationTokenSource();
 
         try
         {
+            // 先调预估接口
+            try
+            {
+                var estResp = await _cloudApiClient.EstimateAiCopyAsync(new AiCopyEstimateRequest
+                {
+                    Scene = SelectedScene,
+                    ProductName = ProductName.Trim(),
+                    SellingPoints = SellingPoints.ToList(),
+                    ClientRequestId = Guid.NewGuid().ToString(),
+                }, _currentCts.Token);
+                if (estResp?.IsSuccess == true && estResp.Data != null)
+                {
+                    EstimatedMinCredits = estResp.Data.MinCredits;
+                    EstimatedMaxCredits = estResp.Data.EstimatedMaxCredits;
+                    EstimatedLatency = estResp.Data.EstimatedLatency?.Display ?? "";
+                    EstimateSummary = $"预计消耗 {EstimatedMinCredits}-{EstimatedMaxCredits} 点"
+                        + (string.IsNullOrEmpty(EstimatedLatency) ? "" : $" · {EstimatedLatency}");
+                    StatusMessage = EstimateSummary;
+                }
+            }
+            catch { /* 预估失败不阻塞 */ }
+
             // 构建请求（严格对应 OpenAPI ai-copy.yaml 定义的字段）
             var request = new AiCopyGenerateRequest
             {

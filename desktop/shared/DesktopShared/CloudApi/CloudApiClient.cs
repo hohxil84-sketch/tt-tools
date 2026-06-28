@@ -159,6 +159,17 @@ public class CloudApiClient : IDisposable
             "/api/v1/ai/copy/generate", request, ct);
     }
 
+    /// <summary>预估文案生成扣点和耗时</summary>
+    public async Task<ApiResponse<AiCopyEstimateResponse>?> EstimateAiCopyAsync(
+        AiCopyEstimateRequest request, CancellationToken ct = default)
+    {
+        request.ClientRequestId = string.IsNullOrEmpty(request.ClientRequestId)
+            ? GenerateClientRequestId()
+            : request.ClientRequestId;
+        return await PostAsync<AiCopyEstimateRequest, AiCopyEstimateResponse>(
+            "/api/v1/ai/copy/estimate", request, ct);
+    }
+
     // ==================== AI Render ====================
 
     /// <summary>创建效果图生成任务</summary>
