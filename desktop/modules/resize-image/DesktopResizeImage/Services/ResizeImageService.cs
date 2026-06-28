@@ -312,7 +312,7 @@ public class ResizeImageService : IDisposable
             _logger?.Info(
                 $"权限拒绝: feature=resize_image_local_paid, " +
                 $"reason={entitlementResp.Data.Reason}, " +
-                $"plan={entitlementResp.Data.PlanCode}",
+                $"plan={entitlementResp.Data.PlanId}",
                 "desktop-resize-image");
             return new ResizeImageResult
             {
@@ -320,7 +320,7 @@ public class ResizeImageService : IDisposable
                 InputPath = inputPath,
                 EntitlementAllowed = false,
                 EntitlementReason = entitlementResp.Data.Reason ?? "当前套餐不支持此功能",
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 RemainingFreeQuota = entitlementResp.Data.RemainingFreeQuota,
                 ErrorMessage = "套餐权限不足",
             };
@@ -334,7 +334,7 @@ public class ResizeImageService : IDisposable
                 IsSuccess = false,
                 InputPath = inputPath,
                 EntitlementAllowed = true,
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 ErrorMessage = _availabilityError ?? "改尺寸服务不可用，请先调用 StartAsync",
             };
         }
@@ -361,7 +361,7 @@ public class ResizeImageService : IDisposable
                 IsSuccess = false,
                 InputPath = inputPath,
                 EntitlementAllowed = true,
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 ErrorMessage = $"改尺寸处理失败: {ex.Message}",
             };
         }
@@ -373,7 +373,7 @@ public class ResizeImageService : IDisposable
                 IsSuccess = false,
                 InputPath = inputPath,
                 EntitlementAllowed = true,
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 ErrorMessage = "改尺寸 worker 返回空响应",
             };
         }
@@ -390,7 +390,7 @@ public class ResizeImageService : IDisposable
                 IsSuccess = false,
                 InputPath = inputPath,
                 EntitlementAllowed = true,
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 ErrorMessage = error,
             };
         }
@@ -400,7 +400,7 @@ public class ResizeImageService : IDisposable
         var result = ResizeImageResult.FromRouterResponse(data, inputPath);
         result.IsSuccess = true;
         result.EntitlementAllowed = true;
-        result.PlanCode = entitlementResp.Data.PlanCode;
+        result.PlanCode = entitlementResp.Data.PlanId;
         result.RemainingFreeQuota = entitlementResp.Data.RemainingFreeQuota;
 
         _logger?.Info(

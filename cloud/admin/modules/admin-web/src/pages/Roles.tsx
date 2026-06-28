@@ -21,7 +21,7 @@ export default function Roles() {
   // 资源分类中文名映射
   const RES_CN: Record<string, string> = {
     dashboard: '仪表盘', users: '用户管理', devices: '设备管理',
-    orders: '订单管理', plans: '套餐管理', credits: '额度管理',
+    orders: '订单管理', plans: '套餐管理', credits: '算力管理',
     providers: 'Provider 管理', features: '功能码管理', roles: '角色权限',
     audit: '审计日志', ops: '运维管理', batch: '批量操作', export: '数据导出',
   };

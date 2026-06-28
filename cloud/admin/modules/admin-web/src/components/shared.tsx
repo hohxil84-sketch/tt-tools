@@ -57,7 +57,7 @@ const _abColors: Record<string, string> = {
   detail: '#8e8e93',   // 灰 — 详情
   edit: '#007aff',     // 蓝 — 编辑
   role: '#af52de',     // 紫 — 角色/权限
-  credit: '#ff9500',   // 橙 — 额度
+  credit: '#ff9500',   // 橙 — 算力
   password: '#5ac8fa', // 青蓝 — 密码
   block: '#ff9500',    // 橙 — 封禁/停用
   unblock: '#34c759',  // 绿 — 解封/启用

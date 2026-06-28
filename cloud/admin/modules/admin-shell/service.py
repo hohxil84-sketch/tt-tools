@@ -176,14 +176,14 @@ def get_menu(user_permissions: set | None = None) -> MenuData:
                 ),
                 MenuItem(
                     id="credits-accounts",
-                    title="额度账户",
+                    title="算力账户",
                     icon="credits",
                     path="/admin/credits/accounts",
                     required_permission="credits.read",
                 ),
                 MenuItem(
                     id="credits-ledger",
-                    title="额度流水",
+                    title="算力流水",
                     icon="ledger",
                     path="/admin/credits/ledger",
                     required_permission="credits.read",

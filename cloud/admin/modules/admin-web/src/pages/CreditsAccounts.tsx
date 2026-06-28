@@ -22,7 +22,7 @@ export default function CreditsAccounts() {
 
   return (
     <div>
-      <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 20 }}>额度账户</h2>
+      <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 20 }}>算力账户</h2>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
         <input placeholder="用户 ID" value={uid} onChange={e => { setUid(e.target.value); setPg(0); }} style={inpS} />
         <select value={sf} onChange={e => { setSf(e.target.value); setPg(0); }} style={selS}><option value="">全部</option><option value="active">正常</option><option value="frozen">冻结</option></select>
@@ -30,7 +30,7 @@ export default function CreditsAccounts() {
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['用户', '套餐', '余额', '月赠', '状态', '周期', '更新', '']} colAligns={['c','c','c','c','c','c','c','r']}>
+      <Card><Tbl heads={['用户', '套餐', '算力', '月推', '状态', '周期', '更新', '']} colAligns={['c','c','c','c','c','c','c','r']}>
         {d?.items.map(a => (
           <tr key={a.id}>
             <td style={{ fontWeight: 500, fontSize: 13, width: '15%', textAlign: 'center' }}>{a.user_account || a.user_id.substring(0, 8)}</td>
@@ -46,7 +46,7 @@ export default function CreditsAccounts() {
       </Tbl></Card>
       <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
       {detail && <Sheet title="账户详情" close={() => setDetail(null)}>
-        <DetailRows rows={[['账户 ID', detail.id], ['用户', detail.user_account], ['名称', detail.user_display_name], ['套餐', detail.plan_name || '—'], ['余额', detail.balance], ['月赠', detail.monthly_grant], ['状态', detail.status], ['周期开始', detail.period_start ? new Date(detail.period_start).toLocaleString('zh-CN') : '—'], ['周期结束', detail.period_end ? new Date(detail.period_end).toLocaleString('zh-CN') : '—'], ['创建', detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN') : '—'], ['更新', new Date(detail.updated_at).toLocaleString('zh-CN')]]} />
+        <DetailRows rows={[['账户 ID', detail.id], ['用户', detail.user_account], ['名称', detail.user_display_name], ['套餐', detail.plan_name || '—'], ['算力', detail.balance], ['月推', detail.monthly_grant], ['状态', detail.status], ['周期开始', detail.period_start ? new Date(detail.period_start).toLocaleString('zh-CN') : '—'], ['周期结束', detail.period_end ? new Date(detail.period_end).toLocaleString('zh-CN') : '—'], ['创建', detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN') : '—'], ['更新', new Date(detail.updated_at).toLocaleString('zh-CN')]]} />
       </Sheet>}
     </div>
   );

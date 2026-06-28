@@ -124,7 +124,7 @@ public class LoginViewModel : BaseViewModel
                     Id = result.Data.User.Id,
                     Account = result.Data.User.Account,
                     DisplayName = result.Data.User.DisplayName,
-                    PlanCode = result.Data.User.PlanCode
+                    PlanCode = result.Data.User.PlanId
                 };
                 var device = new DeviceInfo
                 {

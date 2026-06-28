@@ -26,8 +26,8 @@ export default function CreditsLedger() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>额度流水</h2>
-        <button onClick={() => setShowAdj(true)} style={priBtn}>+ 调整额度</button>
+        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>算力流水</h2>
+        <button onClick={() => setShowAdj(true)} style={priBtn}>+ 调整算力</button>
       </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <input placeholder="用户 ID" value={uid} onChange={e => { setUid(e.target.value); setPg(0); }} style={inpS} />
@@ -60,7 +60,7 @@ function AdjustModal({ close, done }: { close: () => void; done: () => void }) {
   const [saving, setSaving] = useState(false); const [confirmed, setConfirmed] = useState(false);
 
   const submit = async () => { setSaving(true);
-    try { await apiRequest('/admin/credits/adjust', { method: 'POST', body: { user_id: uid, amount: amt, description: desc || undefined } }); showToast('额度调整成功', 'success'); done(); }
+    try { await apiRequest('/admin/credits/adjust', { method: 'POST', body: { user_id: uid, amount: amt, description: desc || undefined } }); showToast('算力调整成功', 'success'); done(); }
     catch (e: unknown) { showToast(e instanceof Error ? e.message : '调整失败', 'error'); }
     finally { setSaving(false); }
   };
@@ -68,19 +68,19 @@ function AdjustModal({ close, done }: { close: () => void; done: () => void }) {
   return <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={close}>
     <div style={{ background: 'var(--white)', borderRadius: 'var(--radius-xl)', padding: '28px 32px', minWidth: 420, boxShadow: 'var(--shadow-lg)' }} onClick={e => e.stopPropagation()}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>调整额度</h3>
+        <h3 style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>调整算力</h3>
         <button onClick={close} style={{ background: 'none', border: 'none', fontSize: 16, color: 'var(--gray-400)', cursor: 'pointer' }}>✕</button>
       </div>
       {!confirmed ? <>
         <Fld label="用户 ID"><input value={uid} onChange={e => setUid(e.target.value)} style={finpS} /></Fld>
-        <Fld label="额度（正数增加，负数扣减）"><input type="number" value={amt} onChange={e => setAmt(Number(e.target.value))} style={finpS} /></Fld>
+        <Fld label="算力（正数增加，负数扣减）"><input type="number" value={amt} onChange={e => setAmt(Number(e.target.value))} style={finpS} /></Fld>
         <Fld label="说明"><input value={desc} onChange={e => setDesc(e.target.value)} style={finpS} /></Fld>
         <button onClick={() => setConfirmed(true)} disabled={!uid || amt === 0} style={priBtn}>下一步</button>
       </> : <>
         <div style={{ background: '#fff9f0', borderRadius: 'var(--radius-md)', padding: 12, marginBottom: 16, fontSize: 13 }}>
           <p style={{ fontWeight: 600 }}>确认调整？</p>
           <p style={{ marginTop: 4 }}>用户: {uid}</p>
-          <p style={{ color: amt > 0 ? '#34c759' : '#ff3b30', fontWeight: 600 }}>额度: {amt > 0 ? '+' : ''}{amt}</p>
+          <p style={{ color: amt > 0 ? '#34c759' : '#ff3b30', fontWeight: 600 }}>算力: {amt > 0 ? '+' : ''}{amt}</p>
           {desc && <p style={{ color: 'var(--gray-500)', fontSize: 12 }}>{desc}</p>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

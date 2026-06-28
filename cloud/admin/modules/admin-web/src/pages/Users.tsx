@@ -124,8 +124,8 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
   const heads = isSystem
     ? [selectAllCheckbox, '账号', '名称', 'RBAC 角色', '状态', '设备', '最后登录', '审计', '创建时间', '']
     : isClient
-      ? [selectAllCheckbox, '账号', '名称', '额度余额', '本月消费', '套餐', '到期时间', '状态', '设备', '最后登录', '创建时间', '']
-      : [selectAllCheckbox, '账号', '名称', '角色', '额度余额', '套餐', '到期时间', '状态', '设备', '最后登录', '创建时间', ''];
+      ? [selectAllCheckbox, '账号', '名称', '算力余额', '本月算力', '套餐', '到期时间', '状态', '设备', '最后登录', '创建时间', '']
+      : [selectAllCheckbox, '账号', '名称', '角色', '算力余额', '套餐', '到期时间', '状态', '设备', '最后登录', '创建时间', ''];
   const colAligns: ('l'|'r'|'c')[] = isSystem
     ? ['c','c','c','c','c','c','c','c','c','r']
     : isClient
@@ -254,8 +254,8 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
               ['RBAC 角色', detail.role_names || '—'],
               ['套餐', detail.plan_name || '—'],
               ['套餐到期', detail.period_end ? new Date(detail.period_end).toLocaleDateString('zh-CN') : '—'],
-              ['额度余额', detail.credit_balance != null ? detail.credit_balance.toLocaleString() : '—'],
-              ['本月消费', (detail.monthly_usage || 0).toLocaleString()],
+              ['算力余额', detail.credit_balance != null ? detail.credit_balance.toLocaleString() : '—'],
+              ['本月算力', (detail.monthly_usage || 0).toLocaleString()],
               ['绑定设备', detail.device_count ?? 0],
               ['最后登录', detail.last_login_at ? new Date(detail.last_login_at).toLocaleString('zh-CN') : '—'],
               ['操作审计', detail.audit_count ?? 0],
@@ -267,8 +267,8 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
               ['角色', '用户 (user)'], ['状态', SL[detail.status] || detail.status],
               ['套餐', detail.plan_name || '—'],
               ['套餐到期', detail.period_end ? new Date(detail.period_end).toLocaleDateString('zh-CN') : '—'],
-              ['额度余额', detail.credit_balance != null ? detail.credit_balance.toLocaleString() : '—'],
-              ['本月消费', (detail.monthly_usage || 0).toLocaleString()],
+              ['算力余额', detail.credit_balance != null ? detail.credit_balance.toLocaleString() : '—'],
+              ['本月算力', (detail.monthly_usage || 0).toLocaleString()],
               ['绑定设备', detail.device_count ?? 0],
               ['最后登录', detail.last_login_at ? new Date(detail.last_login_at).toLocaleString('zh-CN') : '—'],
               ['注册时间', new Date(detail.created_at).toLocaleString('zh-CN')],
@@ -326,7 +326,7 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
   );
 }
 
-/** ==================== 用户表单（编辑时含密码/角色/额度全覆盖） ==================== */
+/** ==================== 用户表单（编辑时含密码/角色/算力全覆盖） ==================== */
 
 function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?: string; close: () => void; done: () => void }) {
   const [acc, setAcc] = useState(user?.account || '');
@@ -350,7 +350,7 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
   const [allRoles, setAllRoles] = useState<RoleOption[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set());
   const [rolesLoading, setRolesLoading] = useState(false);
-  // 编辑用户时显示的额度余额和调整
+  // 编辑用户时显示的算力余额和调整
   const [editCreditBalance, setEditCreditBalance] = useState<number | null>(null);
   const [creditAmountStr, setCreditAmountStr] = useState('');  // 用字符串避免 number input 吞负号
   const [creditDesc, setCreditDesc] = useState('');
@@ -386,7 +386,7 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
     })();
   }, [isCreatingAdmin, isEditingAdmin]);
 
-  // 编辑用户时显示额度余额
+  // 编辑用户时显示算力余额
   useEffect(() => {
     if (isEditingUser && user?.credit_balance != null) {
       setEditCreditBalance(user.credit_balance);
@@ -420,7 +420,7 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
         if ((isCreatingAdmin || isEditingAdmin) && selectedRoleIds.size > 0) {
           await apiRequest(`/admin/users/${user!.id}/roles`, { method: 'POST', body: { role_ids: [...selectedRoleIds] } });
         }
-        // 编辑时如果填了额度调整，一起提交
+        // 编辑时如果填了算力调整，一起提交
         const creditAmount = Number(creditAmountStr);
         if (isEditingUser && creditAmountStr.trim() !== '' && !isNaN(creditAmount) && creditAmount !== 0) {
           await apiRequest('/admin/credits/adjust', { method: 'POST', body: { user_id: user!.id, amount: creditAmount, description: creditDesc || undefined } });
@@ -443,16 +443,16 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
         {isEdit && <Fld label="密码（留空则保持原密码）"><input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="留空则保持原密码" style={finpS} /></Fld>}
         <Fld label="展示名称 *"><input value={dn} onChange={e => setDn(e.target.value)} required style={finpS} /></Fld>
 
-        {/* 编辑客户端用户时显示额度余额 + 额度调整 */}
+        {/* 编辑客户端用户时显示算力余额 + 算力调整 */}
         {isEditingUser && editCreditBalance != null && (
-          <Fld label="当前额度">
+          <Fld label="当前算力">
             <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--orange)' }}>{editCreditBalance.toLocaleString()}</span>
-            <span style={{ fontSize: 12, color: 'var(--gray-400)', marginLeft: 4 }}>额度</span>
+            <span style={{ fontSize: 12, color: 'var(--gray-400)', marginLeft: 4 }}>算力</span>
           </Fld>
         )}
         {isEditingUser && (
           <>
-            <Fld label="调整额度（正数赠送，负数扣除，0=不调整）">
+            <Fld label="调整算力（正数赠送，负数扣除，0=不调整）">
               <input type="text" value={creditAmountStr} onChange={e => setCreditAmountStr(e.target.value)} style={finpS} placeholder="如 1000 或 -500" />
             </Fld>
             <Fld label="调整原因">

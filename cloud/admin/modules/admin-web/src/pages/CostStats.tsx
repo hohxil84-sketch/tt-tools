@@ -15,7 +15,7 @@ export default function CostStats() {
     { l: '总调用次数', v: d.total_calls.toLocaleString(), c: '#0071e3' },
     { l: '总 Token', v: d.total_tokens.toLocaleString(), c: '#34c759' },
     { l: '总成本 (USD)', v: `$${d.total_cost.toFixed(4)}`, c: '#ff9500' },
-    { l: '总扣额度', v: d.total_credits_charged.toLocaleString(), c: '#af52de' },
+    { l: '算力消耗', v: d.total_credits_charged.toLocaleString(), c: '#af52de' },
   ];
 
   return (
@@ -43,7 +43,7 @@ function Section({ title, items }: { title: string; items: Brk[] }) {
           <th style={{ textAlign: 'right' }}>调用</th>
           <th style={{ textAlign: 'right' }}>Token</th>
           <th style={{ textAlign: 'right' }}>成本</th>
-          <th style={{ textAlign: 'right' }}>额度</th>
+          <th style={{ textAlign: 'right' }}>算力</th>
         </tr></thead>
         <tbody>{items.map(i => <tr key={i.key}>
           <td>

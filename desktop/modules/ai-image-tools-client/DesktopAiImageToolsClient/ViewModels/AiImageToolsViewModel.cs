@@ -500,7 +500,7 @@ public class AiImageToolsViewModel : BaseViewModel
             if (response?.IsSuccess == true && response.Data != null)
             {
                 CurrentBalance = response.Data.Balance;
-                CurrentPlanCode = response.Data.PlanCode;
+                CurrentPlanCode = response.Data.PlanId;
                 OnPropertyChanged(nameof(BalanceDisplay));
                 StatusMessage = $"余额已更新 - 套餐: {CurrentPlanCode}, 余额: {CurrentBalance} 积分";
             }
@@ -586,7 +586,7 @@ public class AiImageToolsViewModel : BaseViewModel
             if (balanceResponse?.IsSuccess == true && balanceResponse.Data != null)
             {
                 CurrentBalance = balanceResponse.Data.Balance;
-                CurrentPlanCode = balanceResponse.Data.PlanCode;
+                CurrentPlanCode = balanceResponse.Data.PlanId;
                 OnPropertyChanged(nameof(BalanceDisplay));
 
                 if (balanceResponse.Data.Balance <= 0)
@@ -594,7 +594,7 @@ public class AiImageToolsViewModel : BaseViewModel
                     ErrorMessage = $"积分余额不足（当前余额: {balanceResponse.Data.Balance}），请充值后再使用";
                     StatusMessage = "积分不足 - 无法处理";
                     _logger?.Warning(
-                        $"AI 图片工具积分不足: balance={balanceResponse.Data.Balance}, plan={balanceResponse.Data.PlanCode}",
+                        $"AI 图片工具积分不足: balance={balanceResponse.Data.Balance}, plan={balanceResponse.Data.PlanId}",
                         "desktop-ai-image-tools-client");
                     return;
                 }

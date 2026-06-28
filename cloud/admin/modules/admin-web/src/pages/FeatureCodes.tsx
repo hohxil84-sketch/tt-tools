@@ -47,7 +47,7 @@ export default function FeatureCodes() {
 
   const saveRate = async () => {
     setSavingRate(true);
-    try { await apiRequest('/admin/billing/system-config/credits_exchange_rate', { method:'PUT', body:{value:rate} }); showToast('汇率已更新','success'); setRefreshKey(k=>k+1); }
+    try { await apiRequest('/admin/billing/system-config/credits_exchange_rate', { method:'PUT', body:{value:rate} }); showToast('算力率已更新','success'); setRefreshKey(k=>k+1); }
     catch(e:unknown){ showToast(e instanceof Error?e.message:'保存失败','error'); }
     finally{setSavingRate(false);}
   };
@@ -92,10 +92,10 @@ export default function FeatureCodes() {
       </div>
       {/* 汇率 */}
       <div style={{ background:'var(--white)', borderRadius:'var(--radius-lg)', padding:'12px 20px', border:'1px solid var(--gray-200)', boxShadow:'var(--shadow-sm)', marginBottom:16, display:'flex', alignItems:'center', gap:12 }}>
-        <span style={{ fontSize:14, fontWeight:600 }}>汇率：1 CNY =</span>
+        <span style={{ fontSize:14, fontWeight:600 }}>算力率：1 CNY =</span>
         <input type="number" step="0.1" value={rate} onChange={e=>setRate(e.target.value)} style={{ width:80, padding:'5px 8px', fontSize:13, textAlign:'center', border:'1px solid var(--gray-300)', borderRadius:'var(--radius-sm)' }} />
-        <span style={{ fontSize:14, fontWeight:600 }}>点</span>
-        <button onClick={saveRate} disabled={savingRate} style={{ ...priBtn, fontSize:12, padding:'5px 16px' }}>{savingRate?'保存中':'更新汇率'}</button>
+        <span style={{ fontSize:14, fontWeight:600 }}>算力</span>
+        <button onClick={saveRate} disabled={savingRate} style={{ ...priBtn, fontSize:12, padding:'5px 16px' }}>{savingRate?'保存中':'更新算力率'}</button>
       </div>
       <div style={{ display:'flex', gap:10, marginBottom:20 }}>
         <select value={cat} onChange={e=>{setCat(e.target.value);setPg(0);}} style={selS}>
@@ -104,7 +104,7 @@ export default function FeatureCodes() {
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color:'var(--red)', fontSize:12, marginBottom:12 }}>{err}</div>}
-      <Card><Tbl heads={['功能码','名称','分类','起步扣点','状态','关联套餐','创建时间','']} colAligns={['c','c','c','c','c','c','c','r']}>
+      <Card><Tbl heads={['功能码','名称','分类','起步算力','状态','关联套餐','创建时间','']} colAligns={['c','c','c','c','c','c','c','r']}>
         {d?.items.map(fc=>(
           <tr key={fc.id}>
             <td style={{ fontSize:13, width:'11%', textAlign:'center' }}><code style={{ fontSize:12, fontWeight:600 }}>{fc.code}</code></td>
@@ -129,10 +129,10 @@ export default function FeatureCodes() {
 
       {delTarget && <Modal title="删除功能码" close={()=>setDelTarget(null)} action={doDelete} danger><p>确认删除功能码 <b>{delTarget.code}</b>？此操作不可撤销。</p></Modal>}
       {toggleTarget && <Modal title={toggleTarget.is_active?'禁用功能码':'启用功能码'} close={()=>setToggleTarget(null)} action={()=>{doToggle(toggleTarget);setToggleTarget(null);}} danger={toggleTarget.is_active}><p>确认{toggleTarget.is_active?'禁用':'启用'}功能码 <b>{toggleTarget.code}</b>？</p></Modal>}
-      {creditEdit && <Sheet title={`编辑起步扣点: ${creditEdit.name}`} close={()=>setCreditEdit(null)}>
+      {creditEdit && <Sheet title={`编辑起步算力: ${creditEdit.name}`} close={()=>setCreditEdit(null)}>
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <Fld label="功能码"><code>{creditEdit.code}</code></Fld>
-          <Fld label="起步扣点"><input type="number" min={1} value={creditEdit.val} onChange={e=>setCreditEdit({...creditEdit,val:Math.max(1,Number(e.target.value))})} style={inpS} /></Fld>
+          <Fld label="起步算力"><input type="number" min={1} value={creditEdit.val} onChange={e=>setCreditEdit({...creditEdit,val:Math.max(1,Number(e.target.value))})} style={inpS} /></Fld>
           <button onClick={doSaveCredits} style={priBtn}>保存</button>
         </div>
       </Sheet>}
@@ -161,7 +161,7 @@ export default function FeatureCodes() {
          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
            <thead><tr style={{ borderBottom:'2px solid var(--gray-200)' }}>
              <th style={{ textAlign:'left', padding:'8px 4px' }}>套餐名称</th>
-             <th style={{ textAlign:'right', padding:'8px 4px' }}>月赠额度</th>
+             <th style={{ textAlign:'right', padding:'8px 4px' }}>月推算力</th>
              <th style={{ textAlign:'center', padding:'8px 4px' }}>状态</th>
            </tr></thead>
            <tbody>{detailPlans.map(p => (

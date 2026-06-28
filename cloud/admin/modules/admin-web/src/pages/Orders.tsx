@@ -73,7 +73,7 @@ export default function Orders() {
       <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 20 }}>订单管理</h2>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
         <input placeholder="用户 ID" value={uid} onChange={e => { setUid(e.target.value); setPg(0); }} style={inpS} />
-        <select value={ot} onChange={e => { setOt(e.target.value); setPg(0); }} style={selS}><option value="">全部类型</option><option value="plan">套餐</option><option value="credits">额度</option></select>
+        <select value={ot} onChange={e => { setOt(e.target.value); setPg(0); }} style={selS}><option value="">全部类型</option><option value="plan">套餐</option><option value="credits">算力</option></select>
         <select value={sf} onChange={e => { setSf(e.target.value); setPg(0); }} style={selS}><option value="">全部状态</option><option value="pending">待支付</option><option value="paid">已支付</option><option value="closed">已关闭</option><option value="refunded">已退款</option></select>
         <input placeholder="订单号" value={orderNo} onChange={e => { setOrderNo(e.target.value); setPg(0); }} style={inpS} />
         <button onClick={load} style={secBtn}>刷新</button>
@@ -94,7 +94,7 @@ export default function Orders() {
           <tr key={o.id} style={{ background: selected.has(o.id) ? 'var(--blue-50)' : undefined }}>
             <td style={{ width: 30, padding: '8px 4px', textAlign: 'center' }}>{o.status === 'pending' ? <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleSelect(o.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} /> : null}</td>
             <td style={{ fontSize: 13, width: '16%', textAlign: 'center' }}><code style={{ fontSize: 11, fontWeight: 600 }}>{o.order_no}</code></td>
-            <td style={{ fontSize: 13, width: '7%', textAlign: 'center' }}><Badge t={o.order_type === 'plan' ? '套餐' : '额度'} c={o.order_type === 'plan' ? 'var(--blue)' : 'var(--orange)'} /></td>
+            <td style={{ fontSize: 13, width: '7%', textAlign: 'center' }}><Badge t={o.order_type === 'plan' ? '套餐' : '算力'} c={o.order_type === 'plan' ? 'var(--blue)' : 'var(--orange)'} /></td>
             <td style={{ fontSize: 13, width: '14%', textAlign: 'center' }}>{o.product_code}</td>
             <td style={{ fontWeight: 600, fontSize: 13, width: '8%', textAlign: 'center', paddingRight: 24 }}>¥{(o.amount_cents / 100).toFixed(2)}</td>
             <td style={{ fontSize: 13, width: '6%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: o.status === 'paid' ? '#34c759' : 'var(--gray-500)' }}>{SS[o.status] || o.status}</span></td>
@@ -111,7 +111,7 @@ export default function Orders() {
         <DetailRows rows={[
           ['订单号', detail.order_no], ['类型', detail.order_type],
           ['产品', detail.product_code], ['金额', `¥${(detail.amount_cents / 100).toFixed(2)}`],
-          ['额度', detail.credit_amount], ['币种', detail.currency],
+          ['算力', detail.credit_amount], ['币种', detail.currency],
           ['状态', detail.status],
           ['支付时间', detail.paid_at ? new Date(detail.paid_at).toLocaleString('zh-CN') : '—'],
           ['用户', detail.user_account], ['用户名称', detail.user_display_name],

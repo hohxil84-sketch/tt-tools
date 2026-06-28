@@ -56,7 +56,7 @@ export default function Plans() {
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
-      <Card><Tbl heads={['名称', '月赠额度', '到期', '默认', '状态', '创建时间', '']} colAligns={['l', 'r', 'c', 'c', 'c', 'l', 'r']}>
+      <Card><Tbl heads={['名称', '月推算力', '到期', '默认', '状态', '创建时间', '']} colAligns={['l', 'r', 'c', 'c', 'c', 'l', 'r']}>
         {sortedItems.map(p => (
           <tr key={p.id}>
             <td style={{ fontWeight: 600, fontSize: 13, width: '22%' }}>{p.name}</td>
@@ -206,7 +206,7 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
     <form onSubmit={submit}>
       <Fld label="名称"><input value={name} onChange={e => setName(e.target.value)} required style={finpS} /></Fld>
       <Fld label="套餐等级"><select value={planTier} onChange={e => setPlanTier(e.target.value)} style={selS}><option value="free">免费</option><option value="standard">标准</option><option value="pro">专业</option></select></Fld>
-      <Fld label="月赠额度"><input type="number" value={mg} onChange={e => setMg(Number(e.target.value))} min={0} style={finpS} /></Fld>
+      <Fld label="月推算力"><input type="number" value={mg} onChange={e => setMg(Number(e.target.value))} min={0} style={finpS} /></Fld>
       <Fld label="到期天数（0=永不过期）"><input type="number" value={expDays} onChange={e => setExpDays(Math.max(0, Number(e.target.value)))} min={0} style={finpS} /></Fld>
       <Fld label="">
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>

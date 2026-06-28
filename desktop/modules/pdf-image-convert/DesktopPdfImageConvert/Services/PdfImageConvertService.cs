@@ -285,7 +285,7 @@ public class PdfImageConvertService : IDisposable
             _logger?.Info(
                 $"权限拒绝: feature=pdf_image_convert_local_paid, " +
                 $"reason={entitlementResp.Data.Reason}, " +
-                $"plan={entitlementResp.Data.PlanCode}",
+                $"plan={entitlementResp.Data.PlanId}",
                 "desktop-pdf-image-convert");
             return new PdfImageConvertResult
             {
@@ -293,7 +293,7 @@ public class PdfImageConvertService : IDisposable
                 InputPath = inputPath,
                 EntitlementAllowed = false,
                 EntitlementReason = entitlementResp.Data.Reason ?? "当前套餐不支持此功能",
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 RemainingFreeQuota = entitlementResp.Data.RemainingFreeQuota,
                 ErrorMessage = "套餐权限不足",
             };
@@ -307,7 +307,7 @@ public class PdfImageConvertService : IDisposable
                 IsSuccess = false,
                 InputPath = inputPath,
                 EntitlementAllowed = true,
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 ErrorMessage = _availabilityError ?? "PDF/图片互转服务不可用，请先调用 StartAsync",
             };
         }
@@ -335,7 +335,7 @@ public class PdfImageConvertService : IDisposable
                 IsSuccess = false,
                 InputPath = inputPath,
                 EntitlementAllowed = true,
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 ErrorMessage = $"转换处理失败: {ex.Message}",
             };
         }
@@ -347,7 +347,7 @@ public class PdfImageConvertService : IDisposable
                 IsSuccess = false,
                 InputPath = inputPath,
                 EntitlementAllowed = true,
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 ErrorMessage = "PDF/图片互转 worker 返回空响应",
             };
         }
@@ -364,7 +364,7 @@ public class PdfImageConvertService : IDisposable
                 IsSuccess = false,
                 InputPath = inputPath,
                 EntitlementAllowed = true,
-                PlanCode = entitlementResp.Data.PlanCode,
+                PlanCode = entitlementResp.Data.PlanId,
                 ErrorMessage = error,
             };
         }
@@ -374,7 +374,7 @@ public class PdfImageConvertService : IDisposable
         var result = PdfImageConvertResult.FromRouterResponse(data, inputPath);
         result.IsSuccess = true;
         result.EntitlementAllowed = true;
-        result.PlanCode = entitlementResp.Data.PlanCode;
+        result.PlanCode = entitlementResp.Data.PlanId;
         result.RemainingFreeQuota = entitlementResp.Data.RemainingFreeQuota;
 
         _logger?.Info(

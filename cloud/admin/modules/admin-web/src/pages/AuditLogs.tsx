@@ -6,10 +6,10 @@ interface Log { id: string; admin_user_id: string; admin_account: string; admin_
 interface List { items: Log[]; total: number; limit: number; offset: number; }
 const ACTION_LABELS: Record<string, string> = {
   create: '创建', update: '更新', delete: '删除', status_change: '状态变更',
-  adjust: '额度调整', refund: '退款', cancel: '取消', batch: '批量操作',
+  adjust: '算力调整', refund: '退款', cancel: '取消', batch: '批量操作',
 };
 const TARGET_LABELS: Record<string, string> = {
-  user: '用户', device: '设备', order: '订单', plan: '套餐', credits: '额度',
+  user: '用户', device: '设备', order: '订单', plan: '套餐', credits: '算力',
   feature_flag: '功能开关', provider: 'Provider', audit_log: '审计日志', role: '角色权限', feature_code: '功能码',
 };
 
@@ -52,14 +52,14 @@ export default function AuditLogs() {
           <option value="">全部操作</option>
           <option value="create">创建</option><option value="update">更新</option>
           <option value="delete">删除</option><option value="status_change">状态变更</option>
-          <option value="adjust">额度调整</option><option value="refund">退款</option>
+          <option value="adjust">算力调整</option><option value="refund">退款</option>
           <option value="cancel">取消</option><option value="batch">批量操作</option>
         </select>
         <select value={targetType} onChange={e => { setTargetType(e.target.value); setPg(0); }} style={selS}>
           <option value="">全部目标</option>
           <option value="user">用户</option><option value="device">设备</option>
           <option value="order">订单</option><option value="plan">套餐</option>
-          <option value="credits">额度</option><option value="feature_flag">功能开关</option>
+          <option value="credits">算力</option><option value="feature_flag">功能开关</option>
         </select>
         <button onClick={load} style={secBtn}>刷新</button>
       </div>
