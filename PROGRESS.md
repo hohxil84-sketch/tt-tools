@@ -55,6 +55,7 @@
 | desktop-ai-render-client | desktop/modules/ai-render-client | feature/desktop-ai-render-client | DEVELOPMENT_COMPLETE | 31/31 通过 | 2026-06-24 已合并 |
 | desktop-ai-image-tools-client | desktop/modules/ai-image-tools-client | feature/desktop-ai-image-tools-client | DEVELOPMENT_COMPLETE | 39/39 通过 | 2026-06-26 已合并 |
 | integration-test-ai-image-tools | 全项目 | fix/integration-ai-image-tools | INTEGRATION_COMPLETE | 576 通过 | 2026-06-26 已推送，待合并 |
+| cloud-db-driven-pricing | 全项目 | feat/db-driven-pricing | DEVELOPMENT_COMPLETE | 30/30 通过 | 2026-06-29 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
 
 ## 云端 AI 图片工具全量联调记录 (2026-06-26)
