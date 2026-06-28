@@ -1,5 +1,23 @@
 # PROGRESS.md - cloud-provider-runtime
 
+## 2026-06-29 Provider 数据驱动重构 + 前端修复
+
+- 代码提交：`97f952b` - `feat: Provider 数据驱动重构 + 前端修复`
+- 分支：`feat/db-driven-pricing`
+- 测试结果：
+  - `python -m pytest cloud\modules\credits-billing\tests -q`：30 passed
+- 改动摘要：
+  - 新增 `OpenAICompatibleProvider` 通用类，覆盖所有 OpenAI 兼容 API（DeepSeek/OpenAI/Gemini 等）
+  - `registry.py` 改为数据驱动：`_create_provider_instance` 未知 `provider_type` 自动回退到 `OpenAICompatibleProvider`
+  - `DeepSeekProvider` 改为 `OpenAICompatibleProvider` 子类，保留向后兼容默认值
+  - 删除 Providers 管理表单中的 `models_json` 输入框，模型配置由 `provider_model_pricing` 表完全驱动
+  - 删除 `FeatureFlags.tsx` + `FeaturePricing.tsx`，定价整合进 `FeatureCodes.tsx`
+  - 修复 `admin-billing` 路由 `plans.write`→`plans.manage`（不存在的权限码）
+  - `PlanItem`/`PlanDetail`/`CreatePlanRequest`/`UpdatePlanRequest` 全部添加 `plan_tier` 和 `enabled_features_json`
+  - 修复套餐编辑时 `is_default` 被无条件发送导致默认标记丢失
+  - 修复用户列表表格溢出、按钮遮挡、RBAC 角色显示、到期时间显示
+- 未提交文件：`tsconfig.tsbuildinfo`（构建产物）
+
 ## 2026-06-26 多模型真实 API 接入记录
 
 - 代码提交：`ddf9b67` - `feat(provider-runtime): 接入多模型能力路由`
