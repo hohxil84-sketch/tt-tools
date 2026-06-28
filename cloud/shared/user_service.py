@@ -18,6 +18,7 @@ async def register_new_user(
     display_name: str = "",
     role: str = "user",
     password_hash: str = "",
+    profile_json: dict = None,
 ) -> str:
     """统一注册新用户。
 
@@ -50,11 +51,13 @@ async def register_new_user(
     plan_exp = plan_row[2] if plan_row else 0
 
     # 2. 创建用户记录
+    import json as _json
     await db.execute(
         text(
             "INSERT INTO users (id, account, password_hash, display_name, role, "
-            "status, plan_id, created_at, updated_at) "
-            "VALUES (:id, :account, :pw, :dn, :role, 'active', :plan_id, :now, :now)"
+            "status, plan_id, profile_json, created_at, updated_at) "
+            "VALUES (:id, :account, :pw, :dn, :role, 'active', :plan_id, "
+            ":profile::jsonb, :now, :now)"
         ),
         {
             "id": user_id,
@@ -63,6 +66,7 @@ async def register_new_user(
             "dn": display_name or account,
             "role": role,
             "plan_id": plan_id,
+            "profile": _json.dumps(profile_json) if profile_json else None,
             "now": now,
         },
     )

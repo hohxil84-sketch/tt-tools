@@ -187,18 +187,24 @@ async def alipay_handle_callback(db: AsyncSession, auth_code: str) -> dict:
 
     # 2. 尝试获取支付宝用户信息（应用上线后才可用）
     nickname = ""
-    avatar = ""
+    profile: dict[str, str] = {}
     try:
         user_info = await _call_alipay("alipay.user.info.share",
             top_params={"auth_token": access_token}
         )
         nickname = user_info.get("nick_name", "")
-        avatar = user_info.get("avatar", "")
+        profile = {
+            "avatar": user_info.get("avatar", ""),
+            "gender": user_info.get("gender", ""),
+            "province": user_info.get("province", ""),
+            "city": user_info.get("city", ""),
+            "is_certified": user_info.get("is_certified", ""),
+        }
     except AppError:
-        pass  # 应用未上线时 user.info.share 不可用，使用 open_id 即可
+        pass  # 应用未上线时 user.info.share 不可用
 
     # 3. 查找或创建本地用户
-    local_user_id = await _find_or_create_alipay_user(db, alipay_user_id, nickname)
+    local_user_id = await _find_or_create_alipay_user(db, alipay_user_id, nickname, profile)
 
     # 4. 签发 JWT
     now = int(time.time())
@@ -217,7 +223,7 @@ async def alipay_handle_callback(db: AsyncSession, auth_code: str) -> dict:
     }
 
 
-async def _find_or_create_alipay_user(db: AsyncSession, alipay_user_id: str, nickname: str) -> str:
+async def _find_or_create_alipay_user(db: AsyncSession, alipay_user_id: str, nickname: str, profile: dict = None) -> str:
     """按 alipay_user_id 查找已有绑定用户，不存在则创建新用户。
 
     使用 raw SQL 避免跨模块 ORM 冲突。
@@ -234,10 +240,12 @@ async def _find_or_create_alipay_user(db: AsyncSession, alipay_user_id: str, nic
     # 统一注册新用户（默认套餐自动分配）
     from cloud.shared.user_service import register_new_user
     account = f"alipay_{alipay_user_id[-8:]}"
+    display_name = nickname or account
     user_id = await register_new_user(
         db=db,
         account=account,
-        display_name=nickname or account,
+        display_name=display_name,
+        profile_json=profile if profile else None,
     )
 
     # 插入支付宝绑定

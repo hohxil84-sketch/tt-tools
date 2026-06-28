@@ -22,6 +22,7 @@
 | role | varchar(50) | not null default `user` | 用户角色 |
 | status | varchar(50) | not null default `active` | active / blocked / deleted |
 | plan_id | uuid | fk plans.id, nullable | 当前套餐 ID（UUID 外键） |
+| profile_json | jsonb | nullable | 社会化资料：头像、昵称、性别、地区等 |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |
 
