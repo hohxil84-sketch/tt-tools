@@ -56,6 +56,7 @@
 | desktop-ai-image-tools-client | desktop/modules/ai-image-tools-client | feature/desktop-ai-image-tools-client | DEVELOPMENT_COMPLETE | 39/39 通过 | 2026-06-26 已合并 |
 | integration-test-ai-image-tools | 全项目 | fix/integration-ai-image-tools | INTEGRATION_COMPLETE | 576 通过 | 2026-06-26 已推送，待合并 |
 | cloud-db-driven-pricing | 全项目 | feat/db-driven-pricing | DEVELOPMENT_COMPLETE | 30/30 通过 | 2026-06-29 已合并 |
+| cloud-admin-bugfix | 全项目 | fix/admin-users-role-period-plan-ui | BUGFIX_COMPLETE | 50/50 通过 | 2026-06-29 已合并 |
 | 其余模块 | 见各模块目录 | 未创建 | NOT_STARTED | 未测试 | 未合并 |
 
 ## 云端 AI 图片工具全量联调记录 (2026-06-26)
@@ -298,3 +299,45 @@
 - admin-shell: 14/14 通过
 - admin-audit: 4/4 通过
 - 前端: TypeScript 编译 0 错误，Vite 构建成功
+
+## Bug 修复 + 软删除改造 (2026-06-29)
+
+**分支**: fix/admin-users-role-period-plan-ui
+**提交**: 52daefe
+**状态**: BUGFIX_COMPLETE（已合并到 dev/full-product）
+
+### Bug 修复（4 项）
+
+1. **RBAC 角色全显示"超级管理员"** — `_batch_role_names`: `func.group_concat` → `func.string_agg` 兼容 PostgreSQL
+2. **全部用户视图缺少「到期时间」列** — Users.tsx 全部用户视图新增 period_end 列
+3. **操作按钮溢出屏幕** — 4-5 个 ActBtn 改为 ⋮ 紧凑下拉菜单（列宽从 21-27% 缩至 50px），新增「批量恢复」和「🔄 恢复」
+4. **provider_call_log 列名不匹配** — `estimated_latency_ms_before` → `estimated_latency_ms` 对齐数据库和文档
+
+### 软删除改造（6 个函数全改）
+
+| 模块 | 函数 | 方式 |
+|---|---|---|
+| admin-users | delete_user | status='deleted' + 设备 status='removed' + 清除会话 |
+| admin-users | delete_device | status='removed' |
+| admin-billing | delete_plan | status='disabled' |
+| admin-providers | delete_provider | is_enabled=False |
+| admin-feature-codes | delete_feature_code | is_active=False |
+| admin-roles | delete_role | is_active=False（新增 roles.is_active 列） |
+
+### 配套改动
+
+- **database.py**: init_db 新增 ALTER TABLE roles ADD is_active 幂等迁移
+- **DATABASE_SCHEMA.md**: roles 表新增 is_active 字段
+- **list_roles**: 过滤 is_active=True
+- **_batch_role_names**: JOIN 条件过滤已停用角色
+- **FeatureCodes.tsx**: 修复 Fld 导入冲突
+- **创建管理员**: 套餐改为必选（前后端统一）
+
+### 修改文件统计
+- 后端: 20 个文件
+- 前端: 13 个文件
+- 规格文档: 2 个文件
+- 总计: 35 files, +495/-347
+
+### 测试结果
+- admin-users: 50/50 通过

@@ -2,11 +2,11 @@
 
 ## 当前状态
 
-`DEVELOPMENT_COMPLETE`
+`FIX_IN_PROGRESS`
 
 ## 分支
 
-`feature/admin-users`
+`fix/admin-users-role-period-plan-ui`
 
 ## 已完成
 
@@ -33,23 +33,30 @@
 
 ## 测试记录
 
-日期：2026-06-24
+日期：2026-06-29
 测试命令：pytest cloud/admin/modules/admin-users/tests/ -v
 结果：50 passed, 0 failed
 失败原因：无
-修复提交：无
-中文备注：全部 50 项测试通过，覆盖 7 个接口的成功路径、鉴权错误（401/403）、业务错误（400/404）、分页、筛选、搜索、响应格式验证。
+中文备注：全部 50 项测试通过。
 
 ## Bug 记录
 
-暂无。
+### 2026-06-29
+
+| 问题 | 根因 | 修复 | 测试结果 |
+|---|---|---|---|
+| RBAC 角色全显示"超级管理员" | `func.group_concat` 不兼容 PostgreSQL | 改为 `func.string_agg` | 50 passed |
+| 全部用户视图无到期时间列 | Users.tsx 只在 isClient 视图渲染该列 | 全部用户视图增加「到期时间」列 | 构建通过 |
+| 操作按钮溢出屏幕 | 4-5 个 ActBtn 占 21-27% 列宽 | 改为 ⋮ 紧凑下拉菜单（50px） | 构建通过 |
+| 删除用户报外键冲突 | 漏清 user_alipay_bindings | 改为软删除 status='deleted' | 50 passed |
+| 创管时不选套餐 | 校验仅对普通用户要求 | 创建管理员也必选套餐 | 50 passed |
 
 ## 提交记录
 
-- 2026-06-24：`1b1cc71` feat(admin-users): complete admin users and devices management module（13 files, 2557 insertions）
+- 2026-06-29：`52daefe` fix: 修复角色显示/到期时间/按钮溢出 + 全模块软删除改造 + 数据库对齐
+- 2026-06-24：`1b1cc71` feat(admin-users): complete admin users and devices management module
 - 2026-06-24：`4d922ea` docs: update admin-users PROGRESS.md with commit hash
-- 推送状态：GitHub 连接超时，本地已提交，待网络恢复后推送 origin feature/admin-users
 
 ## 下一步
 
-提交、推送，等待用户确认合并到 dev/full-product。
+等待用户确认，合并 fix/admin-users-role-period-plan-ui 到 dev/full-product。
