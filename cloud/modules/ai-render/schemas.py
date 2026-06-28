@@ -101,3 +101,24 @@ class RenderContext(BaseModel):
     role: str = Field(default="user", description="用户角色")
     plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
     request_id: str = Field(..., description="云端请求追踪 ID")
+
+
+class EstimateRequest(BaseModel):
+    """预估扣费 + 耗时请求（/estimate 端点，复用 generate 参数）。"""
+
+    scene_type: str = Field(default="poster_design", description="场景类型")
+    prompt: str = Field(default="", description="提示词")
+    max_tokens: int = Field(default=2048, description="最大生成 token 数")
+
+
+class EstimateResponse(BaseModel):
+    """预估结果。"""
+
+    feature: str = Field(default="ai_render_cloud")
+    min_credits: int = Field(default=0)
+    estimated_max_credits: int = Field(default=0)
+    balance: int = Field(default=0)
+    enough: bool = Field(default=False)
+    estimated_latency: dict = Field(default_factory=dict)
+    provider: str = Field(default="")
+    model: str = Field(default="")

@@ -317,18 +317,23 @@ async def pro_user(db_session: AsyncSession, seed_plans):
 
 @pytest_asyncio.fixture
 async def test_credit_account(db_session: AsyncSession, test_user, seed_plans):
-    """为测试用户创建额度账户。"""
+    """为测试用户创建额度账户（使用标准套餐 UUID）。"""
     from service import get_or_create_credit_account  # noqa: E402
-    account = await get_or_create_credit_account(db_session, test_user.id, "standard")
+    # 从已 seed 的 plans 中找到标准套餐的 UUID
+    std_plan = next((p for p in seed_plans if p.plan_tier == "standard"), None)
+    plan_id = std_plan.id if std_plan else ""
+    account = await get_or_create_credit_account(db_session, test_user.id, plan_id)
     await db_session.flush()
     return account
 
 
 @pytest_asyncio.fixture
 async def free_credit_account(db_session: AsyncSession, free_user, seed_plans):
-    """为免费用户创建额度账户。"""
+    """为免费用户创建额度账户（使用免费套餐 UUID）。"""
     from service import get_or_create_credit_account  # noqa: E402
-    account = await get_or_create_credit_account(db_session, free_user.id, "free")
+    free_plan = next((p for p in seed_plans if p.plan_tier == "free"), None)
+    plan_id = free_plan.id if free_plan else ""
+    account = await get_or_create_credit_account(db_session, free_user.id, plan_id)
     await db_session.flush()
     return account
 

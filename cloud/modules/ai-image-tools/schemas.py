@@ -133,3 +133,25 @@ class ImageToolContext(BaseModel):
     role: str = Field(default="user", description="用户角色")
     plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
     request_id: str = Field(..., description="云端请求追踪 ID")
+
+
+class EstimateRequest(BaseModel):
+    """预估扣费 + 耗时请求。"""
+
+    feature: str = Field(default="upscale_image_cloud", description="功能码")
+    input_file_ids: List[str] = Field(default_factory=list)
+    options: Optional[dict] = Field(default=None)
+    max_tokens: int = Field(default=2048, description="最大生成 token 数")
+
+
+class EstimateResponse(BaseModel):
+    """预估结果。"""
+
+    feature: str = Field(default="")
+    min_credits: int = Field(default=0)
+    estimated_max_credits: int = Field(default=0)
+    balance: int = Field(default=0)
+    enough: bool = Field(default=False)
+    estimated_latency: dict = Field(default_factory=dict)
+    provider: str = Field(default="")
+    model: str = Field(default="")
