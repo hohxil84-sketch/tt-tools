@@ -918,8 +918,10 @@ async def get_model_pricing(
     """
     result = await db.execute(
         text(
-            "SELECT input_price, output_price FROM provider_model_pricing "
-            "WHERE provider_name = :prov AND model_name = :model AND is_active = TRUE"
+            "SELECT pmp.input_price, pmp.output_price "
+            "FROM provider_model_pricing pmp "
+            "JOIN providers p ON pmp.provider_id = p.id "
+            "WHERE p.name = :prov AND pmp.model_name = :model AND pmp.is_active = TRUE"
         ),
         {"prov": provider, "model": model},
     )
@@ -933,7 +935,7 @@ async def get_model_pricing(
     result = await db.execute(
         text(
             "SELECT input_price, output_price FROM provider_model_pricing "
-            "WHERE provider_name = '__default__' AND is_active = TRUE"
+            "WHERE model_name = '__default__' AND is_active = TRUE LIMIT 1"
         ),
     )
     row = result.fetchone()

@@ -3,19 +3,18 @@ import { apiRequest } from '../api/client';
 import { Card, Tbl, ActBtn, Sheet, Fld, priBtn, secBtn, inpS, finpS, showToast } from '../components/shared';
 
 interface Pricing {
-  id: string;
-  provider_name: string;
-  model_name: string;
-  input_price: number;
-  output_price: number;
-  currency: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at?: string;
+  id: string; provider_id: string;
+  provider_name: string; model_name: string;
+  input_price: number; output_price: number;
+  currency: string; is_active: boolean;
+  created_at: string; updated_at?: string;
 }
+
+interface Provider { id: string; name: string; }
 
 export default function ProviderModelPricing() {
   const [items, setItems] = useState<Pricing[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [err, setErr] = useState('');
   const [edit, setEdit] = useState<Pricing | null>(null);
   const [showNew, setShowNew] = useState(false);
@@ -24,11 +23,13 @@ export default function ProviderModelPricing() {
   const load = useCallback(async () => {
     setErr('');
     try {
-      const d = await apiRequest<{ items: Pricing[] }>('/admin/billing/model-pricing');
+      const [d, pd] = await Promise.all([
+        apiRequest<{ items: Pricing[] }>('/admin/billing/model-pricing'),
+        apiRequest<{ items: Provider[] }>('/admin/providers'),
+      ]);
       setItems(d.items);
-    } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : '加载失败');
-    }
+      setProviders(pd.items?.filter((p: any) => p.is_enabled) || []);
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
   }, [refreshKey]);
   useEffect(() => { load(); }, [load]);
 
@@ -58,14 +59,14 @@ export default function ProviderModelPricing() {
           </tr>
         ))}
       </Tbl></Card>
-      {(edit || showNew) && <PricingForm item={edit} close={() => { setEdit(null); setShowNew(false); }} done={() => { setEdit(null); setShowNew(false); setRefreshKey(k => k + 1); load(); }} />}
+      {(edit || showNew) && <PricingForm item={edit} providers={providers} close={() => { setEdit(null); setShowNew(false); }} done={() => { setEdit(null); setShowNew(false); setRefreshKey(k => k + 1); }} />}
     </div>
   );
 }
 
-function PricingForm({ item, close, done }: { item?: Pricing | null; close: () => void; done: () => void }) {
+function PricingForm({ item, providers, close, done }: { item?: Pricing | null; providers: Provider[]; close: () => void; done: () => void }) {
   const isEdit = !!item;
-  const [providerName, setProviderName] = useState(item?.provider_name || '');
+  const [providerId, setProviderId] = useState(item?.provider_id || '');
   const [modelName, setModelName] = useState(item?.model_name || '');
   const [inputPrice, setInputPrice] = useState(item?.input_price?.toString() || '1.0');
   const [outputPrice, setOutputPrice] = useState(item?.output_price?.toString() || '2.0');
@@ -82,7 +83,7 @@ function PricingForm({ item, close, done }: { item?: Pricing | null; close: () =
       } else {
         await apiRequest('/admin/billing/model-pricing', {
           method: 'POST',
-          body: { provider_name: providerName, model_name: modelName, input_price: parseFloat(inputPrice), output_price: parseFloat(outputPrice), currency },
+          body: { provider_id: providerId, model_name: modelName, input_price: parseFloat(inputPrice), output_price: parseFloat(outputPrice), currency },
         });
       }
       showToast('保存成功', 'success'); done();
@@ -93,7 +94,12 @@ function PricingForm({ item, close, done }: { item?: Pricing | null; close: () =
   return <Sheet title={isEdit ? `编辑: ${item!.provider_name}/${item!.model_name}` : '新增模型定价'} close={close}>
     <form onSubmit={submit}>
       {!isEdit && <>
-        <Fld label="Provider 名称"><input value={providerName} onChange={e => setProviderName(e.target.value)} required style={finpS} placeholder="如 deepseek, openai" /></Fld>
+        <Fld label="Provider">
+          <select value={providerId} onChange={e => setProviderId(e.target.value)} required style={{ padding: '7px 12px', width: '100%', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-sm)', fontSize: 13, background: 'var(--white)' }}>
+            <option value="">-- 选择 Provider --</option>
+            {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </Fld>
         <Fld label="模型名称"><input value={modelName} onChange={e => setModelName(e.target.value)} required style={finpS} placeholder="如 deepseek-chat, gpt-4o" /></Fld>
       </>}
       <Fld label="输入单价 (¥/百万token)"><input type="number" step="0.0001" value={inputPrice} onChange={e => setInputPrice(e.target.value)} required style={finpS} /></Fld>

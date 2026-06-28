@@ -1188,26 +1188,28 @@ async def _get_order_function(func_name: str):
 
 async def list_model_pricing(
     db: AsyncSession,
-    provider_name: Optional[str] = None,
+    provider_id: Optional[str] = None,
     is_active: Optional[bool] = None,
 ) -> list[dict]:
-    """列出所有 Provider 模型定价。"""
+    """列出所有 Provider 模型定价（JOIN providers 获取名称）。"""
     from sqlalchemy import text as _t
     conditions = ["1=1"]
     params: dict = {}
-    if provider_name:
-        conditions.append("provider_name = :pn")
-        params["pn"] = provider_name
+    if provider_id:
+        conditions.append("pmp.provider_id = :pid")
+        params["pid"] = provider_id
     if is_active is not None:
-        conditions.append("is_active = :ia")
+        conditions.append("pmp.is_active = :ia")
         params["ia"] = is_active
 
     result = await db.execute(
         _t(
-            f"SELECT id, provider_name, model_name, input_price, output_price, "
-            f"currency, is_active, created_at, updated_at "
-            f"FROM provider_model_pricing WHERE {' AND '.join(conditions)} "
-            f"ORDER BY provider_name, model_name"
+            f"SELECT pmp.id, p.name, pmp.model_name, pmp.input_price, pmp.output_price, "
+            f"pmp.currency, pmp.is_active, pmp.created_at, pmp.updated_at, pmp.provider_id "
+            f"FROM provider_model_pricing pmp "
+            f"JOIN providers p ON pmp.provider_id = p.id "
+            f"WHERE {' AND '.join(conditions)} "
+            f"ORDER BY p.name, pmp.model_name"
         ),
         params,
     )
@@ -1215,6 +1217,7 @@ async def list_model_pricing(
     return [
         {
             "id": r[0], "provider_name": r[1], "model_name": r[2],
+            "provider_id": r[9],
             "input_price": float(r[3]), "output_price": float(r[4]),
             "currency": r[5], "is_active": r[6],
             "created_at": r[7].isoformat() if r[7] else None,
@@ -1226,13 +1229,13 @@ async def list_model_pricing(
 
 async def create_model_pricing(
     db: AsyncSession,
-    provider_name: str,
+    provider_id: str,
     model_name: str,
     input_price: float,
     output_price: float,
     currency: str = "CNY",
 ) -> dict:
-    """新增模型定价。"""
+    """新增模型定价（关联 Provider UUID）。"""
     import uuid as _uuid
     from sqlalchemy import text as _t
     now = datetime.now(timezone.utc)
@@ -1241,14 +1244,18 @@ async def create_model_pricing(
     await db.execute(
         _t(
             "INSERT INTO provider_model_pricing "
-            "(id, provider_name, model_name, input_price, output_price, currency, created_at, updated_at) "
-            "VALUES (:id, :pn, :mn, :ip, :op, :cur, :now, :now)"
+            "(id, provider_id, model_name, input_price, output_price, currency, created_at, updated_at) "
+            "VALUES (:id, :pid, :mn, :ip, :op, :cur, :now, :now)"
         ),
-        {"id": id_, "pn": provider_name, "mn": model_name,
+        {"id": id_, "pid": provider_id, "mn": model_name,
          "ip": input_price, "op": output_price, "cur": currency, "now": now},
     )
     await db.flush()
-    return {"id": id_, "provider_name": provider_name, "model_name": model_name}
+    # 查 provider name 返回
+    result = await db.execute(_t("SELECT name FROM providers WHERE id = :pid"), {"pid": provider_id})
+    row = result.fetchone()
+    pname = row[0] if row else ""
+    return {"id": id_, "provider_name": pname, "model_name": model_name}
 
 
 async def update_model_pricing(

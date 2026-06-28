@@ -298,7 +298,7 @@ Provider 模型定价表，替代代码硬编码。运营后台可编辑，即�
 | 字段 | 类型 | 约束 | 说明 |
 |---|---|---|---|
 | id | uuid | pk | |
-| provider_name | varchar(50) | not null | deepseek / openai / anthropic / doubao |
+| provider_id | uuid | fk providers.id, not null | 关联的 Provider |
 | model_name | varchar(100) | not null | deepseek-chat / gpt-4o |
 | input_price | decimal(18, 6) | not null | 输入单价（元/百万token） |
 | output_price | decimal(18, 6) | not null | 输出单价（元/百万token） |
@@ -307,7 +307,7 @@ Provider 模型定价表，替代代码硬编码。运营后台可编辑，即�
 | created_at | timestamptz | not null | |
 | updated_at | timestamptz | not null | |
 
-索引：UNIQUE `(provider_name, model_name)`
+索引：UNIQUE `(provider_id, model_name)`
 
 ## feature_pricing
 

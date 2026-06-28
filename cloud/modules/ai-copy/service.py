@@ -785,8 +785,10 @@ async def _get_model_pricing(
     """从 provider_model_pricing 表查模型定价。"""
     result = await db.execute(
         text(
-            "SELECT input_price, output_price FROM provider_model_pricing "
-            "WHERE provider_name = :pn AND model_name = :mn AND is_active = TRUE"
+            "SELECT pmp.input_price, pmp.output_price "
+            "FROM provider_model_pricing pmp "
+            "JOIN providers p ON pmp.provider_id = p.id "
+            "WHERE p.name = :pn AND pmp.model_name = :mn AND pmp.is_active = TRUE"
         ),
         {"pn": provider, "mn": model},
     )
@@ -858,7 +860,7 @@ async def _estimate_threshold(
     result = await db.execute(
         text(
             "SELECT MIN(output_price), MIN(input_price) FROM provider_model_pricing "
-            "WHERE is_active = TRUE AND provider_name != '__default__'"
+            "WHERE is_active = TRUE AND model_name != '__default__'"
         ),
     )
     row = result.fetchone()

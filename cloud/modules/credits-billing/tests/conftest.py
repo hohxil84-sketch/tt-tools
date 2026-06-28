@@ -89,12 +89,20 @@ async def test_engine():
             " created_at TIMESTAMP)"
         ))
         await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS providers ("
+            " id VARCHAR(36) PRIMARY KEY, name VARCHAR(100) UNIQUE NOT NULL,"
+            " provider_type VARCHAR(50) NOT NULL DEFAULT '',"
+            " is_enabled BOOLEAN DEFAULT TRUE, priority INTEGER DEFAULT 0,"
+            " created_at TIMESTAMP, updated_at TIMESTAMP)"
+        ))
+        await conn.execute(text(
             "CREATE TABLE IF NOT EXISTS provider_model_pricing ("
-            " id VARCHAR(36) PRIMARY KEY, provider_name VARCHAR(50) NOT NULL,"
-            " model_name VARCHAR(100) NOT NULL, input_price DECIMAL(18,6) NOT NULL DEFAULT 0,"
+            " id VARCHAR(36) PRIMARY KEY, provider_id VARCHAR(36) NOT NULL,"
+            " model_name VARCHAR(100) NOT NULL, provider_name VARCHAR(50) DEFAULT '',"
+            " input_price DECIMAL(18,6) NOT NULL DEFAULT 0,"
             " output_price DECIMAL(18,6) NOT NULL DEFAULT 0, currency VARCHAR(10) DEFAULT 'CNY',"
             " is_active BOOLEAN DEFAULT TRUE, created_at TIMESTAMP, updated_at TIMESTAMP,"
-            " UNIQUE(provider_name, model_name))"
+            " UNIQUE(provider_id, model_name))"
         ))
         await conn.execute(text(
             "CREATE TABLE IF NOT EXISTS feature_pricing ("
@@ -229,17 +237,28 @@ async def seed_pricing_tables(db_session: AsyncSession):
             {"id": str(_uuid.uuid4()), "code": code, "name": name, "cat": cat, "active": active, "now": now},
         )
 
-    # 模型定价
+    # Providers（测试用）
+    prov_ids = {}
+    for pname, ptype in [("deepseek", "deepseek"), ("__default__", "__default__")]:
+        pid = str(_uuid.uuid4())
+        prov_ids[pname] = pid
+        await db_session.execute(
+            text("INSERT OR IGNORE INTO providers (id, name, provider_type, is_enabled, created_at, updated_at) "
+                 "VALUES (:id, :nm, :pt, TRUE, :now, :now)"),
+            {"id": pid, "nm": pname, "pt": ptype, "now": now},
+        )
+
+    # 模型定价（使用 provider_id）
     pricing = [
-        ("deepseek", "deepseek-chat", 1.0, 2.0),
-        ("__default__", "__default__", 1.0, 2.0),
+        (prov_ids["deepseek"], "deepseek-chat", 1.0, 2.0),
+        (prov_ids["__default__"], "__default__", 1.0, 2.0),
     ]
-    for pn, mn, ip, op in pricing:
+    for pid, mn, ip, op in pricing:
         await db_session.execute(
             text("INSERT OR IGNORE INTO provider_model_pricing "
-                 "(id, provider_name, model_name, input_price, output_price, is_active, created_at, updated_at) "
-                 "VALUES (:id, :pn, :mn, :ip, :op, TRUE, :now, :now)"),
-            {"id": str(_uuid.uuid4()), "pn": pn, "mn": mn, "ip": ip, "op": op, "now": now},
+                 "(id, provider_id, provider_name, model_name, input_price, output_price, is_active, created_at, updated_at) "
+                 "VALUES (:id, :pid, :pn, :mn, :ip, :op, TRUE, :now, :now)"),
+            {"id": str(_uuid.uuid4()), "pid": pid, "pn": "", "mn": mn, "ip": ip, "op": op, "now": now},
         )
 
     # 功能定价

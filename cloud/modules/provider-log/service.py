@@ -274,7 +274,7 @@ async def _update_latency_stats_async(
             "UPDATE provider_latency_stats SET "
             "p50_latency_ms = :p50, p95_latency_ms = :p95, sample_count = :cnt, "
             "updated_at = :now "
-            "WHERE provider_name = :pn AND model_name = :mn AND capability = :cap"
+            "WHERE JOIN providers p ON pmp.provider_id = p.id WHERE p.name = :pn AND pmp.model_name = :mn AND pmp.capability = :cap"
         ),
         {
             "p50": p50, "p95": p95, "cnt": n,

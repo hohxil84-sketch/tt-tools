@@ -1043,8 +1043,10 @@ async def _get_exchange_rate(db: AsyncSession) -> float:
 async def _get_model_pricing(db: AsyncSession, provider: str, model: str) -> dict:
     result = await db.execute(
         text(
-            "SELECT input_price, output_price FROM provider_model_pricing "
-            "WHERE provider_name = :pn AND model_name = :mn AND is_active = TRUE"
+            "SELECT pmp.input_price, pmp.output_price "
+            "FROM provider_model_pricing pmp "
+            "JOIN providers p ON pmp.provider_id = p.id "
+            "WHERE p.name = :pn AND pmp.model_name = :mn AND pmp.is_active = TRUE"
         ),
         {"pn": provider, "mn": model},
     )
@@ -1075,7 +1077,7 @@ async def _estimate_threshold(
     min_credits = await _get_min_credits(db, feature)
     rate = await _get_exchange_rate(db)
     result = await db.execute(
-        text("SELECT MIN(output_price), MIN(input_price) FROM provider_model_pricing WHERE is_active = TRUE AND provider_name != '__default__'"),
+        text("SELECT MIN(output_price), MIN(input_price) FROM provider_model_pricing WHERE is_active = TRUE AND model_name != '__default__'"),
     )
     row = result.fetchone()
     output_price = float(row[0]) if row and row[0] is not None else 2.0

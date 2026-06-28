@@ -594,7 +594,7 @@ async def admin_create_model_pricing(
     try:
         data = await create_model_pricing(
             db,
-            provider_name=body["provider_name"],
+            provider_id=body["provider_id"],
             model_name=body["model_name"],
             input_price=float(body["input_price"]),
             output_price=float(body["output_price"]),

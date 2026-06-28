@@ -225,7 +225,8 @@ class ProviderModelPricing(Base):
     __tablename__ = "provider_model_pricing"
 
     id = Column(String(36), primary_key=True, default=_new_uuid)
-    provider_name = Column(String(50), nullable=False)
+    provider_id = Column(String(36), nullable=False)  # FK→providers.id 通过raw SQL确保
+    provider_name = Column(String(50), default="")  # 过渡期保留，后续版本删除
     model_name = Column(String(100), nullable=False)
     input_price = Column(Numeric(18, 6), nullable=False, default=0)  # 元/百万token
     output_price = Column(Numeric(18, 6), nullable=False, default=0)  # 元/百万token
@@ -237,11 +238,11 @@ class ProviderModelPricing(Base):
     )
 
     __table_args__ = (
-        Index("idx_pmp_provider_model", "provider_name", "model_name", unique=True),
+        Index("idx_pmp_provider_model", "provider_id", "model_name", unique=True),
     )
 
     def __repr__(self) -> str:
-        return f"<ProviderModelPricing({self.provider_name}/{self.model_name})>"
+        return f"<ProviderModelPricing(provider={self.provider_id}/{self.model_name})>"
 
 
 class FeaturePricing(Base):
