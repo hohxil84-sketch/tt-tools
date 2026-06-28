@@ -164,9 +164,16 @@ async def list_products_endpoint(
     """获取可用产品列表（套餐 + 充值包）。不鉴权——任何人都可以浏览。"""
     try:
         from sqlalchemy import text as _text
-        from cloud.modules.credits_billing.service import list_credit_packages
-
-        credits_items = await list_credit_packages(db)
+        # 直接用 raw SQL 查 credit_packages，避免 importlib 跨模块冲突
+        cp_result = await db.execute(
+            _text("SELECT product_code, name, credit_amount, price_cents, sort_order "
+                  "FROM credit_packages WHERE is_active = TRUE ORDER BY sort_order"),
+        )
+        credits_items = [
+            {"product_code": r[0], "name": r[1], "credit_amount": r[2],
+             "price_cents": r[3], "sort_order": r[4]}
+            for r in cp_result.all()
+        ]
         plans_result = await db.execute(
             _text("SELECT id, name, plan_tier, monthly_grant, price_cents FROM plans WHERE status = 'active' ORDER BY price_cents"),
         )

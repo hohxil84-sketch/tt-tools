@@ -207,7 +207,7 @@ async def _create_session(
     user_id: str,
     device_id: str,
     role: str = "user",
-    plan_code: str = "free",
+    plan_id: str = "free",
 ) -> TokenPair:
     """创建认证会话：生成 access_token + refresh_token 对。
 
@@ -219,7 +219,7 @@ async def _create_session(
         user_id: 用户 ID
         device_id: 设备 ID
         role: 用户角色（用于 JWT 载荷）
-        plan_code: 当前套餐编码（用于 JWT 载荷）
+        plan_id: 当前套餐编码（用于 JWT 载荷）
 
     Returns:
         TokenPair（access_token, refresh_token, token_type, expires_in）
@@ -228,12 +228,12 @@ async def _create_session(
     raw_refresh = generate_refresh_token()
     refresh_hash = hash_token(raw_refresh)
 
-    # 签发 JWT access_token（委托 cloud-shared，携带用户真实 role 和 plan_code）
+    # 签发 JWT access_token（委托 cloud-shared，携带用户真实 role 和 plan_id）
     access_token = create_access_token(
         user_id=user_id,
         device_id=device_id,
         role=role,
-        plan_code=plan_code,
+        plan_id=plan_id,
     )
 
     # 计算过期时间
@@ -406,13 +406,13 @@ async def login(
         is_new = True
         await db.flush()
 
-    # 3. 创建会话（携带用户真实的 role 和 plan_code 进入 JWT 载荷）
+    # 3. 创建会话（携带用户真实的 role 和 plan_id 进入 JWT 载荷）
     tokens = await _create_session(
         db,
         user_id=user.id,
         device_id=device.id,
         role=user.role,
-        plan_code=user.plan_code,
+        plan_id=user.plan_id,
     )
 
     # 4. 构造响应
@@ -425,7 +425,7 @@ async def login(
             id=user.id,
             account=user.account,
             display_name=user.display_name,
-            plan_code=user.plan_code,
+            plan_id=user.plan_id,
         ),
         device=DeviceInfo(
             id=device.id,
@@ -464,21 +464,21 @@ async def refresh(
     old_refresh = refresh_token  # 保存引用
     await _revoke_session(db, old_refresh)
 
-    # 3. 创建新会话（令牌轮换，需要获取用户真实 role 和 plan_code）
+    # 3. 创建新会话（令牌轮换，需要获取用户真实 role 和 plan_id）
     # 查询用户信息用于 JWT 载荷
     user_result = await db.execute(
         select(User).where(User.id == session.user_id)
     )
     user = user_result.scalar_one_or_none()
     user_role = user.role if user else "user"
-    user_plan = user.plan_code if user else "free"
+    user_plan = user.plan_id if user else "free"
 
     new_tokens = await _create_session(
         db,
         user_id=session.user_id,
         device_id=session.device_id or "",
         role=user_role,
-        plan_code=user_plan,
+        plan_id=user_plan,
     )
 
     # 4. 更新设备活跃时间

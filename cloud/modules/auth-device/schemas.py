@@ -58,7 +58,7 @@ class UserInfo(BaseModel):
     id: str = Field(..., description="用户 ID（UUID）")
     account: str = Field(..., description="登录账号")
     display_name: Optional[str] = Field(default=None, description="展示名称")
-    plan_code: str = Field(..., description="当前套餐编码")
+    plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
 
 
 class DeviceInfo(BaseModel):
