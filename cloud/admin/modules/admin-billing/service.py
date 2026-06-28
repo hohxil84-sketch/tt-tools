@@ -1234,8 +1234,9 @@ async def create_model_pricing(
     input_price: float,
     output_price: float,
     currency: str = "CNY",
+    capability: str = "text",
 ) -> dict:
-    """新增模型定价（关联 Provider UUID）。"""
+    """新增模型定价（关联 Provider UUID + capability）。"""
     import uuid as _uuid
     from sqlalchemy import text as _t
     now = datetime.now(timezone.utc)
@@ -1244,10 +1245,10 @@ async def create_model_pricing(
     await db.execute(
         _t(
             "INSERT INTO provider_model_pricing "
-            "(id, provider_id, model_name, input_price, output_price, currency, created_at, updated_at) "
-            "VALUES (:id, :pid, :mn, :ip, :op, :cur, :now, :now)"
+            "(id, provider_id, model_name, capability, input_price, output_price, currency, created_at, updated_at) "
+            "VALUES (:id, :pid, :mn, :cap, :ip, :op, :cur, :now, :now)"
         ),
-        {"id": id_, "pid": provider_id, "mn": model_name,
+        {"id": id_, "pid": provider_id, "mn": model_name, "cap": capability,
          "ip": input_price, "op": output_price, "cur": currency, "now": now},
     )
     await db.flush()

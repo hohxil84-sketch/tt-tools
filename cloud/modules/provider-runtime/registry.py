@@ -122,28 +122,36 @@ async def load_providers_from_db(db_session, router) -> int:
 
     result = await db_session.execute(
         text(
-            "SELECT name, provider_type, api_key_encrypted, base_url, "
-            "models_json, priority "
-            "FROM providers "
-            "WHERE is_enabled = true "
-            "ORDER BY priority DESC, name ASC"
+            "SELECT p.name, p.provider_type, p.api_key_encrypted, p.base_url, "
+            "p.priority, pmp.model_name, pmp.capability "
+            "FROM providers p "
+            "INNER JOIN provider_model_pricing pmp ON pmp.provider_id = p.id "
+            "WHERE p.is_enabled = true AND pmp.is_active = true "
+            "ORDER BY p.priority DESC, p.name ASC"
         )
     )
     rows = result.all()
     if not rows:
-        _logger.warning("数据库中没有已启用的 Provider，AI 功能将不可用")
+        _logger.warning("数据库中没有已启用的 Provider（需在 provider_model_pricing 中配置模型），AI 功能将不可用")
 
     router.clear()
     loaded = 0
+    # 按 provider name 分组组装 models_json
+    prov_data: dict[str, dict] = {}
     for row in rows:
-        row_dict = {
-            "name": row[0],
-            "provider_type": row[1],
-            "api_key_encrypted": row[2],
-            "base_url": row[3],
-            "models_json": row[4],
-            "priority": row[5],
-        }
+        pname = row[0]
+        if pname not in prov_data:
+            prov_data[pname] = {
+                "name": pname,
+                "provider_type": row[1],
+                "api_key_encrypted": row[2],
+                "base_url": row[3],
+                "priority": row[4],
+                "models_json": {},
+            }
+        prov_data[pname]["models_json"][row[6] or "text"] = row[5]
+
+    for pname, row_dict in prov_data.items():
         instance = _create_provider_instance(row_dict)
         if instance is None:
             continue
@@ -154,8 +162,9 @@ async def load_providers_from_db(db_session, router) -> int:
             priority=row_dict["priority"],
         )
         loaded += 1
+        _logger.info("Provider %s: models=%s", pname, row_dict["models_json"])
 
-    _logger.info("从数据库加载了 %d 个 Provider", loaded)
+    _logger.info("从数据库加载了 %d 个 Provider（模型配置来自 provider_model_pricing）", loaded)
     return loaded
 
 

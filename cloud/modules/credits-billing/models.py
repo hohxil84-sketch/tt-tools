@@ -228,6 +228,7 @@ class ProviderModelPricing(Base):
     provider_id = Column(String(36), nullable=False)  # FK→providers.id 通过raw SQL确保
     provider_name = Column(String(50), default="")  # 过渡期保留，后续版本删除
     model_name = Column(String(100), nullable=False)
+    capability = Column(String(50), nullable=False, default="text")  # text/image_generation/image_edit
     input_price = Column(Numeric(18, 6), nullable=False, default=0)  # 元/百万token
     output_price = Column(Numeric(18, 6), nullable=False, default=0)  # 元/百万token
     currency = Column(String(10), nullable=False, default="CNY")
