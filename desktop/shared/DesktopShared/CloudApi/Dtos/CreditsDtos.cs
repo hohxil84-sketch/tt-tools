@@ -10,8 +10,8 @@ public class CreditBalanceDto
     [JsonPropertyName("user_id")]
     public string UserId { get; set; } = string.Empty;
 
-    [JsonPropertyName("plan_code")]
-    public string PlanCode { get; set; } = string.Empty;
+    [JsonPropertyName("plan_id")]
+    public string PlanId { get; set; } = string.Empty;
 
     [JsonPropertyName("monthly_grant")]
     public int MonthlyGrant { get; set; }
@@ -82,8 +82,8 @@ public class EntitlementCheckData
     [JsonPropertyName("feature")]
     public string Feature { get; set; } = string.Empty;
 
-    [JsonPropertyName("plan_code")]
-    public string PlanCode { get; set; } = string.Empty;
+    [JsonPropertyName("plan_id")]
+    public string PlanId { get; set; } = string.Empty;
 
     [JsonPropertyName("remaining_free_quota")]
     public int? RemainingFreeQuota { get; set; }

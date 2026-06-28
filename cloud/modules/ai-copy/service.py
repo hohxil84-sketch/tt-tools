@@ -100,9 +100,6 @@ def _import_from_provider_runtime(source_name: str, *names: str):
 ProviderCallRequest, ChatMessage = _import_from_provider_runtime(
     "models", "ProviderCallRequest", "ChatMessage",
 )
-MockProvider = _import_from_provider_runtime(
-    "mock", "MockProvider",
-)
 get_global_router = _import_from_provider_runtime(
     "registry", "get_global_router",
 )
@@ -111,12 +108,6 @@ get_global_router = _import_from_provider_runtime(
 # ============================================================
 # 常量
 # ============================================================
-
-# 默认使用 deepseek-chat（性价比高，中文能力强）
-_DEFAULT_MODEL = "route"
-
-# 每次调用消耗的默认额度
-_DEFAULT_CREDITS_PER_CALL = 1
 
 # 当前时间（UTC）获取函数
 _utcnow = lambda: datetime.now(timezone.utc)
@@ -217,21 +208,27 @@ async def generate_ai_copy(
     5. 扣除 AI 额度
     6. 返回生成结果
     """
+    feature = "ai_copy_cloud"
+
     # ---- 步骤 1: 套餐权限检查 ----
     await _check_feature_permission(db, ctx.plan_id)
 
-    # ---- 步骤 2: 额度预检查 ----
-    await _check_credits_balance(db, ctx.user_id, _DEFAULT_CREDITS_PER_CALL)
+    # ---- 步骤 2: 额度预检查（从 DB 读起步扣点 + 按 max_tokens 预估） ----
+    min_credits = await _get_min_credits(db, feature)
+    max_tokens = 2048  # 当前固定值，后续可通过请求参数传入
+    threshold = await _estimate_threshold(db, feature, "text", max_tokens,
+        _build_user_prompt(req))
+    await _check_credits_balance(db, ctx.user_id, threshold)
 
     # ---- 步骤 3: 构建 prompt 并调用 Provider Runtime ----
     system_prompt = _build_system_prompt()
     user_prompt = _build_user_prompt(req)
 
     provider_result = await _call_provider(
-        model=_DEFAULT_MODEL,
+        model="route",  # router 自动选择
         system_prompt=system_prompt,
         user_prompt=user_prompt,
-        feature="ai_copy_cloud",
+        feature=feature,
         request_id=ctx.request_id,
     )
 
@@ -263,6 +260,13 @@ async def generate_ai_copy(
         )
 
     # ---- 步骤 4: 写入 Provider 调用日志（成功） ----
+    # 先计算实际扣费（从 DB 定价表独立计算，不依赖 cost.py 硬编码）
+    actual_credits = await _calculate_deduction(
+        db, feature,
+        provider_result.provider, provider_result.model,
+        provider_result.usage,
+    )
+
     provider_call_id = await _insert_provider_log(
         db=db,
         ctx=ctx,
@@ -277,16 +281,18 @@ async def generate_ai_copy(
         cached_tokens=provider_result.usage.cached_tokens,
         image_count=provider_result.usage.image_count,
         estimated_cost=provider_result.estimated_cost,
-        credits_charged=_DEFAULT_CREDITS_PER_CALL,
+        credits_charged=actual_credits,
         latency_ms=provider_result.latency_ms or 0,
         raw_usage_json=provider_result.raw_usage_json,
+        estimated_credits_before=threshold,
+        estimated_latency_ms=None,
     )
 
     # ---- 步骤 5: 扣除 AI 额度 ----
     await _consume_credits(
         db=db,
         user_id=ctx.user_id,
-        amount=_DEFAULT_CREDITS_PER_CALL,
+        amount=actual_credits,
         source_id=provider_call_id,
         description=f"AI 文案生成 · {req.scene} · {req.product_name}",
     )
@@ -295,13 +301,13 @@ async def generate_ai_copy(
     text, variants = _parse_generated_text(provider_result.text)
 
     return AiCopyGenerateData(
-        feature="ai_copy_cloud",
+        feature=feature,
         text=text,
         variants=variants,
         provider=provider_result.provider,
         model=provider_result.model,
         estimated_cost=provider_result.estimated_cost,
-        credits_charged=_DEFAULT_CREDITS_PER_CALL,
+        credits_charged=actual_credits,
         provider_call_id=provider_call_id,
     )
 
@@ -571,6 +577,8 @@ async def _insert_provider_log(
     credits_charged: int,
     latency_ms: int,
     raw_usage_json: dict,
+    estimated_credits_before: Optional[int] = None,
+    estimated_latency_ms: Optional[int] = None,
 ) -> str:
     """写入 Provider 调用日志到 provider_call_log 表。
 
@@ -591,10 +599,11 @@ async def _insert_provider_log(
             "(id, request_id, user_id, device_id, feature, provider, model, "
             " status, error_code, input_tokens, output_tokens, total_tokens, "
             " reasoning_tokens, cached_tokens, image_count, estimated_cost, "
-            " credits_charged, latency_ms, raw_usage_json, raw_meta_json, created_at) "
+            " credits_charged, latency_ms, raw_usage_json, raw_meta_json, "
+            " estimated_credits_before, estimated_latency_ms, created_at) "
             "VALUES (:id, :rid, :uid, :did, :feat, :prov, :mod, "
             " :st, :ec, :it, :ot, :tt, :rt, :ct, :ic, :ecost, "
-            " :cc, :lat, :ruj, :rmj, :now)"
+            " :cc, :lat, :ruj, :rmj, :ecb, :elm, :now)"
         ),
         {
             "id": log_id,
@@ -617,6 +626,8 @@ async def _insert_provider_log(
             "lat": latency_ms,
             "ruj": json.dumps(raw_usage_json) if raw_usage_json else None,
             "rmj": raw_meta,
+            "ecb": estimated_credits_before,
+            "elm": estimated_latency_ms,
             "now": _utcnow(),
         },
     )
@@ -742,3 +753,122 @@ def _parse_generated_text(raw_text: str) -> Tuple[str, List[str]]:
     variants = paragraphs[1:] if len(paragraphs) > 1 else []
 
     return text, variants
+
+
+# ============================================================
+# DB 驱动定价辅助函数（使用 raw SQL 避免 ORM 跨模块冲突）
+# ============================================================
+
+
+async def _get_min_credits(db: AsyncSession, feature: str) -> int:
+    """从 feature_pricing 表查起步扣点。"""
+    result = await db.execute(
+        text("SELECT min_credits FROM feature_pricing WHERE feature_code = :fc"),
+        {"fc": feature},
+    )
+    row = result.fetchone()
+    return row[0] if row else 1
+
+
+async def _get_exchange_rate(db: AsyncSession) -> float:
+    """从 system_config 表查汇率。"""
+    result = await db.execute(
+        text("SELECT value FROM system_config WHERE key = 'credits_exchange_rate'"),
+    )
+    row = result.fetchone()
+    return float(row[0]) if row else 10.0
+
+
+async def _get_model_pricing(
+    db: AsyncSession, provider: str, model: str
+) -> dict:
+    """从 provider_model_pricing 表查模型定价。"""
+    result = await db.execute(
+        text(
+            "SELECT input_price, output_price FROM provider_model_pricing "
+            "WHERE provider_name = :pn AND model_name = :mn AND is_active = TRUE"
+        ),
+        {"pn": provider, "mn": model},
+    )
+    row = result.fetchone()
+    if row is not None:
+        return {"input_price": float(row[0]), "output_price": float(row[1])}
+    return {"input_price": 1.0, "output_price": 2.0}
+
+
+async def _get_latency_estimate(
+    db: AsyncSession, provider: str, model: str, capability: str
+) -> dict:
+    """从 provider_latency_stats 表查预估耗时。"""
+    result = await db.execute(
+        text(
+            "SELECT p50_latency_ms, p95_latency_ms, sample_count "
+            "FROM provider_latency_stats "
+            "WHERE provider_name = :pn AND model_name = :mn AND capability = :cap"
+        ),
+        {"pn": provider, "mn": model, "cap": capability},
+    )
+    row = result.fetchone()
+    if row is not None:
+        p50, p95, cnt = row[0], row[1], row[2]
+        return {
+            "p50_ms": p50, "p95_ms": p95,
+            "display": f"约 {p50 // 1000}-{p95 // 1000} 秒",
+            "sample_count": cnt,
+        }
+    return {"p50_ms": 0, "p95_ms": 0, "display": "暂无耗时数据", "sample_count": 0}
+
+
+async def _calculate_deduction(
+    db: AsyncSession,
+    feature: str,
+    provider: str,
+    model: str,
+    usage,  # ProviderUsage
+) -> int:
+    """计算实际扣点数。公式：max(起步扣点, ceil(实际CNY成本 × 汇率))"""
+    import math as _math
+
+    min_credits = await _get_min_credits(db, feature)
+    pricing = await _get_model_pricing(db, provider, model)
+    rate = await _get_exchange_rate(db)
+
+    input_cost = (usage.input_tokens / 1_000_000) * pricing["input_price"]
+    output_cost = (usage.output_tokens / 1_000_000) * pricing["output_price"]
+    actual_cost_cny = input_cost + output_cost
+
+    cost_credits = _math.ceil(actual_cost_cny * rate)
+    return max(min_credits, cost_credits)
+
+
+async def _estimate_threshold(
+    db: AsyncSession,
+    feature: str,
+    capability: str,
+    max_tokens: int,
+    prompt_text: str,
+) -> int:
+    """预估最大扣点（预检查用）。按最坏情况（输出用满 max_tokens）计算。"""
+    import math as _math
+
+    min_credits = await _get_min_credits(db, feature)
+    rate = await _get_exchange_rate(db)
+
+    # 取所有活跃模型的最贵定价作为保守估算
+    result = await db.execute(
+        text(
+            "SELECT MAX(output_price), MAX(input_price) FROM provider_model_pricing "
+            "WHERE is_active = TRUE"
+        ),
+    )
+    row = result.fetchone()
+    output_price = float(row[0]) if row and row[0] is not None else 2.0
+    input_price = float(row[1]) if row and row[1] is not None else 1.0
+
+    estimated_input = max(1, int(len(prompt_text) * 1.2))
+    input_cost = (estimated_input / 1_000_000) * input_price
+    output_cost = (max_tokens / 1_000_000) * output_price
+    max_cost_cny = input_cost + output_cost
+
+    max_credits = _math.ceil(max_cost_cny * rate)
+    return max(min_credits, max_credits)

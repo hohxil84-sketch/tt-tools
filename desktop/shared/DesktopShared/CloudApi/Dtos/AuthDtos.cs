@@ -57,8 +57,8 @@ public class UserDto
     [JsonPropertyName("display_name")]
     public string? DisplayName { get; set; }
 
-    [JsonPropertyName("plan_code")]
-    public string PlanCode { get; set; } = "free";
+    [JsonPropertyName("plan_id")]
+    public string PlanId { get; set; } = string.Empty;
 }
 
 /// <summary>设备信息 DTO</summary>

@@ -101,6 +101,16 @@ async def write_provider_call_log(
     db.add(log_entry)
     await db.flush()
 
+    # 异步更新 Provider 耗时统计（仅成功调用）
+    if req.status == "success" and req.latency_ms is not None and req.latency_ms > 0:
+        await _update_latency_stats_async(
+            db,
+            provider_name=req.provider,
+            model_name=req.model,
+            capability=_guess_capability(feature),
+            latency_ms=req.latency_ms,
+        )
+
     return log_entry
 
 
@@ -194,3 +204,99 @@ async def list_provider_call_logs(
         limit=limit,
         offset=offset,
     )
+
+
+# ============================================================
+# Provider 耗时统计更新（供预估接口使用）
+# ============================================================
+
+
+def _guess_capability(feature: str) -> str:
+    """根据功能码推测 capability 类型。
+
+    用于 provider_latency_stats 表的 capability 字段。
+    """
+    image_features = {
+        "ai_render_cloud", "upscale_image_cloud", "vectorize_image_cloud",
+        "ai_edit_image_cloud", "remove_bg_cloud",
+    }
+    ocr_features = {"ocr_cloud"}
+    if feature in image_features:
+        return "image_generation"
+    if feature in ocr_features:
+        return "image_edit"
+    return "text"
+
+
+async def _update_latency_stats_async(
+    db: AsyncSession,
+    provider_name: str,
+    model_name: str,
+    capability: str,
+    latency_ms: int,
+) -> None:
+    """异步更新 provider_latency_stats 表。
+
+    基于最近 1000 条成功调用的滑动窗口，计算 p50 和 p95 耗时。
+    使用 raw SQL 避免 ORM 跨模块冲突。
+
+    Args:
+        db: 数据库异步会话
+        provider_name: Provider 名称
+        model_name: 模型名称
+        capability: text / image_generation / image_edit
+        latency_ms: 本次调用的耗时（毫秒）
+    """
+    # 查询最近 1000 条成功调用的耗时（含本次）
+    result = await db.execute(
+        text(
+            "SELECT latency_ms FROM provider_call_log "
+            "WHERE provider = :pn AND model = :mn AND status = 'success' "
+            "AND latency_ms IS NOT NULL "
+            "ORDER BY created_at DESC LIMIT 1000"
+        ),
+        {"pn": provider_name, "mn": model_name},
+    )
+    rows = result.all()
+    latencies = sorted([row[0] for row in rows if row[0] is not None])
+
+    if not latencies:
+        return
+
+    n = len(latencies)
+    p50 = latencies[n // 2]
+    p95 = latencies[min(int(n * 0.95), n - 1)]
+
+    # UPSERT: 使用 PostgreSQL ON CONFLICT / SQLite INSERT OR REPLACE
+    # 兼容两种数据库，先尝试 UPDATE，rowcount=0 则 INSERT
+    update_result = await db.execute(
+        text(
+            "UPDATE provider_latency_stats SET "
+            "p50_latency_ms = :p50, p95_latency_ms = :p95, sample_count = :cnt, "
+            "updated_at = :now "
+            "WHERE provider_name = :pn AND model_name = :mn AND capability = :cap"
+        ),
+        {
+            "p50": p50, "p95": p95, "cnt": n,
+            "now": datetime.now(timezone.utc),
+            "pn": provider_name, "mn": model_name, "cap": capability,
+        },
+    )
+    if update_result.rowcount == 0:
+        import uuid as _uuid
+        await db.execute(
+            text(
+                "INSERT INTO provider_latency_stats "
+                "(id, provider_name, model_name, capability, "
+                " p50_latency_ms, p95_latency_ms, sample_count, updated_at) "
+                "VALUES (:id, :pn, :mn, :cap, :p50, :p95, :cnt, :now)"
+            ),
+            {
+                "id": str(_uuid.uuid4()),
+                "pn": provider_name, "mn": model_name, "cap": capability,
+                "p50": p50, "p95": p95, "cnt": n,
+                "now": datetime.now(timezone.utc),
+            },
+        )
+
+    await db.flush()

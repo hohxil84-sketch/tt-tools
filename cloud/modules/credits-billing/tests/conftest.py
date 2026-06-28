@@ -62,6 +62,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from fastapi import FastAPI
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from cloud.shared.database import Base
@@ -79,6 +80,46 @@ async def test_engine():
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # 手动创建跨模块的表（这些表的 ORM 不在本模块中，但 raw SQL 查询会用到）
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS feature_codes ("
+            " id VARCHAR(36) PRIMARY KEY, code VARCHAR(100) UNIQUE NOT NULL,"
+            " name VARCHAR(100) NOT NULL, category VARCHAR(50) NOT NULL,"
+            " description TEXT, is_active BOOLEAN NOT NULL DEFAULT TRUE,"
+            " created_at TIMESTAMP)"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS provider_model_pricing ("
+            " id VARCHAR(36) PRIMARY KEY, provider_name VARCHAR(50) NOT NULL,"
+            " model_name VARCHAR(100) NOT NULL, input_price DECIMAL(18,6) NOT NULL DEFAULT 0,"
+            " output_price DECIMAL(18,6) NOT NULL DEFAULT 0, currency VARCHAR(10) DEFAULT 'CNY',"
+            " is_active BOOLEAN DEFAULT TRUE, created_at TIMESTAMP, updated_at TIMESTAMP,"
+            " UNIQUE(provider_name, model_name))"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS feature_pricing ("
+            " feature_code VARCHAR(100) PRIMARY KEY, min_credits INT NOT NULL DEFAULT 1,"
+            " default_max_tokens INT NOT NULL DEFAULT 2048, updated_at TIMESTAMP)"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS system_config ("
+            " key VARCHAR(100) PRIMARY KEY, value VARCHAR(500) NOT NULL, updated_at TIMESTAMP)"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS provider_latency_stats ("
+            " id VARCHAR(36) PRIMARY KEY, provider_name VARCHAR(50) NOT NULL,"
+            " model_name VARCHAR(100) NOT NULL, capability VARCHAR(50) NOT NULL,"
+            " p50_latency_ms INT NOT NULL DEFAULT 0, p95_latency_ms INT NOT NULL DEFAULT 0,"
+            " sample_count INT NOT NULL DEFAULT 0, updated_at TIMESTAMP,"
+            " UNIQUE(provider_name, model_name, capability))"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS credit_packages ("
+            " id VARCHAR(36) PRIMARY KEY, product_code VARCHAR(50) UNIQUE NOT NULL,"
+            " name VARCHAR(100) NOT NULL, credit_amount INT NOT NULL,"
+            " price_cents INT NOT NULL, is_active BOOLEAN DEFAULT TRUE,"
+            " sort_order INT DEFAULT 0, created_at TIMESTAMP, updated_at TIMESTAMP)"
+        ))
 
     yield engine
     await engine.dispose()
@@ -161,7 +202,70 @@ async def seed_plans(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def test_user(db_session: AsyncSession, seed_plans):
+async def seed_pricing_tables(db_session: AsyncSession):
+    """初始化定价相关表的种子数据。"""
+    import uuid as _uuid
+    from datetime import datetime, timezone as _tz
+
+    now = datetime.now(_tz.utc)
+
+    # 功能码
+    features = [
+        ("ai_copy_cloud", "AI 文案生成", "cloud_ai", True),
+        ("ai_render_cloud", "AI 效果图生成", "cloud_ai", True),
+        ("upscale_image_cloud", "AI 高清修复", "cloud_ai", True),
+        ("vectorize_image_cloud", "AI 转矢量", "cloud_ai", True),
+        ("ai_edit_image_cloud", "AI 智能改图", "cloud_ai", True),
+        ("remove_bg_cloud", "云端高级抠图", "cloud_ai", True),
+        ("ocr_cloud", "云端高级 OCR", "cloud_ai", True),
+        ("resize_image_local_paid", "图片改尺寸", "local_paid", True),
+        ("pdf_image_convert_local_paid", "PDF/图片互转", "local_paid", True),
+        ("ocr_local", "本地 OCR", "local_free", True),
+    ]
+    for code, name, cat, active in features:
+        await db_session.execute(
+            text("INSERT OR IGNORE INTO feature_codes (id, code, name, category, is_active, created_at) "
+                 "VALUES (:id, :code, :name, :cat, :active, :now)"),
+            {"id": str(_uuid.uuid4()), "code": code, "name": name, "cat": cat, "active": active, "now": now},
+        )
+
+    # 模型定价
+    pricing = [
+        ("deepseek", "deepseek-chat", 1.0, 2.0),
+        ("__default__", "__default__", 1.0, 2.0),
+    ]
+    for pn, mn, ip, op in pricing:
+        await db_session.execute(
+            text("INSERT OR IGNORE INTO provider_model_pricing "
+                 "(id, provider_name, model_name, input_price, output_price, is_active, created_at, updated_at) "
+                 "VALUES (:id, :pn, :mn, :ip, :op, TRUE, :now, :now)"),
+            {"id": str(_uuid.uuid4()), "pn": pn, "mn": mn, "ip": ip, "op": op, "now": now},
+        )
+
+    # 功能定价
+    fp_data = [
+        ("ai_copy_cloud", 2), ("ai_render_cloud", 3),
+        ("upscale_image_cloud", 3), ("vectorize_image_cloud", 3),
+        ("ai_edit_image_cloud", 5), ("remove_bg_cloud", 2), ("ocr_cloud", 2),
+    ]
+    for fc_code, mc in fp_data:
+        await db_session.execute(
+            text("INSERT OR IGNORE INTO feature_pricing (feature_code, min_credits, default_max_tokens, updated_at) "
+                 "VALUES (:fc, :mc, 2048, :now)"),
+            {"fc": fc_code, "mc": mc, "now": now},
+        )
+
+    # 汇率
+    await db_session.execute(
+        text("INSERT OR IGNORE INTO system_config (key, value, updated_at) VALUES ('credits_exchange_rate', '10', :now)"),
+        {"now": now},
+    )
+
+    await db_session.flush()
+
+
+@pytest_asyncio.fixture
+async def test_user(db_session: AsyncSession, seed_plans, seed_pricing_tables):
     """创建一个测试用户（标准套餐）并返回 ORM 对象。
 
     密码为 "test123"，已 bcrypt 哈希。

@@ -187,8 +187,25 @@ Response `data`:
   "provider": "deepseek",
   "model": "deepseek-chat",
   "estimated_cost": 0.002,
-  "credits_charged": 1,
+  "credits_charged": 2,
   "provider_call_id": "uuid"
+}
+```
+
+### POST `/api/v1/ai/copy/estimate`（新增）
+
+预估扣点和耗时，不实际调用 AI。请求体同 generate，响应：
+
+```json
+{
+  "feature": "ai_copy_cloud",
+  "min_credits": 2,
+  "estimated_max_credits": 2,
+  "balance": 500,
+  "enough": true,
+  "estimated_latency": {"p50_ms": 1200, "p95_ms": 3500, "display": "约 1-4 秒", "sample_count": 150},
+  "provider": "deepseek",
+  "model": "deepseek-chat"
 }
 ```
 

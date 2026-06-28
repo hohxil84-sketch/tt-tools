@@ -12,6 +12,7 @@ cloud-credits-billing 业务逻辑层。
 """
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Tuple
 
@@ -80,9 +81,9 @@ _PRO_FEATURES = {
 
 # 默认套餐定义
 _DEFAULT_PLANS = [
-    {"name": "免费套餐", "monthly_grant": 10, "features": _FREE_FEATURES},
-    {"name": "标准套餐", "monthly_grant": 500, "features": _STANDARD_FEATURES},
-    {"name": "专业套餐", "monthly_grant": 2000, "features": _PRO_FEATURES},
+    {"name": "免费套餐", "monthly_grant": 10, "plan_tier": "free", "price_cents": 0, "features": _FREE_FEATURES},
+    {"name": "标准套餐", "monthly_grant": 500, "plan_tier": "standard", "price_cents": 2900, "features": _STANDARD_FEATURES},
+    {"name": "专业套餐", "monthly_grant": 2000, "plan_tier": "pro", "price_cents": 9900, "features": _PRO_FEATURES},
 ]
 
 
@@ -117,6 +118,8 @@ async def seed_plans(db: AsyncSession) -> List[Plan]:
         plan = Plan(
             name=p["name"],
             monthly_grant=p["monthly_grant"],
+            plan_tier=p.get("plan_tier", ""),
+            price_cents=p.get("price_cents", 0),
             enabled_features_json=p["features"],
             status="active",
         )
@@ -431,8 +434,8 @@ async def check_entitlement(
             reason=f"当前套餐不支持此功能：{feature}",
         )
 
-    # 4. 免费套餐（monthly_grant <= 10 判定为免费套餐）：检查每日配额
-    is_free_plan = plan.monthly_grant <= 10
+    # 4. 免费套餐（plan_tier == 'free' 判定，替代 monthly_grant <= 10 硬编码）
+    is_free_plan = (plan.plan_tier == "free")
     if is_free_plan and isinstance(feature_config, dict):
         daily_limit = feature_config.get("daily_limit", 0)
         if daily_limit > 0:
@@ -875,3 +878,367 @@ async def _maybe_refresh_monthly_grant(
 
     await db.flush()
     return account
+
+
+# ============================================================
+# DB 驱动定价函数（替代所有代码硬编码）
+# ============================================================
+
+
+async def get_exchange_rate(db: AsyncSession) -> float:
+    """获取 CNY → 点数的汇率。
+
+    Args:
+        db: 数据库异步会话
+
+    Returns:
+        汇率（默认 10，即 1 元 = 10 点）
+    """
+    result = await db.execute(
+        text("SELECT value FROM system_config WHERE key = 'credits_exchange_rate'"),
+    )
+    row = result.fetchone()
+    if row is None:
+        return 10.0  # 兜底默认值
+    return float(row[0])
+
+
+async def get_model_pricing(
+    db: AsyncSession, provider: str, model: str
+) -> dict:
+    """从 DB 查询某模型的定价。
+
+    Args:
+        db: 数据库异步会话
+        provider: Provider 名称
+        model: 模型名称
+
+    Returns:
+        dict，含 input_price、output_price（元/百万token）
+    """
+    result = await db.execute(
+        text(
+            "SELECT input_price, output_price FROM provider_model_pricing "
+            "WHERE provider_name = :prov AND model_name = :model AND is_active = TRUE"
+        ),
+        {"prov": provider, "model": model},
+    )
+    row = result.fetchone()
+    if row is not None:
+        return {
+            "input_price": float(row[0]),
+            "output_price": float(row[1]),
+        }
+    # 兜底：查默认定价
+    result = await db.execute(
+        text(
+            "SELECT input_price, output_price FROM provider_model_pricing "
+            "WHERE provider_name = '__default__' AND is_active = TRUE"
+        ),
+    )
+    row = result.fetchone()
+    if row is not None:
+        return {
+            "input_price": float(row[0]),
+            "output_price": float(row[1]),
+        }
+    # 最终兜底
+    return {"input_price": 1.0, "output_price": 2.0}
+
+
+async def get_feature_min_credits(db: AsyncSession, feature: str) -> int:
+    """查询某功能的最小扣点数（起步扣点）。
+
+    Args:
+        db: 数据库异步会话
+        feature: 功能码
+
+    Returns:
+        起步扣点（默认 1）
+    """
+    result = await db.execute(
+        text("SELECT min_credits FROM feature_pricing WHERE feature_code = :fc"),
+        {"fc": feature},
+    )
+    row = result.fetchone()
+    return row[0] if row else 1
+
+
+async def get_feature_default_max_tokens(db: AsyncSession, feature: str) -> int:
+    """查询某功能的默认 max_tokens。
+
+    Args:
+        db: 数据库异步会话
+        feature: 功能码
+
+    Returns:
+        max_tokens（默认 2048）
+    """
+    result = await db.execute(
+        text("SELECT default_max_tokens FROM feature_pricing WHERE feature_code = :fc"),
+        {"fc": feature},
+    )
+    row = result.fetchone()
+    return row[0] if row else 2048
+
+
+async def calculate_deduction(
+    db: AsyncSession,
+    feature: str,
+    provider: str,
+    model: str,
+    usage,  # ProviderUsage
+) -> int:
+    """计算实际扣点数（核心公式）。
+
+    从 DB 独立计算 CNY 成本 + 汇率换算，完全不依赖 cost.py 硬编码。
+
+    公式：max(起步扣点, ceil(实际CNY成本 × 汇率))
+
+    Args:
+        db: 数据库异步会话
+        feature: 功能码
+        provider: Provider 名称
+        model: 模型名称
+        usage: ProviderUsage 结构（含 input_tokens、output_tokens、image_count）
+
+    Returns:
+        实际应扣点数（整数）
+    """
+    # 1. 查起步扣点
+    min_credits = await get_feature_min_credits(db, feature)
+
+    # 2. 查模型定价
+    pricing = await get_model_pricing(db, provider, model)
+
+    # 3. 计算实际 CNY 成本（token消耗 × 模型单价）
+    input_cost = (usage.input_tokens / 1_000_000) * pricing["input_price"]
+    output_cost = (usage.output_tokens / 1_000_000) * pricing["output_price"]
+    actual_cost_cny = input_cost + output_cost
+
+    # 4. 汇率换算
+    rate = await get_exchange_rate(db)
+    cost_credits = math.ceil(actual_cost_cny * rate)
+
+    # 5. 取最大值
+    return max(min_credits, cost_credits)
+
+
+async def estimate_credits(
+    db: AsyncSession,
+    feature: str,
+    capability: str,
+    max_tokens: int,
+    prompt_text: str,
+    router=None,  # ProviderRouter 实例，用于路由选模型
+) -> dict:
+    """预估扣费 + 耗时（/estimate 端点用）。
+
+    不调用 Provider，纯查 DB + 计算。路由确定 provider/model 后查定价表。
+
+    Args:
+        db: 数据库异步会话
+        feature: 功能码
+        capability: text / image_generation / image_edit
+        max_tokens: 请求的 max_tokens
+        prompt_text: 用户提示词（用于估算输入 token 数）
+        router: ProviderRouter 实例（用于 resolve_route）
+
+    Returns:
+        dict:
+        - min_credits: 起步扣点
+        - estimated_max_credits: 预估最大扣点
+        - provider: 路由到的 Provider 名称（可能为空）
+        - model: 路由到的模型名称（可能为空）
+        - balance: 当前余额（为 None 时表示未登录/无账户）
+        - enough: 余额是否足够
+        - estimated_latency: {p50_ms, p95_ms, display, sample_count}
+    """
+    result = {
+        "min_credits": 0,
+        "estimated_max_credits": 0,
+        "provider": "",
+        "model": "",
+        "balance": 0,
+        "enough": False,
+        "estimated_latency": {
+            "p50_ms": 0,
+            "p95_ms": 0,
+            "display": "暂无耗时数据",
+            "sample_count": 0,
+        },
+    }
+
+    # 1. 路由确定 provider + model
+    if router is not None:
+        try:
+            from cloud.modules.provider_runtime.registry import resolve_route
+            target = resolve_route(capability=capability, router=router)
+            result["provider"] = target.provider
+            result["model"] = target.model
+        except Exception:
+            pass  # 路由失败不阻塞预估
+
+    provider = result["provider"]
+    model_name = result["model"]
+
+    # 2. 查起步扣点
+    min_credits = await get_feature_min_credits(db, feature)
+    result["min_credits"] = min_credits
+
+    # 3. 查模型定价
+    pricing = {"input_price": 1.0, "output_price": 2.0}  # 兜底
+    if provider and model_name:
+        pricing = await get_model_pricing(db, provider, model_name)
+
+    # 4. 估算输入 token（中文字符数 × 1.2，英文约 0.75，取保守估算 1.2）
+    estimated_input_tokens = max(1, int(len(prompt_text) * 1.2))
+
+    # 5. 预估最大成本
+    input_cost = (estimated_input_tokens / 1_000_000) * pricing["input_price"]
+    output_cost = (max_tokens / 1_000_000) * pricing["output_price"]
+    max_cost_cny = input_cost + output_cost
+
+    # 6. 汇率换算
+    rate = await get_exchange_rate(db)
+    max_credits = math.ceil(max_cost_cny * rate)
+
+    # 7. 预检查阈值
+    threshold = max(min_credits, max_credits)
+    result["estimated_max_credits"] = threshold
+
+    # 8. 查耗时统计
+    if provider and model_name:
+        latency_result = await db.execute(
+            text(
+                "SELECT p50_latency_ms, p95_latency_ms, sample_count "
+                "FROM provider_latency_stats "
+                "WHERE provider_name = :pn AND model_name = :mn AND capability = :cap"
+            ),
+            {"pn": provider, "mn": model_name, "cap": capability},
+        )
+        row = latency_result.fetchone()
+        if row is not None:
+            p50, p95, count = row[0], row[1], row[2]
+            result["estimated_latency"] = {
+                "p50_ms": p50,
+                "p95_ms": p95,
+                "display": f"约 {p50 // 1000}-{p95 // 1000} 秒",
+                "sample_count": count,
+            }
+
+    return result
+
+
+async def estimate_with_balance(
+    db: AsyncSession,
+    user_id: str,
+    feature: str,
+    capability: str,
+    max_tokens: int,
+    prompt_text: str,
+    router=None,
+) -> dict:
+    """预估扣费 + 耗时，并检查用户余额（完整版 /estimate）。
+
+    Args:
+        db: 数据库异步会话
+        user_id: 用户 ID
+        feature: 功能码
+        capability: 能力类型
+        max_tokens: max_tokens
+        prompt_text: 提示词
+        router: ProviderRouter 实例
+
+    Returns:
+        同 estimate_credits，但 balance 和 enough 会填充真实值
+    """
+    result = await estimate_credits(
+        db, feature, capability, max_tokens, prompt_text, router
+    )
+
+    # 查用户余额
+    balance_result = await db.execute(
+        text("SELECT balance FROM credit_accounts WHERE user_id = :uid AND status = 'active'"),
+        {"uid": user_id},
+    )
+    row = balance_result.fetchone()
+    balance = row[0] if row else 0
+    result["balance"] = balance
+    result["enough"] = balance >= result["estimated_max_credits"]
+
+    return result
+
+
+async def get_credit_package(
+    db: AsyncSession, product_code: str
+) -> Optional[dict]:
+    """查询充值套餐。
+
+    Args:
+        db: 数据库异步会话
+        product_code: 产品编码
+
+    Returns:
+        dict(credit_amount, price_cents, name) 或 None
+    """
+    result = await db.execute(
+        text(
+            "SELECT credit_amount, price_cents, name FROM credit_packages "
+            "WHERE product_code = :pc AND is_active = TRUE"
+        ),
+        {"pc": product_code},
+    )
+    row = result.fetchone()
+    if row is None:
+        return None
+    return {
+        "credit_amount": row[0],
+        "price_cents": row[1],
+        "name": row[2],
+    }
+
+
+async def list_credit_packages(
+    db: AsyncSession,
+) -> list[dict]:
+    """列出所有启用的充值套餐。
+
+    Returns:
+        套餐列表，按 sort_order 排序
+    """
+    result = await db.execute(
+        text(
+            "SELECT product_code, name, credit_amount, price_cents, sort_order "
+            "FROM credit_packages WHERE is_active = TRUE ORDER BY sort_order ASC"
+        ),
+    )
+    rows = result.all()
+    return [
+        {
+            "product_code": row[0],
+            "name": row[1],
+            "credit_amount": row[2],
+            "price_cents": row[3],
+            "sort_order": row[4],
+        }
+        for row in rows
+    ]
+
+
+async def get_plan_price(db: AsyncSession, plan_id: str) -> Optional[int]:
+    """查询套餐月费（分）。
+
+    Args:
+        db: 数据库异步会话
+        plan_id: 套餐 ID
+
+    Returns:
+        价格（分），或 None
+    """
+    result = await db.execute(
+        text("SELECT price_cents FROM plans WHERE id = :pid AND status = 'active'"),
+        {"pid": plan_id},
+    )
+    row = result.fetchone()
+    return row[0] if row else None

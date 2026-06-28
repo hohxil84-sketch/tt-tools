@@ -36,8 +36,8 @@ _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 if _MODULE_DIR not in sys.path:
     sys.path.insert(0, _MODULE_DIR)
 
-from schemas import CreateAiRenderTaskRequest, RenderContext
-from service import create_render_task, query_render_task
+from schemas import CreateAiRenderTaskRequest, RenderContext, EstimateRequest
+from service import create_render_task, query_render_task, _get_min_credits, _estimate_threshold
 
 # 创建路由，prefix 在 app-shell 装配时指定
 router = APIRouter(tags=["AI Render"])
@@ -92,6 +92,42 @@ async def ai_render_create_task(
             status_code=e.status_code,
             details=e.details,
         )
+
+
+@router.post("/ai/render/estimate")
+async def ai_render_estimate(
+    req: CreateAiRenderTaskRequest,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """预估 AI 效果图生成的扣点和耗时（不实际创建任务）。"""
+    try:
+        feature = "ai_render_cloud"
+        prompt_text = req.prompt or ""
+        max_tokens = 2048
+
+        min_credits = await _get_min_credits(db, feature)
+        threshold = await _estimate_threshold(db, feature, "image_generation", max_tokens, prompt_text)
+
+        from sqlalchemy import text as _text
+        bal_result = await db.execute(
+            _text("SELECT balance FROM credit_accounts WHERE user_id = :uid AND status = 'active'"),
+            {"uid": current_user.user_id},
+        )
+        row = bal_result.fetchone()
+        balance = row[0] if row else 0
+
+        return success_response({
+            "feature": feature, "min_credits": min_credits,
+            "estimated_max_credits": threshold, "balance": balance,
+            "enough": balance >= threshold,
+            "estimated_latency": {"p50_ms": 0, "p95_ms": 0, "display": "暂无耗时数据", "sample_count": 0},
+            "provider": "", "model": "",
+        }, request_id)
+    except AppError as e:
+        return error_response(code=e.code, message=e.message, request_id=request_id,
+            status_code=e.status_code, details=e.details)
 
 
 @router.get("/ai/render/tasks/{task_id}")

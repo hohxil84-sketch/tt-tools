@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Optional
 import logging
 
-from mock import MockProvider
 from deepseek import DeepSeekProvider
 from doubao import DoubaoProvider
 from errors import ProviderError, ProviderErrorCode
@@ -48,7 +47,6 @@ class RouteTarget:
 # ============================================================
 
 _PROVIDER_CLASSES: dict[str, type] = {
-    "mock": MockProvider,
     "deepseek": DeepSeekProvider,
     "doubao": DoubaoProvider,
 }
@@ -84,9 +82,6 @@ def _create_provider_instance(row: dict) -> Optional[object]:
     base_url = row.get("base_url") or ""
     models = row.get("models_json") or {}
     name = row.get("name") or ""
-
-    if ptype == "mock":
-        return cls(provider_name=name)
 
     if ptype == "deepseek":
         return cls(

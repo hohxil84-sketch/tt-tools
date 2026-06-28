@@ -119,154 +119,23 @@ def _import_from_provider_runtime(source_name: str, *names: str):
 ProviderCallRequest, ChatMessage = _import_from_provider_runtime(
     "models", "ProviderCallRequest", "ChatMessage",
 )
-MockProvider = _import_from_provider_runtime(
-    "mock", "MockProvider",
-)
 get_global_router = _import_from_provider_runtime(
     "registry", "get_global_router",
 )
 
 
-# ============================================================
-# 常量
-# ============================================================
-
-# 默认使用 deepseek-chat（性价比高，中文能力强）
-_DEFAULT_MODEL = "route"
-
-# 各子功能消耗的默认额度（对齐功能码复杂度）
-# upscale / vectorize: 3 额度（中等计算量）
-# ai_edit: 5 额度（最复杂，涉及图片理解和生成）
-# remove_bg / ocr: 2 额度（标准处理）
-_FEATURE_CREDITS: dict = {
-    "upscale_image_cloud": 3,
-    "vectorize_image_cloud": 3,
-    "ai_edit_image_cloud": 5,
-    "remove_bg_cloud": 2,
-    "ocr_cloud": 2,
-}
-
-# 默认额度（当功能码未知时）
-_DEFAULT_CREDITS_PER_CALL = 2
-
 # 当前时间（UTC）获取函数
 _utcnow = lambda: datetime.now(timezone.utc)
 
-# 各子功能的中文标签
-_FEATURE_LABELS: dict = {
-    "upscale_image_cloud": "高清修复",
-    "vectorize_image_cloud": "转矢量",
-    "ai_edit_image_cloud": "AI 改图",
-    "remove_bg_cloud": "高级抠图",
-    "ocr_cloud": "高级 OCR",
-}
 
-
-# ============================================================
-# Mock 结果文件（按功能码提供不同的模拟输出）
-# ============================================================
-
-# 高清修复：输出 4K 分辨率 PNG
-_MOCK_UPSCALE_FILES: List[dict] = [
-    {
-        "file_id": "00000000-0000-0000-0000-000000000011",
-        "url": "https://mock-cdn.tt-tools.com/image-tools/upscaled_4k.png",
-        "mime_type": "image/png",
-        "width": 3840,
-        "height": 2160,
-    },
-]
-
-# 转矢量：输出 SVG 矢量文件
-_MOCK_VECTORIZE_FILES: List[dict] = [
-    {
-        "file_id": "00000000-0000-0000-0000-000000000012",
-        "url": "https://mock-cdn.tt-tools.com/image-tools/vectorized.svg",
-        "mime_type": "image/svg+xml",
-        "width": None,
-        "height": None,
-    },
-]
-
-# AI 改图：输出编辑后的图片
-_MOCK_AI_EDIT_FILES: List[dict] = [
-    {
-        "file_id": "00000000-0000-0000-0000-000000000013",
-        "url": "https://mock-cdn.tt-tools.com/image-tools/ai_edited.png",
-        "mime_type": "image/png",
-        "width": 1920,
-        "height": 1080,
-    },
-]
-
-# 高级抠图：输出透明背景 PNG
-_MOCK_REMOVE_BG_FILES: List[dict] = [
-    {
-        "file_id": "00000000-0000-0000-0000-000000000014",
-        "url": "https://mock-cdn.tt-tools.com/image-tools/removed_bg.png",
-        "mime_type": "image/png",
-        "width": 1024,
-        "height": 1024,
-    },
-]
-
-# 高级 OCR：输出 TXT 文本识别结果
-_MOCK_OCR_FILES: List[dict] = [
-    {
-        "file_id": "00000000-0000-0000-0000-000000000015",
-        "url": "https://mock-cdn.tt-tools.com/image-tools/ocr_result.txt",
-        "mime_type": "text/plain",
-        "width": None,
-        "height": None,
-    },
-]
-
-# 按功能码映射的 Mock 结果文件
-_MOCK_RESULT_FILES_BY_FEATURE: dict = {
-    "upscale_image_cloud": _MOCK_UPSCALE_FILES,
-    "vectorize_image_cloud": _MOCK_VECTORIZE_FILES,
-    "ai_edit_image_cloud": _MOCK_AI_EDIT_FILES,
-    "remove_bg_cloud": _MOCK_REMOVE_BG_FILES,
-    "ocr_cloud": _MOCK_OCR_FILES,
-}
-
-# 各功能码的 Mock result_json（不同功能有不同的自定义结果数据）
-_MOCK_RESULT_JSON_BY_FEATURE: dict = {
-    "upscale_image_cloud": {
-        "original_width": 1920,
-        "original_height": 1080,
-        "output_width": 3840,
-        "output_height": 2160,
-        "scale_factor": 2.0,
-        "algorithm": "ai_super_resolution_v2",
-    },
-    "vectorize_image_cloud": {
-        "layer_count": 3,
-        "path_count": 128,
-        "output_format": "svg",
-        "color_mode": "indexed",
-    },
-    "ai_edit_image_cloud": {
-        "edit_type": "intelligent_enhancement",
-        "applied_filters": ["denoise", "sharpen", "color_correction"],
-        "confidence": 0.95,
-    },
-    "remove_bg_cloud": {
-        "detected_subjects": 1,
-        "edge_refinement": "matting_v2",
-        "has_transparency": True,
-    },
-    "ocr_cloud": {
-        "text_lines": [
-            {"text": "TT Tools 快印工作助手", "confidence": 0.99, "bbox": [10, 20, 300, 50]},
-            {"text": "当天取件 · 高清印刷", "confidence": 0.97, "bbox": [10, 60, 280, 90]},
-            {"text": "联系电话：400-888-0000", "confidence": 0.98, "bbox": [10, 100, 320, 130]},
-        ],
-        "language": "zh",
-        "text_direction": "horizontal",
-        "total_lines": 3,
-    },
-}
+async def _get_feature_name(db: AsyncSession, feature: str) -> str:
+    """从 feature_codes 表查功能中文名（替代 _FEATURE_LABELS 硬编码）。"""
+    result = await db.execute(
+        text("SELECT name FROM feature_codes WHERE code = :fc"),
+        {"fc": feature},
+    )
+    row = result.fetchone()
+    return row[0] if row else feature
 
 
 # ============================================================
@@ -319,7 +188,7 @@ def _build_user_prompt(req: CreateAiImageToolTaskRequest) -> str:
     Returns:
         结构化的用户提示词文本
     """
-    feature_label = _FEATURE_LABELS.get(req.feature, req.feature)
+    feature_label = req.feature  # 仅用于 prompt 构建，不需要查 DB
     parts = [f"【处理任务】{feature_label}"]
 
     # 输入文件信息
@@ -364,14 +233,14 @@ async def create_image_tool_task(
     Returns:
         CreatedTaskData（包含 task_id、status、feature、estimated_credits）
     """
-    # 确定本功能码的消耗额度
-    credits_per_call = _FEATURE_CREDITS.get(req.feature, _DEFAULT_CREDITS_PER_CALL)
-
     # ---- 步骤 1: 套餐权限检查 ----
     await _check_feature_permission(db, ctx.plan_id, req.feature)
 
-    # ---- 步骤 2: 额度预检查 ----
-    await _check_credits_balance(db, ctx.user_id, credits_per_call)
+    # ---- 步骤 2: 额度预检查（从 DB 读起步扣点 + 预估最大成本） ----
+    min_credits = await _get_min_credits(db, req.feature)
+    threshold = await _estimate_threshold(db, req.feature, "image_edit", 2048,
+        _build_user_prompt(req))
+    await _check_credits_balance(db, ctx.user_id, threshold)
 
     # ---- 步骤 3: 创建任务记录（状态 queued） ----
     task_id = await _create_task_record(
@@ -386,7 +255,7 @@ async def create_image_tool_task(
     user_prompt = _build_user_prompt(req)
 
     provider_result = await _call_provider(
-        model=_DEFAULT_MODEL,
+        model="route",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         feature=req.feature,
@@ -429,6 +298,12 @@ async def create_image_tool_task(
         )
 
     # ---- 步骤 5: 写入 Provider 调用日志（成功） ----
+    actual_credits = await _calculate_deduction(
+        db, req.feature,
+        provider_result.provider, provider_result.model,
+        provider_result.usage,
+    )
+
     provider_call_id = await _insert_provider_log(
         db=db,
         ctx=ctx,
@@ -444,24 +319,24 @@ async def create_image_tool_task(
         cached_tokens=provider_result.usage.cached_tokens,
         image_count=provider_result.usage.image_count,
         estimated_cost=provider_result.estimated_cost,
-        credits_charged=credits_per_call,
+        credits_charged=actual_credits,
         latency_ms=provider_result.latency_ms or 0,
         raw_usage_json=provider_result.raw_usage_json,
+        estimated_credits_before=threshold,
     )
 
     # ---- 步骤 6: 扣除 AI 额度 ----
-    feature_label = _FEATURE_LABELS.get(req.feature, req.feature)
+    feature_label = await _get_feature_name(db, req.feature)
     await _consume_credits(
         db=db,
         user_id=ctx.user_id,
-        amount=credits_per_call,
+        amount=actual_credits,
         source_id=provider_call_id,
         description=f"AI 图片处理 · {feature_label}",
     )
 
     # ---- 步骤 7: 更新任务为 succeeded，写入结果 ----
-    result_files = _get_result_files(req.feature, provider_result)
-    result_json = _get_result_json(req.feature, provider_result)
+    result_files = _normalize_result_files(provider_result)
     await _update_task_result(
         db=db,
         task_id=task_id,
@@ -470,16 +345,16 @@ async def create_image_tool_task(
         provider=provider_result.provider,
         model=provider_result.model,
         estimated_cost=provider_result.estimated_cost,
-        credits_charged=credits_per_call,
+        credits_charged=actual_credits,
         result_files=result_files,
-        result_json=result_json,
+        estimated_credits_before=threshold,
     )
 
     return CreatedTaskData(
         task_id=task_id,
         status="succeeded",
         feature=req.feature,
-        estimated_credits=credits_per_call,
+        estimated_credits=actual_credits,
     )
 
 
@@ -640,7 +515,7 @@ async def _check_feature_permission(
     if not _is_feature_enabled(feature_enabled):
         raise AppError(
             code=ErrorCode.PERMISSION_DENIED,
-            message=f"当前套餐不支持{_FEATURE_LABELS.get(feature, feature)}功能，请升级套餐",
+            message=f"当前套餐不支持此功能（{feature}），请升级套餐",
             status_code=403,
         )
 
@@ -1105,53 +980,19 @@ async def _consume_credits(
 
 
 def _is_feature_enabled(value) -> bool:
-    """判断功能开关是否启用。
-
-    兼容 bool 值和 dict 格式（如 {"daily_limit": 3}）。
-
-    Args:
-        value: 功能开关值（True / False / dict）
-
-    Returns:
-        是否启用
-    """
+    """判断功能开关是否启用。兼容 bool 值和 dict 格式。"""
     if isinstance(value, bool):
         return value
     if isinstance(value, dict):
-        # dict 格式（如本地付费功能的配额配置），非空即视为启用
         return bool(value)
     return False
 
 
-def _get_mock_result_files(feature: str) -> List[dict]:
-    """根据功能码获取对应的 Mock 结果文件列表。
-
-    Mock 阶段返回固定的模拟文件信息，模拟真实图片 AI 处理的输出。
-    后续接入真实图片 AI Provider 时替换此处逻辑。
-
-    Args:
-        feature: AI 图片工具功能码
-
-    Returns:
-        对应功能的模拟结果文件列表
-    """
-    return _MOCK_RESULT_FILES_BY_FEATURE.get(feature, _MOCK_REMOVE_BG_FILES)
-
-
-def _get_result_files(feature: str, provider_result) -> List[dict]:
-    """Return real provider files, with mock fixtures only for mock provider."""
+def _normalize_result_files(provider_result) -> List[dict]:
+    """从 Provider 返回中提取规范化文件列表。不 Mock。"""
     if getattr(provider_result, "files", None):
         return provider_result.files
-    if getattr(provider_result, "provider", "") == "mock":
-        return _get_mock_result_files(feature)
     return []
-
-
-def _get_result_json(feature: str, provider_result) -> Optional[dict]:
-    """Return mock result_json only for mock provider."""
-    if getattr(provider_result, "provider", "") == "mock":
-        return _MOCK_RESULT_JSON_BY_FEATURE.get(feature)
-    return None
 
 
 def _parse_json_field(raw) -> dict:
@@ -1175,3 +1016,70 @@ def _parse_json_field(raw) -> dict:
         except (json.JSONDecodeError, TypeError):
             return {}
     return {}
+
+
+# ============================================================
+# DB 驱动定价辅助函数（使用 raw SQL）
+# ============================================================
+
+
+async def _get_min_credits(db: AsyncSession, feature: str) -> int:
+    result = await db.execute(
+        text("SELECT min_credits FROM feature_pricing WHERE feature_code = :fc"),
+        {"fc": feature},
+    )
+    row = result.fetchone()
+    return row[0] if row else 1
+
+
+async def _get_exchange_rate(db: AsyncSession) -> float:
+    result = await db.execute(
+        text("SELECT value FROM system_config WHERE key = 'credits_exchange_rate'"),
+    )
+    row = result.fetchone()
+    return float(row[0]) if row else 10.0
+
+
+async def _get_model_pricing(db: AsyncSession, provider: str, model: str) -> dict:
+    result = await db.execute(
+        text(
+            "SELECT input_price, output_price FROM provider_model_pricing "
+            "WHERE provider_name = :pn AND model_name = :mn AND is_active = TRUE"
+        ),
+        {"pn": provider, "mn": model},
+    )
+    row = result.fetchone()
+    if row is not None:
+        return {"input_price": float(row[0]), "output_price": float(row[1])}
+    return {"input_price": 1.0, "output_price": 2.0}
+
+
+async def _calculate_deduction(
+    db: AsyncSession, feature: str, provider: str, model: str, usage,
+) -> int:
+    import math as _math
+    min_credits = await _get_min_credits(db, feature)
+    pricing = await _get_model_pricing(db, provider, model)
+    rate = await _get_exchange_rate(db)
+    input_cost = (usage.input_tokens / 1_000_000) * pricing["input_price"]
+    output_cost = (usage.output_tokens / 1_000_000) * pricing["output_price"]
+    cost_credits = _math.ceil((input_cost + output_cost) * rate)
+    return max(min_credits, cost_credits)
+
+
+async def _estimate_threshold(
+    db: AsyncSession, feature: str, capability: str,
+    max_tokens: int, prompt_text: str,
+) -> int:
+    import math as _math
+    min_credits = await _get_min_credits(db, feature)
+    rate = await _get_exchange_rate(db)
+    result = await db.execute(
+        text("SELECT MAX(output_price), MAX(input_price) FROM provider_model_pricing WHERE is_active = TRUE"),
+    )
+    row = result.fetchone()
+    output_price = float(row[0]) if row and row[0] is not None else 2.0
+    input_price = float(row[1]) if row and row[1] is not None else 1.0
+    estimated_input = max(1, int(len(prompt_text) * 1.2))
+    max_cost_cny = (estimated_input / 1_000_000) * input_price + (max_tokens / 1_000_000) * output_price
+    return max(min_credits, _math.ceil(max_cost_cny * rate))

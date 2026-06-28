@@ -81,6 +81,8 @@
 | enabled_features_json | jsonb | not null default `{}` | 功能开关 |
 | expire_days | integer | not null default 0 | 到期天数，0=永不过期 |
 | is_default | boolean | not null default false | 是否默认套餐（新用户自动获得） |
+| plan_tier | varchar(20) | not null default '' | 套餐等级：free / standard / pro |
+| price_cents | integer | not null default 0 | 套餐月费（分），如 2900=¥29 |
 | status | varchar(50) | not null default `active` | active / disabled |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |
@@ -140,9 +142,11 @@
 | reasoning_tokens | integer | not null default 0 | 推理 token |
 | cached_tokens | integer | not null default 0 | 缓存 token |
 | image_count | integer | not null default 0 | 图片数量 |
-| estimated_cost | decimal(18, 6) | not null default 0 | 估算成本 |
+| estimated_cost | decimal(18, 6) | not null default 0 | 估算成本（人民币） |
 | credits_charged | integer | not null default 0 | 扣除额度 |
-| latency_ms | integer | nullable | 延迟 |
+| estimated_credits_before | integer | nullable | 调用前预估扣点（用于预估 vs 实际对比） |
+| estimated_latency_ms | integer | nullable | 调用前预估耗时（用于预估 vs 实际对比） |
+| latency_ms | integer | nullable | 实际 Provider 延迟 |
 | raw_usage_json | jsonb | nullable | 原始 usage，仅服务端使用 |
 | raw_meta_json | jsonb | nullable | 脱敏元数据 |
 | created_at | timestamptz | not null | 创建时间 |
@@ -213,6 +217,8 @@
 | result_json | jsonb | nullable | 结果 |
 | provider_call_id | uuid | fk provider_call_log.id, nullable | Provider 调用 ID |
 | credits_charged | integer | not null default 0 | 扣除额度 |
+| estimated_credits_before | integer | nullable | 创建任务时预估扣点 |
+| estimated_latency_ms | integer | nullable | 创建任务时预估耗时 |
 | error_code | varchar(100) | nullable | 错误码 |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |
@@ -284,6 +290,80 @@
 | description | text | nullable | 功能说明 |
 | is_active | boolean | not null default true | 是否启用 |
 | created_at | timestamptz | not null | 创建时间 |
+
+## provider_model_pricing
+
+Provider 模型定价表，替代代码硬编码。运营后台可编辑，即时生效。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | |
+| provider_name | varchar(50) | not null | deepseek / openai / anthropic / doubao |
+| model_name | varchar(100) | not null | deepseek-chat / gpt-4o |
+| input_price | decimal(18, 6) | not null | 输入单价（元/百万token） |
+| output_price | decimal(18, 6) | not null | 输出单价（元/百万token） |
+| currency | varchar(10) | not null default 'CNY' | |
+| is_active | boolean | not null default true | |
+| created_at | timestamptz | not null | |
+| updated_at | timestamptz | not null | |
+
+索引：UNIQUE `(provider_name, model_name)`
+
+## feature_pricing
+
+功能起步扣点表，替代代码硬编码。每个 AI 功能对应一条记录。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| feature_code | varchar(100) | pk, fk feature_codes.code | 功能码 |
+| min_credits | integer | not null | 起步扣点（最少扣点数） |
+| default_max_tokens | integer | not null default 2048 | 默认 max_tokens，用于预估计算 |
+| updated_at | timestamptz | not null | |
+
+## system_config
+
+全局系统配置表，简单 KV 结构。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| key | varchar(100) | pk | 配置键，如 credits_exchange_rate |
+| value | varchar(500) | not null | 配置值 |
+| updated_at | timestamptz | not null | |
+
+种子数据：`credits_exchange_rate = "10"`（1 CNY = 10 点）
+
+## provider_latency_stats
+
+Provider 耗时统计表，由 provider-log 模块异步更新。滑动窗口基于最近 1000 条成功调用。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | |
+| provider_name | varchar(50) | not null | |
+| model_name | varchar(100) | not null | |
+| capability | varchar(50) | not null | text / image_generation / image_edit |
+| p50_latency_ms | integer | not null | 中位数耗时（毫秒） |
+| p95_latency_ms | integer | not null | 95分位耗时（毫秒） |
+| sample_count | integer | not null | 样本数 |
+| updated_at | timestamptz | not null | |
+
+索引：UNIQUE `(provider_name, model_name, capability)`
+
+## credit_packages
+
+充值套餐表，替代 `orders_recharge/service.py` 硬编码。
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| id | uuid | pk | |
+| product_code | varchar(50) | unique, not null | credits_100 / credits_500 / credits_2000 |
+| name | varchar(100) | not null | "100点额度包" |
+| credit_amount | integer | not null | 到账点数 |
+| price_cents | integer | not null | 价格（分），如 1000=¥10 |
+| is_active | boolean | not null default true | |
+| sort_order | integer | not null default 0 | 排序 |
+| created_at | timestamptz | not null | |
+| updated_at | timestamptz | not null | |
 
 ## roles / permissions / 关联表
 

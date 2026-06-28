@@ -122,32 +122,8 @@ get_global_router = _import_from_provider_runtime(
 # ============================================================
 
 # 默认使用 deepseek-chat（性价比高，中文能力强）
-_DEFAULT_MODEL = "deepseek-chat"
-
-# 每次调用消耗的默认额度
-_DEFAULT_CREDITS_PER_CALL = 2
-
 # 当前时间（UTC）获取函数
 _utcnow = lambda: datetime.now(timezone.utc)
-
-# Mock 效果图文件列表（模拟 AI 生成的结果文件）
-# 注意：Mock 阶段 URL 为 null，真实图片生成 Provider 接入后替换
-_MOCK_RESULT_FILES: List[dict] = [
-    {
-        "file_id": "00000000-0000-0000-0000-000000000001",
-        "url": None,
-        "mime_type": "image/png",
-        "width": 1920,
-        "height": 1080,
-    },
-    {
-        "file_id": "00000000-0000-0000-0000-000000000002",
-        "url": None,
-        "mime_type": "image/png",
-        "width": 1024,
-        "height": 1024,
-    },
-]
 
 
 # ============================================================
@@ -240,11 +216,16 @@ async def create_render_task(
     Returns:
         CreatedTaskData（包含 task_id、status、feature、estimated_credits）
     """
+    feature = "ai_render_cloud"
+
     # ---- 步骤 1: 套餐权限检查 ----
     await _check_feature_permission(db, ctx.plan_id)
 
-    # ---- 步骤 2: 额度预检查 ----
-    await _check_credits_balance(db, ctx.user_id, _DEFAULT_CREDITS_PER_CALL)
+    # ---- 步骤 2: 额度预检查（从 DB 读起步扣点 + 预估最大成本） ----
+    min_credits = await _get_min_credits(db, feature)
+    threshold = await _estimate_threshold(db, feature, "image_generation", 2048,
+        _build_user_prompt(req))
+    await _check_credits_balance(db, ctx.user_id, threshold)
 
     # ---- 步骤 3: 创建任务记录（状态 queued） ----
     task_id = await _create_task_record(
@@ -259,7 +240,7 @@ async def create_render_task(
     user_prompt = _build_user_prompt(req)
 
     provider_result = await _call_provider(
-        model=_DEFAULT_MODEL,
+        model="deepseek-chat",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         feature="ai_render_cloud",
@@ -301,6 +282,12 @@ async def create_render_task(
         )
 
     # ---- 步骤 5: 写入 Provider 调用日志（成功） ----
+    actual_credits = await _calculate_deduction(
+        db, feature,
+        provider_result.provider, provider_result.model,
+        provider_result.usage,
+    )
+
     provider_call_id = await _insert_provider_log(
         db=db,
         ctx=ctx,
@@ -315,22 +302,22 @@ async def create_render_task(
         cached_tokens=provider_result.usage.cached_tokens,
         image_count=provider_result.usage.image_count,
         estimated_cost=provider_result.estimated_cost,
-        credits_charged=_DEFAULT_CREDITS_PER_CALL,
+        credits_charged=actual_credits,
         latency_ms=provider_result.latency_ms or 0,
         raw_usage_json=provider_result.raw_usage_json,
+        estimated_credits_before=threshold,
     )
 
     # ---- 步骤 6: 扣除 AI 额度 ----
     await _consume_credits(
         db=db,
         user_id=ctx.user_id,
-        amount=_DEFAULT_CREDITS_PER_CALL,
+        amount=actual_credits,
         source_id=provider_call_id,
         description=f"AI 效果图生成 · {req.scene_type}",
     )
 
     # ---- 步骤 7: 更新任务为 succeeded，写入结果 ----
-    # 优先使用 Provider 返回的真实文件列表，无文件时回退 Mock
     result_files = _normalize_result_files(provider_result.files or [])
     await _update_task_result(
         db=db,
@@ -340,15 +327,16 @@ async def create_render_task(
         provider=provider_result.provider,
         model=provider_result.model,
         estimated_cost=provider_result.estimated_cost,
-        credits_charged=_DEFAULT_CREDITS_PER_CALL,
+        credits_charged=actual_credits,
         result_files=result_files,
+        estimated_credits_before=threshold,
     )
 
     return CreatedTaskData(
         task_id=task_id,
         status="succeeded",
-        feature="ai_render_cloud",
-        estimated_credits=_DEFAULT_CREDITS_PER_CALL,
+        feature=feature,
+        estimated_credits=actual_credits,
     )
 
 
@@ -679,8 +667,8 @@ async def _create_task_record(
         text(
             "INSERT INTO ai_tasks "
             "(id, user_id, device_id, feature, status, input_json, "
-            " credits_charged, created_at, updated_at) "
-            "VALUES (:id, :uid, :did, :feat, :st, :input, 0, :now, :now)"
+            " credits_charged, estimated_credits_before, created_at, updated_at) "
+            "VALUES (:id, :uid, :did, :feat, :st, :input, 0, :ecb, :now, :now)"
         ),
         {
             "id": task_id,
@@ -689,6 +677,7 @@ async def _create_task_record(
             "feat": "ai_render_cloud",
             "st": status,
             "input": json.dumps(input_data),
+            "ecb": 0,  # 创建时填 0，完成时更新为实际预估
             "now": now,
         },
     )
@@ -730,6 +719,7 @@ async def _update_task_result(
     estimated_cost: float,
     credits_charged: int,
     result_files: List[dict],
+    estimated_credits_before: Optional[int] = None,
 ) -> None:
     """更新任务为完成状态并写入结果。
 
@@ -757,6 +747,7 @@ async def _update_task_result(
         text(
             "UPDATE ai_tasks SET status = :st, result_json = :result, "
             "provider_call_id = :pcid, credits_charged = :cc, "
+            "estimated_credits_before = :ecb, "
             "updated_at = :now WHERE id = :tid"
         ),
         {
@@ -764,6 +755,7 @@ async def _update_task_result(
             "result": json.dumps(result_data),
             "pcid": provider_call_id,
             "cc": credits_charged,
+            "ecb": estimated_credits_before,
             "now": now,
             "tid": task_id,
         },
@@ -830,6 +822,7 @@ async def _insert_provider_log(
     credits_charged: int,
     latency_ms: int,
     raw_usage_json: dict,
+    estimated_credits_before: Optional[int] = None,
 ) -> str:
     """写入 Provider 调用日志到 provider_call_log 表。
 
@@ -848,10 +841,11 @@ async def _insert_provider_log(
             "(id, request_id, user_id, device_id, feature, provider, model, "
             " status, error_code, input_tokens, output_tokens, total_tokens, "
             " reasoning_tokens, cached_tokens, image_count, estimated_cost, "
-            " credits_charged, latency_ms, raw_usage_json, raw_meta_json, created_at) "
+            " credits_charged, latency_ms, raw_usage_json, raw_meta_json, "
+            " estimated_credits_before, created_at) "
             "VALUES (:id, :rid, :uid, :did, :feat, :prov, :mod, "
             " :st, :ec, :it, :ot, :tt, :rt, :ct, :ic, :ecost, "
-            " :cc, :lat, :ruj, :rmj, :now)"
+            " :cc, :lat, :ruj, :rmj, :ecb, :now)"
         ),
         {
             "id": log_id,
@@ -874,6 +868,7 @@ async def _insert_provider_log(
             "lat": latency_ms,
             "ruj": json.dumps(raw_usage_json) if raw_usage_json else None,
             "rmj": raw_meta,
+            "ecb": estimated_credits_before,
             "now": _utcnow(),
         },
     )
@@ -974,32 +969,13 @@ async def _consume_credits(
 # ============================================================
 
 
-def _build_mock_result_files() -> List[dict]:
-    """构建 Mock 效果图结果文件列表。
-
-    Mock 阶段返回固定的模拟文件信息，模拟真实图片生成 Provider 的输出。
-    后续接入真实图片 Provider 时替换此处逻辑。
-
-    Returns:
-        模拟结果文件列表
-    """
-    return _MOCK_RESULT_FILES
-
-
 def _normalize_result_files(provider_files: List[dict]) -> List[dict]:
     """将 Provider 返回的文件列表规范化为 ResultFile 格式。
 
-    真实图片生成 Provider（如 DALL-E、Stable Diffusion）返回的文件
-    字段名可能不一致，本函数补齐缺失字段并生成 file_id。
-
-    Args:
-        provider_files: Provider 返回的原始文件列表
-
-    Returns:
-        规范化后的结果文件列表（provider_files 为空时回退 Mock）
+    不再回退 Mock——Provider 无返回则返回空列表。
     """
     if not provider_files:
-        return _build_mock_result_files()
+        return []
 
     normalized = []
     for f in provider_files:
@@ -1014,16 +990,7 @@ def _normalize_result_files(provider_files: List[dict]) -> List[dict]:
 
 
 def _parse_json_field(raw) -> dict:
-    """安全解析数据库中的 JSON 字段。
-
-    兼容 SQLite（存储为 TEXT 字符串）和 PostgreSQL（存储为 JSONB）两种格式。
-
-    Args:
-        raw: 原始字段值（可能是 str、dict 或 None）
-
-    Returns:
-        解析后的 dict（解析失败返回空 dict）
-    """
+    """安全解析数据库中的 JSON 字段。"""
     if raw is None:
         return {}
     if isinstance(raw, dict):
@@ -1034,3 +1001,88 @@ def _parse_json_field(raw) -> dict:
         except (json.JSONDecodeError, TypeError):
             return {}
     return {}
+
+
+# ============================================================
+# DB 驱动定价辅助函数（使用 raw SQL 避免 ORM 跨模块冲突）
+# ============================================================
+
+
+async def _get_min_credits(db: AsyncSession, feature: str) -> int:
+    """从 feature_pricing 表查起步扣点。"""
+    result = await db.execute(
+        text("SELECT min_credits FROM feature_pricing WHERE feature_code = :fc"),
+        {"fc": feature},
+    )
+    row = result.fetchone()
+    return row[0] if row else 1
+
+
+async def _get_exchange_rate(db: AsyncSession) -> float:
+    """从 system_config 表查汇率。"""
+    result = await db.execute(
+        text("SELECT value FROM system_config WHERE key = 'credits_exchange_rate'"),
+    )
+    row = result.fetchone()
+    return float(row[0]) if row else 10.0
+
+
+async def _get_model_pricing(
+    db: AsyncSession, provider: str, model: str
+) -> dict:
+    """从 provider_model_pricing 表查模型定价。"""
+    result = await db.execute(
+        text(
+            "SELECT input_price, output_price FROM provider_model_pricing "
+            "WHERE provider_name = :pn AND model_name = :mn AND is_active = TRUE"
+        ),
+        {"pn": provider, "mn": model},
+    )
+    row = result.fetchone()
+    if row is not None:
+        return {"input_price": float(row[0]), "output_price": float(row[1])}
+    return {"input_price": 1.0, "output_price": 2.0}
+
+
+async def _calculate_deduction(
+    db: AsyncSession, feature: str, provider: str, model: str, usage,
+) -> int:
+    """计算实际扣点数。公式：max(起步扣点, ceil(实际CNY成本 × 汇率))"""
+    import math as _math
+
+    min_credits = await _get_min_credits(db, feature)
+    pricing = await _get_model_pricing(db, provider, model)
+    rate = await _get_exchange_rate(db)
+
+    input_cost = (usage.input_tokens / 1_000_000) * pricing["input_price"]
+    output_cost = (usage.output_tokens / 1_000_000) * pricing["output_price"]
+    actual_cost_cny = input_cost + output_cost
+
+    cost_credits = _math.ceil(actual_cost_cny * rate)
+    return max(min_credits, cost_credits)
+
+
+async def _estimate_threshold(
+    db: AsyncSession, feature: str, capability: str,
+    max_tokens: int, prompt_text: str,
+) -> int:
+    """预估最大扣点（预检查用）。"""
+    import math as _math
+
+    min_credits = await _get_min_credits(db, feature)
+    rate = await _get_exchange_rate(db)
+
+    result = await db.execute(
+        text("SELECT MAX(output_price), MAX(input_price) FROM provider_model_pricing WHERE is_active = TRUE"),
+    )
+    row = result.fetchone()
+    output_price = float(row[0]) if row and row[0] is not None else 2.0
+    input_price = float(row[1]) if row and row[1] is not None else 1.0
+
+    estimated_input = max(1, int(len(prompt_text) * 1.2))
+    input_cost = (estimated_input / 1_000_000) * input_price
+    output_cost = (max_tokens / 1_000_000) * output_price
+    max_cost_cny = input_cost + output_cost
+
+    max_credits = _math.ceil(max_cost_cny * rate)
+    return max(min_credits, max_credits)

@@ -59,6 +59,17 @@ from service import (
     get_credit_account_detail,
     list_all_credit_ledger,
     adjust_credits,
+    # 新增定价管理
+    list_model_pricing,
+    create_model_pricing,
+    update_model_pricing,
+    list_feature_pricing,
+    update_feature_pricing,
+    get_system_config,
+    update_system_config,
+    list_credit_packages_admin,
+    create_credit_package,
+    update_credit_package,
 )
 
 # 创建路由，prefix="/api/v1/admin" 在 app-shell 装配时指定
@@ -546,5 +557,223 @@ async def admin_adjust_credits(
                 request_id=request_id,
                 details=e.details,
             ),
+            status_code=e.status_code,
+        )
+
+
+# ============================================================
+# 模型定价管理端点
+# ============================================================
+
+
+@router.get("/admin/billing/model-pricing")
+async def admin_list_model_pricing(
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出所有 Provider 模型定价。"""
+    try:
+        items = await list_model_pricing(db)
+        return success_response({"items": items}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+@router.post("/admin/billing/model-pricing")
+async def admin_create_model_pricing(
+    body: dict,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """新增模型定价。"""
+    try:
+        data = await create_model_pricing(
+            db,
+            provider_name=body["provider_name"],
+            model_name=body["model_name"],
+            input_price=float(body["input_price"]),
+            output_price=float(body["output_price"]),
+            currency=body.get("currency", "CNY"),
+        )
+        return success_response(data, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+@router.put("/admin/billing/model-pricing/{pricing_id}")
+async def admin_update_model_pricing(
+    pricing_id: str,
+    body: dict,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新模型定价。"""
+    try:
+        await update_model_pricing(db, pricing_id, **body)
+        return success_response({"id": pricing_id}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+# ============================================================
+# 功能定价管理端点
+# ============================================================
+
+
+@router.get("/admin/billing/feature-pricing")
+async def admin_list_feature_pricing(
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出所有功能起步扣点。"""
+    try:
+        items = await list_feature_pricing(db)
+        return success_response({"items": items}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+@router.put("/admin/billing/feature-pricing/{feature_code}")
+async def admin_update_feature_pricing(
+    feature_code: str,
+    body: dict,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新功能起步扣点。"""
+    try:
+        await update_feature_pricing(
+            db, feature_code,
+            min_credits=int(body["min_credits"]),
+            default_max_tokens=body.get("default_max_tokens"),
+        )
+        return success_response({"feature_code": feature_code}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+# ============================================================
+# 系统配置管理端点
+# ============================================================
+
+
+@router.get("/admin/billing/system-config")
+async def admin_get_system_config(
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取系统配置。"""
+    try:
+        data = await get_system_config(db)
+        return success_response(data, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+@router.put("/admin/billing/system-config/{key}")
+async def admin_update_system_config(
+    key: str,
+    body: dict,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新系统配置。"""
+    try:
+        await update_system_config(db, key, str(body["value"]))
+        return success_response({"key": key}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+# ============================================================
+# 充值套餐管理端点
+# ============================================================
+
+
+@router.get("/admin/billing/credit-packages")
+async def admin_list_credit_packages(
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.read")),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出所有充值套餐。"""
+    try:
+        items = await list_credit_packages_admin(db)
+        return success_response({"items": items}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+@router.post("/admin/billing/credit-packages")
+async def admin_create_credit_package(
+    body: dict,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """新增充值套餐。"""
+    try:
+        data = await create_credit_package(
+            db,
+            product_code=body["product_code"],
+            name=body["name"],
+            credit_amount=int(body["credit_amount"]),
+            price_cents=int(body["price_cents"]),
+            sort_order=body.get("sort_order", 0),
+        )
+        return success_response(data, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
+            status_code=e.status_code,
+        )
+
+
+@router.put("/admin/billing/credit-packages/{package_id}")
+async def admin_update_credit_package(
+    package_id: str,
+    body: dict,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_permission("plans.write")),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新充值套餐。"""
+    try:
+        await update_credit_package(db, package_id, **body)
+        return success_response({"id": package_id}, request_id)
+    except AppError as e:
+        return JSONResponse(
+            content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details),
             status_code=e.status_code,
         )

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, ActBtn, Pager, Sheet, Modal, Fld, priBtn, secBtn, inpS, selS, finpS, showToast } from '../components/shared';
 
-interface Plan { id: string; name: string; monthly_grant: number; expire_days?: number; is_default?: boolean; status: string; created_at: string; enabled_features_json?: Record<string, unknown>; updated_at?: string; }
+interface Plan { id: string; name: string; monthly_grant: number; expire_days?: number; is_default?: boolean; plan_tier?: string; status: string; created_at: string; enabled_features_json?: Record<string, unknown>; updated_at?: string; }
 interface FeatureCode { id: string; code: string; name: string; category: string; is_active: boolean; description?: string | null; }
 
 /** 功能开关条目（可视化用） */
@@ -83,6 +83,7 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   const [name, setName] = useState(plan?.name || '');
   const [mg, setMg] = useState(plan?.monthly_grant || 0);
   const [expDays, setExpDays] = useState(plan?.expire_days || 0);
+  const [planTier, setPlanTier] = useState((plan as any)?.plan_tier || 'standard');
   const [isDefault, setIsDefault] = useState(plan?.is_default || false);
 
   // 全部可用功能码列表（从后端拉取）
@@ -171,9 +172,9 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
     const featuresJson = buildFeaturesJson();
     try {
       if (isEdit) {
-        await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body: { name, monthly_grant: mg, expire_days: expDays, is_default: isDefault, enabled_features_json: featuresJson } });
+        await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body: { name, monthly_grant: mg, expire_days: expDays, is_default: isDefault, plan_tier: planTier, enabled_features_json: featuresJson } });
       } else {
-        await apiRequest('/admin/plans', { method: 'POST', body: { name, monthly_grant: mg, expire_days: expDays, is_default: isDefault, enabled_features_json: featuresJson } });
+        await apiRequest('/admin/plans', { method: 'POST', body: { name, monthly_grant: mg, expire_days: expDays, is_default: isDefault, plan_tier: planTier, enabled_features_json: featuresJson } });
       }
       showToast('保存成功', 'success'); done();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '保存失败', 'error'); }
@@ -192,6 +193,7 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   return <Sheet title={isEdit ? `编辑: ${plan!.name}` : '新建套餐'} close={close}>
     <form onSubmit={submit}>
       <Fld label="名称"><input value={name} onChange={e => setName(e.target.value)} required style={finpS} /></Fld>
+      <Fld label="套餐等级"><select value={planTier} onChange={e => setPlanTier(e.target.value)} style={selS}><option value="free">免费</option><option value="standard">标准</option><option value="pro">专业</option></select></Fld>
       <Fld label="月赠额度"><input type="number" value={mg} onChange={e => setMg(Number(e.target.value))} min={0} style={finpS} /></Fld>
       <Fld label="到期天数（0=永不过期）"><input type="number" value={expDays} onChange={e => setExpDays(Math.max(0, Number(e.target.value)))} min={0} style={finpS} /></Fld>
       <Fld label="">
