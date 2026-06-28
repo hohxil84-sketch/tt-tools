@@ -44,7 +44,7 @@ if _MODULE_DIR not in sys.path:
     sys.path.insert(0, _MODULE_DIR)
 
 from schemas import CreateAiImageToolTaskRequest, ImageToolContext
-from service import create_image_tool_task, query_image_tool_task
+from service import create_image_tool_task, query_image_tool_task, _get_min_credits, _estimate_threshold
 
 # 创建路由，prefix 在 app-shell 装配时指定
 router = APIRouter(tags=["AI Image Tools"])
@@ -129,3 +129,38 @@ async def ai_image_tools_query_task(
             status_code=e.status_code,
             details=e.details,
         )
+
+
+@router.post("/ai/image-tools/estimate")
+async def ai_image_tools_estimate(
+    req: CreateAiImageToolTaskRequest,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """预估 AI 图片处理的扣点和耗时（不实际创建任务）。"""
+    try:
+        feature = req.feature
+        prompt_text = str(req.options or "")
+
+        min_credits = await _get_min_credits(db, feature)
+        threshold = await _estimate_threshold(db, feature, "image_edit", 2048, prompt_text)
+
+        from sqlalchemy import text as _text
+        bal_result = await db.execute(
+            _text("SELECT balance FROM credit_accounts WHERE user_id = :uid AND status = 'active'"),
+            {"uid": current_user.user_id},
+        )
+        row = bal_result.fetchone()
+        balance = row[0] if row else 0
+
+        return success_response({
+            "feature": feature, "min_credits": min_credits,
+            "estimated_max_credits": threshold, "balance": balance,
+            "enough": balance >= threshold,
+            "estimated_latency": {"p50_ms": 0, "p95_ms": 0, "display": "暂无耗时数据", "sample_count": 0},
+            "provider": "", "model": "",
+        }, request_id)
+    except AppError as e:
+        return error_response(code=e.code, message=e.message, request_id=request_id,
+            status_code=e.status_code, details=e.details)

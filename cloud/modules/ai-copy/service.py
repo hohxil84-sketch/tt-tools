@@ -854,11 +854,11 @@ async def _estimate_threshold(
     min_credits = await _get_min_credits(db, feature)
     rate = await _get_exchange_rate(db)
 
-    # 取所有活跃模型的最贵定价作为保守估算
+    # 取最便宜活跃模型定价作为预估基准（router 默认选 cheap tier）
     result = await db.execute(
         text(
-            "SELECT MAX(output_price), MAX(input_price) FROM provider_model_pricing "
-            "WHERE is_active = TRUE"
+            "SELECT MIN(output_price), MIN(input_price) FROM provider_model_pricing "
+            "WHERE is_active = TRUE AND provider_name != '__default__'"
         ),
     )
     row = result.fetchone()

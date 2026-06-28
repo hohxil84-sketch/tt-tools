@@ -1073,7 +1073,7 @@ async def _estimate_threshold(
     rate = await _get_exchange_rate(db)
 
     result = await db.execute(
-        text("SELECT MAX(output_price), MAX(input_price) FROM provider_model_pricing WHERE is_active = TRUE"),
+        text("SELECT MIN(output_price), MIN(input_price) FROM provider_model_pricing WHERE is_active = TRUE AND provider_name != '__default__'"),
     )
     row = result.fetchone()
     output_price = float(row[0]) if row and row[0] is not None else 2.0
