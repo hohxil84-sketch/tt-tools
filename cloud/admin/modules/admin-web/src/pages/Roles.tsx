@@ -14,6 +14,7 @@ export default function Roles() {
   const [delTarget, setDelTarget] = useState<Role | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
   const [form, setForm] = useState({ name: '', code: '', description: '' });
   const [permForm, setPermForm] = useState<string[]>([]);
 
@@ -27,9 +28,9 @@ export default function Roles() {
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<RoleList>('/admin/roles', { params: { limit, offset: pg * limit, search: search || undefined } })); }
+    try { setD(await apiRequest<RoleList>('/admin/roles', { params: { limit, offset: pg * limit, order, search: search || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, search, limit, refreshKey]);
+  }, [pg, search, limit, order, refreshKey]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -108,7 +109,7 @@ export default function Roles() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
 
       {/* 权限管理 Sheet */}
       {detail && <Sheet title={`${detail.name} — 权限配置`} close={() => setDetail(null)} maxHeight="none">

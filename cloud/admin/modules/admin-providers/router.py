@@ -14,11 +14,12 @@ router = APIRouter(tags=["Admin Providers"])
 @router.get("/admin/providers")
 async def admin_list_providers(
     limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0),
+    order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"),
     request_id: str = Depends(get_request_id), current_user: TokenData = Depends(require_permission("providers.read")),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        data = await list_providers(db, limit, offset)
+        data = await list_providers(db, limit, offset, order)
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
         return JSONResponse(content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details), status_code=e.status_code)

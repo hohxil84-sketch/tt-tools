@@ -9,12 +9,13 @@ export default function ProviderCallLogs() {
   const [uid, setUid] = useState(''); const [feat, setFeat] = useState(''); const [prov, setProv] = useState(''); const [sf, setSf] = useState('');
   const [pg, setPg] = useState(0); const [err, setErr] = useState(''); const [detail, setDetail] = useState<Log | null>(null);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/provider-call-logs', { params: { limit, offset: pg * limit, user_id: uid || undefined, feature: feat || undefined, provider: prov || undefined, status: sf || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/provider-call-logs', { params: { limit, offset: pg * limit, order, user_id: uid || undefined, feature: feat || undefined, provider: prov || undefined, status: sf || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, uid, feat, prov, sf, limit]);
+  }, [pg, uid, feat, prov, sf, limit, order]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -52,7 +53,7 @@ export default function ProviderCallLogs() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
       {detail && <Sheet title="调用详情" close={() => setDetail(null)}>
         <DetailRows rows={[['ID', detail.id], ['Request ID', detail.request_id], ['用户', detail.user_account || detail.user_id], ['名称', detail.user_display_name], ['功能', detail.feature], ['Provider', detail.provider], ['模型', detail.model], ['状态', detail.status], ['错误码', detail.error_code], ['输入 Token', detail.input_tokens], ['输出 Token', detail.output_tokens], ['总 Token', detail.total_tokens], ['成本', `$${detail.estimated_cost?.toFixed(6)}`], ['额度', detail.credits_charged], ['延迟', detail.latency_ms != null ? `${detail.latency_ms}ms` : '—'], ['时间', new Date(detail.created_at).toLocaleString('zh-CN')]]} />
       </Sheet>}

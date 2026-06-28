@@ -26,6 +26,7 @@ export default function Plans() {
   const [cd, setCd] = useState<Plan | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
 
   const load = useCallback(async () => {
     setErr('');
@@ -33,6 +34,12 @@ export default function Plans() {
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
   }, [search, sf, pg, limit, refreshKey]);
   useEffect(() => { load(); }, [load]);
+
+  const sortedItems = [...items].sort((a, b) => {
+    const da = new Date(a.created_at).getTime();
+    const db = new Date(b.created_at).getTime();
+    return order === 'desc' ? db - da : da - db;
+  });
 
   const toggle = async (id: string, ns: string) => { try { await apiRequest(`/admin/plans/${id}/status`, { method: 'PATCH', body: { status: ns } }); showToast('操作成功', 'success'); setCt(null); setRefreshKey(k => k + 1); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '操作失败', 'error'); } };
   const del = async () => { if (!cd) return; try { await apiRequest(`/admin/plans/${cd.id}`, { method: 'DELETE' }); showToast('删除成功', 'success'); setCd(null); setRefreshKey(k => k + 1); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); } };
@@ -50,7 +57,7 @@ export default function Plans() {
       </div>
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
       <Card><Tbl heads={['名称', '月赠额度', '到期', '默认', '状态', '创建时间', '']} colAligns={['l', 'r', 'c', 'c', 'c', 'l', 'r']}>
-        {items.map(p => (
+        {sortedItems.map(p => (
           <tr key={p.id}>
             <td style={{ fontWeight: 600, fontSize: 13, width: '22%' }}>{p.name}</td>
             <td style={{ fontSize: 13, width: '10%', textAlign: 'right' }}>{p.monthly_grant.toLocaleString()}</td>
@@ -66,7 +73,7 @@ export default function Plans() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={Math.ceil(items.length / limit)} total={items.length} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={Math.ceil(sortedItems.length / limit)} total={sortedItems.length} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
       {ct && <Modal title="确认" close={() => setCt(null)} action={() => toggle(ct.id, ct.status === 'active' ? 'disabled' : 'active')} danger><p>{ct.status === 'active' ? '停用' : '启用'}套餐 <b>{ct.name}</b>？</p></Modal>}
       {cd && <Modal title="删除套餐" close={() => setCd(null)} action={del} danger><p>永久删除 <b>{cd.name}</b>？</p></Modal>}
       {(edit || showNew) && <PlanForm plan={edit} close={() => { setEdit(null); setShowNew(false); }} done={() => { setEdit(null); setShowNew(false); setRefreshKey(k => k + 1); load(); }} />}
@@ -84,7 +91,7 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   const [mg, setMg] = useState(plan?.monthly_grant || 0);
   const [expDays, setExpDays] = useState(plan?.expire_days || 0);
   const [planTier, setPlanTier] = useState(plan?.plan_tier || 'standard');
-  const [isDefault, setIsDefault] = useState(plan?.is_default || false);
+  const [isDefault, setIsDefault] = useState(plan?.is_default ?? false);
   // 记录原始 is_default 值，编辑时仅当用户改了才发送
   const [origIsDefault] = useState(plan?.is_default || false);
 

@@ -85,6 +85,7 @@ async def list_audit_logs(
     action: Optional[str] = None,
     target_type: Optional[str] = None,
     target_id: Optional[str] = None,
+    order: str = "desc",
 ) -> AuditLogListData:
     """查询审计日志列表（分页+多条件筛选）。
 
@@ -130,7 +131,7 @@ async def list_audit_logs(
         f"SELECT id, admin_user_id, admin_account, admin_display_name, action, target_type, "
         f"target_id, summary, ip_address, created_at "
         f"FROM admin_audit_logs {where_clause} "
-        f"ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+        f"ORDER BY created_at {'DESC' if order == 'desc' else 'ASC'} LIMIT :limit OFFSET :offset"
     )
     params["limit"] = limit
     params["offset"] = offset

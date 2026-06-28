@@ -11,12 +11,13 @@ export default function RiskLogs() {
   const [uid, setUid] = useState(''); const [rt, setRt] = useState(''); const [sv, setSv] = useState('');
   const [pg, setPg] = useState(0); const [err, setErr] = useState(''); const [detail, setDetail] = useState<Risk | null>(null);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/risk-logs', { params: { limit, offset: pg * limit, user_id: uid || undefined, risk_type: rt || undefined, severity: sv || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/risk-logs', { params: { limit, offset: pg * limit, order, user_id: uid || undefined, risk_type: rt || undefined, severity: sv || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, uid, rt, sv, limit]);
+  }, [pg, uid, rt, sv, limit, order]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -42,7 +43,7 @@ export default function RiskLogs() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
       {detail && <Sheet title="风控详情" close={() => setDetail(null)}>
         <div>
           {[['类型', detail.risk_type], ['级别', detail.severity], ['用户', detail.user_account || detail.user_id], ['名称', detail.user_display_name], ['设备', detail.device_name || detail.device_id], ['时间', new Date(detail.created_at).toLocaleString('zh-CN')]].map(([l, v]) => <div key={l} style={{ display: 'flex', padding: '6px 0', borderBottom: '1px solid var(--gray-200)' }}><span style={{ width: 80, fontSize: 12, color: 'var(--gray-500)' }}>{l}</span><span style={{ fontSize: 13 }}>{v || '—'}</span></div>)}

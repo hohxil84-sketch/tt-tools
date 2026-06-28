@@ -126,7 +126,7 @@ class ProviderCallLog(Base):
     estimated_credits_before = Column(Integer, nullable=True)
 
     # 调用前预估耗时（用于预估 vs 实际对比分析）
-    estimated_latency_ms_before = Column(Integer, nullable=True)
+    estimated_latency_ms = Column(Integer, nullable=True)
 
     # 调用延迟（毫秒）
     latency_ms = Column(Integer, nullable=True)

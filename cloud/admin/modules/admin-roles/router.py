@@ -15,8 +15,8 @@ router = APIRouter(tags=["Admin Roles"])
 
 # -- 角色 CRUD --
 @router.get("/admin/roles")
-async def list_r(limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), request_id=Depends(get_request_id), current_user: TokenData=Depends(require_permission("roles.read")), db=Depends(get_db)):
-    try: return success_response((await list_roles(db, limit, offset)).model_dump(mode="json"), request_id)
+async def list_r(limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0), order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"), request_id=Depends(get_request_id), current_user: TokenData=Depends(require_permission("roles.read")), db=Depends(get_db)):
+    try: return success_response((await list_roles(db, limit, offset, order)).model_dump(mode="json"), request_id)
     except AppError as e: return JSONResponse(content=error_response(code=e.code, message=e.message, request_id=request_id, details=e.details), status_code=e.status_code)
 
 @router.post("/admin/roles")

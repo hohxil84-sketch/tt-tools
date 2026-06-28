@@ -308,6 +308,7 @@ async def admin_list_orders(
     user_id: str | None = Query(default=None, description="按用户 ID 筛选"),
     order_type: str | None = Query(default=None, description="按订单类型筛选"),
     status: str | None = Query(default=None, description="按订单状态筛选"),
+    order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("orders.read")),
     db: AsyncSession = Depends(get_db),
@@ -326,6 +327,7 @@ async def admin_list_orders(
             user_id=user_id,
             order_type=order_type,
             status=status,
+            order=order,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
@@ -429,6 +431,7 @@ async def admin_list_credit_accounts(
     status: str | None = Query(default=None, description="按账户状态筛选"),
     plan_id: str | None = Query(default=None, description="按套餐 ID 筛选"),
     user_id: str | None = Query(default=None, description="按用户 ID 筛选"),
+    order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("credits.read")),
     db: AsyncSession = Depends(get_db),
@@ -447,6 +450,7 @@ async def admin_list_credit_accounts(
             status=status,
             plan_id=plan_id,
             user_id=user_id,
+            order=order,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
@@ -496,6 +500,7 @@ async def admin_list_credit_ledger(
     user_id: str | None = Query(default=None, description="按用户 ID 筛选"),
     change_type: str | None = Query(default=None, description="按变化类型筛选"),
     source_type: str | None = Query(default=None, description="按来源类型筛选"),
+    order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("credits.read")),
     db: AsyncSession = Depends(get_db),
@@ -514,6 +519,7 @@ async def admin_list_credit_ledger(
             user_id=user_id,
             change_type=change_type,
             source_type=source_type,
+            order=order,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
@@ -700,10 +706,10 @@ async def admin_update_system_config(
     key: str,
     body: dict,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_permission("plans.manage")),
+    current_user: TokenData = Depends(require_permission("features.manage")),
     db: AsyncSession = Depends(get_db),
 ):
-    """更新系统配置。"""
+    """更新系统配置（汇率等），由功能码管理页面调用。"""
     try:
         await update_system_config(db, key, str(body["value"]))
         return success_response({"key": key}, request_id)

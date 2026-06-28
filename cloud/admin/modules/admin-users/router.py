@@ -70,6 +70,7 @@ async def admin_list_users(
     status: str | None = Query(default=None, description="按状态筛选"),
     search: str | None = Query(default=None, description="按账号或名称搜索"),
     role: str | None = Query(default=None, description="按角色筛选（admin / user）"),
+    order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("users.read")),
     db: AsyncSession = Depends(get_db),
@@ -88,6 +89,7 @@ async def admin_list_users(
             status=status,
             search=search,
             role=role,
+            order=order,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
@@ -180,9 +182,10 @@ async def admin_delete_user(
     current_user: TokenData = Depends(require_permission("users.delete")),
     db: AsyncSession = Depends(get_db),
 ):
-    """删除用户。
+    """删除用户（软删除）。
 
-    硬删除用户及其关联设备。需要管理员权限。危险操作。
+    将用户状态设为 deleted，关联设备设为 removed，清除登录会话。
+    保留所有关联数据，可恢复。需要管理员权限。
 
     对齐 admin-users.yaml DELETE /admin/users/{user_id}。
     """

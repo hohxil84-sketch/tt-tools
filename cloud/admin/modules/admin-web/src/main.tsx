@@ -79,6 +79,9 @@ style.textContent = `
   .admin-table tbody td {
     padding: 12px 16px;
     vertical-align: middle;
+    word-break: break-all;
+    overflow-wrap: break-word;
+    max-width: 0;
   }
   .admin-table thead th {
     padding: 10px 16px;

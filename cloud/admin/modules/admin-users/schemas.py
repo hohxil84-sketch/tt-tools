@@ -68,7 +68,7 @@ class CreateUserRequest(BaseModel):
     password: str = Field(..., description="登录密码（明文，服务端 bcrypt 哈希存储）")
     display_name: str = Field(..., min_length=1, description="展示名称（必填）")
     role: str = Field(default="user", description="用户角色：user / admin", pattern="^(user|admin)$")
-    plan_id: Optional[str] = Field(default=None, description="套餐 ID（UUID），普通用户必选")
+    plan_id: Optional[str] = Field(default=None, description="套餐 ID（UUID），必选")
     role_ids: Optional[list[str]] = Field(default=None, description="RBAC 角色 ID 列表，管理员必选")
 
 

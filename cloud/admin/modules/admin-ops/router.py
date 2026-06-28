@@ -68,6 +68,7 @@ async def admin_list_provider_call_logs(
     feature: str | None = Query(default=None, description="按功能码筛选"),
     provider: str | None = Query(default=None, description="按 Provider 名称筛选"),
     status: str | None = Query(default=None, description="按调用状态筛选"),
+    order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
@@ -88,6 +89,7 @@ async def admin_list_provider_call_logs(
             feature=feature,
             provider=provider,
             status=status,
+            order=order,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:
@@ -176,6 +178,7 @@ async def admin_list_risk_logs(
     user_id: str | None = Query(default=None, description="按用户 ID 筛选"),
     risk_type: str | None = Query(default=None, description="按风险类型筛选"),
     severity: str | None = Query(default=None, description="按严重程度筛选"),
+    order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("ops.read")),
     db: AsyncSession = Depends(get_db),
@@ -194,6 +197,7 @@ async def admin_list_risk_logs(
             user_id=user_id,
             risk_type=risk_type,
             severity=severity,
+            order=order,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:

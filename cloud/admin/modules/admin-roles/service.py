@@ -23,11 +23,12 @@ def _fmt_ts(dt) -> str:
 # 角色 CRUD
 # ============================================================
 
-async def list_roles(db: AsyncSession, limit=20, offset=0) -> RoleListData:
+async def list_roles(db: AsyncSession, limit=20, offset=0, order: str = "desc") -> RoleListData:
     limit = max(1, min(limit, MAX_LIMIT)); offset = max(0, offset)
-    total = (await db.execute(select(func.count()).select_from(Role))).scalar_one()
-    rows = (await db.execute(select(Role).order_by(Role.name).offset(offset).limit(limit))).scalars().all()
-    items = [RoleItem(id=r.id, name=r.name, code=r.code, is_system=r.is_system, created_at=_fmt_ts(r.created_at)) for r in rows]
+    base = select(Role).where(Role.is_active == True)
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    rows = (await db.execute(base.order_by(Role.created_at.desc() if order == "desc" else Role.created_at.asc()).offset(offset).limit(limit))).scalars().all()
+    items = [RoleItem(id=r.id, name=r.name, code=r.code, is_system=r.is_system, is_active=r.is_active, created_at=_fmt_ts(r.created_at)) for r in rows]
     return RoleListData(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -63,13 +64,26 @@ async def update_role(db: AsyncSession, role_id: str, **kwargs) -> RoleDetail:
 
 
 async def delete_role(db: AsyncSession, role_id: str) -> dict:
+    """软删除角色。
+
+    将角色设为停用（is_active=False），保留角色记录及已有的用户-角色关联。
+
+    Args:
+        db: 数据库异步会话
+        role_id: 角色 ID
+
+    Returns:
+        {"deleted": True}
+
+    Raises:
+        AppError: 角色不存在(404)、系统内置角色(400)、已停用(404)
+    """
     r = (await db.execute(select(Role).where(Role.id == role_id))).scalar_one_or_none()
     if not r: raise AppError(code="ROLE_NOT_FOUND", message="角色不存在", status_code=404)
     if r.is_system: raise AppError(code="ROLE_IS_SYSTEM", message="系统内置角色不可删除", status_code=400)
-    # 级联清理关联数据
-    await db.execute(text("DELETE FROM role_permissions WHERE role_id = :rid"), {"rid": role_id})
-    await db.execute(text("DELETE FROM user_roles WHERE role_id = :rid"), {"rid": role_id})
-    await db.delete(r); await db.flush()
+    if not r.is_active: raise AppError(code="ROLE_ALREADY_DISABLED", message="角色已停用", status_code=404)
+    r.is_active = False
+    await db.flush()
     return {"deleted": True}
 
 

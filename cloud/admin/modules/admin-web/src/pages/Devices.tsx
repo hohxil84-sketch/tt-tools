@@ -15,12 +15,13 @@ export default function Devices() {
   const [cd, setCd] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/devices', { params: { limit, offset: pg * limit, search: search || undefined, status: sf || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/devices', { params: { limit, offset: pg * limit, order, search: search || undefined, status: sf || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, search, sf, limit, refreshKey]);
+  }, [pg, search, sf, limit, order, refreshKey]);
   useEffect(() => { load(); }, [load]);
 
   const upd = async (id: string, ns: string) => { try { await apiRequest(`/admin/devices/${id}/status`, { method: 'PATCH', body: { status: ns } }); showToast('操作成功', 'success'); setCa(null); setRefreshKey(k => k + 1); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '操作失败', 'error'); } };
@@ -54,7 +55,7 @@ export default function Devices() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
       {detail && <Sheet title="设备详情" close={() => setDetail(null)}>
         <div>{[['ID', detail.id], ['名称', detail.device_name], ['用户', detail.user_id], ['版本', detail.client_version], ['状态', detail.status], ['绑定', new Date(detail.bound_at).toLocaleString('zh-CN')], ['最近活跃', detail.last_seen_at ? new Date(detail.last_seen_at).toLocaleString('zh-CN') : '—'], ['创建', detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN') : '—'], ['更新', detail.updated_at ? new Date(detail.updated_at).toLocaleString('zh-CN') : '—']].map(([l, v]) => <div key={l} style={{ display: 'flex', padding: '6px 0', borderBottom: '1px solid var(--gray-200)' }}><span style={{ width: 90, fontSize: 12, color: 'var(--gray-500)' }}>{l}</span><span style={{ fontSize: 13 }}>{v || '—'}</span></div>)}</div>
       </Sheet>}

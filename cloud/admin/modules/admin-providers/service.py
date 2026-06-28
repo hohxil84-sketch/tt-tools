@@ -39,10 +39,10 @@ async def _reload_router(db: AsyncSession) -> None:
         _log.warning("Router 热更新失败（不影响 CRUD）: %s", e)
 
 
-async def list_providers(db: AsyncSession, limit: int = 20, offset: int = 0) -> ProviderListData:
+async def list_providers(db: AsyncSession, limit: int = 20, offset: int = 0, order: str = "desc") -> ProviderListData:
     limit = max(1, min(limit, MAX_LIMIT)); offset = max(0, offset)
     total = (await db.execute(select(func.count()).select_from(Provider))).scalar_one()
-    rows = (await db.execute(select(Provider).order_by(Provider.name).offset(offset).limit(limit))).scalars().all()
+    rows = (await db.execute(select(Provider).order_by(Provider.created_at.desc() if order == "desc" else Provider.created_at.asc()).offset(offset).limit(limit))).scalars().all()
     items = [ProviderItem(id=r.id, name=r.name, provider_type=r.provider_type, is_enabled=r.is_enabled, priority=r.priority, created_at=_fmt_ts(r.created_at)) for r in rows]
     return ProviderListData(items=items, total=total, limit=limit, offset=offset)
 
@@ -75,9 +75,24 @@ async def update_provider(db: AsyncSession, provider_id: str, **kwargs) -> Provi
 
 
 async def delete_provider(db: AsyncSession, provider_id: str) -> dict:
+    """软删除 Provider。
+
+    将 Provider 设为禁用（is_enabled=False），保留配置记录。
+
+    Args:
+        db: 数据库异步会话
+        provider_id: Provider ID
+
+    Returns:
+        {"deleted": True}
+
+    Raises:
+        AppError: Provider 不存在时抛出 404
+    """
     p = (await db.execute(select(Provider).where(Provider.id == provider_id))).scalar_one_or_none()
     if not p: raise AppError(code="PROVIDER_NOT_FOUND", message="Provider 不存在", status_code=404)
-    await db.delete(p); await db.flush()
+    p.is_enabled = False
+    await db.flush()
     await _reload_router(db)
     return {"deleted": True}
 

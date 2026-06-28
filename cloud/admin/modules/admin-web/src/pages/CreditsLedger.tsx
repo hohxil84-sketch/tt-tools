@@ -13,12 +13,13 @@ export default function CreditsLedger() {
   const [pg, setPg] = useState(0); const [err, setErr] = useState(''); const [showAdj, setShowAdj] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/credits/ledger', { params: { limit, offset: pg * limit, user_id: uid || undefined, change_type: ct || undefined, source_type: st || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/credits/ledger', { params: { limit, offset: pg * limit, order, user_id: uid || undefined, change_type: ct || undefined, source_type: st || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, uid, ct, st, limit, refreshKey]);
+  }, [pg, uid, ct, st, limit, order, refreshKey]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -48,7 +49,7 @@ export default function CreditsLedger() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
       {showAdj && <AdjustModal close={() => setShowAdj(false)} done={() => { setShowAdj(false); setRefreshKey(k => k + 1); load(); }} />}
     </div>
   );

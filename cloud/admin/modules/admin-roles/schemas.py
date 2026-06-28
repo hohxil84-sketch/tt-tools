@@ -9,7 +9,7 @@ class PermissionItem(BaseModel):
     id: str; code: str; name: str; resource: str; action: str
 
 class RoleItem(BaseModel):
-    id: str; name: str; code: str; is_system: bool; created_at: str
+    id: str; name: str; code: str; is_system: bool; is_active: bool = True; created_at: str
 
 class RoleDetail(BaseModel):
     id: str; name: str; code: str; description: Optional[str] = None

@@ -3,8 +3,10 @@ import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, ActBtn, Pager, Sheet, Modal, secBtn, inpS, selS, priBtn, showToast } from '../components/shared';
 
 interface FC { id: string; code: string; name: string; category: string; is_active: boolean; plan_count?: number; description?: string | null; created_at: string; }
+interface PlanRef { id: string; name: string; monthly_grant: number; status: string; }
 interface List { items: FC[]; total: number; limit: number; offset: number; }
 const CATS: Record<string, string> = { local_free: '本地免费', local_paid: '本地付费', cloud_ai: '云端AI' };
+const SLS: Record<string, string> = { active: '启用', disabled: '停用' };
 
 export default function FeatureCodes() {
   const [d, setD] = useState<List | null>(null);
@@ -17,15 +19,19 @@ export default function FeatureCodes() {
   const [edit, setEdit] = useState<FC | null>(null);
   const [toggleTarget, setToggleTarget] = useState<FC | null>(null);
   const [creditEdit, setCreditEdit] = useState<{code:string;name:string;val:number} | null>(null);
+  const [detailFC, setDetailFC] = useState<FC | null>(null);  // 详情：关联套餐列表
+  const [detailPlans, setDetailPlans] = useState<PlanRef[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
   const [form, setForm] = useState({ code: '', name: '', category: 'cloud_ai', description: '' });
 
   const load = useCallback(async () => {
     setErr('');
     try {
       const [fcData, fpData, cfgData] = await Promise.all([
-        apiRequest<List>('/admin/feature-codes/list', { params: { limit, offset: pg * limit, category: cat || undefined } }),
+        apiRequest<List>('/admin/feature-codes/list', { params: { limit, offset: pg * limit, order, category: cat || undefined } }),
         apiRequest<{items:{feature_code:string;min_credits:number}[]}>('/admin/billing/feature-pricing'),
         apiRequest<{[key:string]:{value:string}}>('/admin/billing/system-config'),
       ]);
@@ -35,7 +41,7 @@ export default function FeatureCodes() {
       setPricing(pmap);
       if (cfgData?.credits_exchange_rate) setRate(cfgData.credits_exchange_rate.value);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, cat, limit, refreshKey]);
+  }, [pg, cat, limit, order, refreshKey]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -68,6 +74,14 @@ export default function FeatureCodes() {
     if(!creditEdit) return;
     try { await apiRequest(`/admin/billing/feature-pricing/${creditEdit.code}`, { method:'PUT', body:{min_credits:creditEdit.val} }); showToast('已更新','success'); setCreditEdit(null); setRefreshKey(k=>k+1); load(); }
     catch(e:unknown){ showToast(e instanceof Error?e.message:'失败','error'); }
+  };
+  const doDetail = async (fc: FC) => {
+    setDetailFC(fc); setDetailPlans([]); setDetailLoading(true);
+    try {
+      const data = await apiRequest<PlanRef[]>(`/admin/feature-codes/${fc.id}/plans`);
+      setDetailPlans(data || []);
+    } catch (e: unknown) { showToast(e instanceof Error ? e.message : '加载失败', 'error'); }
+    finally { setDetailLoading(false); }
   };
 
   return (
@@ -103,14 +117,15 @@ export default function FeatureCodes() {
             <td style={{ fontSize:13, width:'8%', textAlign:'center' }}><span style={{ fontSize:12, fontWeight:500, color:fc.is_active?'#34c759':'var(--gray-400)', cursor:'pointer' }} onClick={()=>setToggleTarget(fc)}>{fc.is_active?'启用':'禁用'}</span></td>
             <td style={{ fontSize:13, width:'8%', textAlign:'center', paddingRight:24 }}><span style={{ fontSize:13, fontWeight:600, color:(fc.plan_count||0)>0?'var(--blue)':'var(--gray-400)' }}>{fc.plan_count??0}</span></td>
             <td style={{ fontSize:12, color:'var(--gray-500)', width:'14%', textAlign:'center' }}>{new Date(fc.created_at).toLocaleString('zh-CN')}</td>
-            <td style={{ textAlign:'right', width:'12%', whiteSpace:'nowrap' }}>
+            <td style={{ textAlign:'right', width:'16%', whiteSpace:'nowrap' }}>
+              <ActBtn kind="detail" onClick={()=>doDetail(fc)}>详情</ActBtn>
               <ActBtn kind="edit" onClick={()=>{setEdit(fc);setForm({code:fc.code,name:fc.name,category:fc.category,description:fc.description||''});}}>编辑</ActBtn>
               <ActBtn kind="delete" onClick={()=>setDelTarget(fc)}>删除</ActBtn>
             </td>
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total||0} limit={limit} onLimitChange={(n)=>{setLimit(n);setPg(0);}} onPrev={()=>setPg(pg-1)} onNext={()=>setPg(pg+1)} />
+      <Pager pg={pg} tp={TP} total={d?.total||0} limit={limit} onLimitChange={(n)=>{setLimit(n);setPg(0);}} onPrev={()=>setPg(pg-1)} onNext={()=>setPg(pg+1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
 
       {delTarget && <Modal title="删除功能码" close={()=>setDelTarget(null)} action={doDelete} danger><p>确认删除功能码 <b>{delTarget.code}</b>？此操作不可撤销。</p></Modal>}
       {toggleTarget && <Modal title={toggleTarget.is_active?'禁用功能码':'启用功能码'} close={()=>setToggleTarget(null)} action={()=>{doToggle(toggleTarget);setToggleTarget(null);}} danger={toggleTarget.is_active}><p>确认{toggleTarget.is_active?'禁用':'启用'}功能码 <b>{toggleTarget.code}</b>？</p></Modal>}
@@ -138,6 +153,26 @@ export default function FeatureCodes() {
           <Fld label="说明"><input value={form.description} onChange={e=>setForm({...form,description:e.target.value})} style={inpS} placeholder="说明（可选）" /></Fld>
           <button onClick={doEdit} style={priBtn}>保存</button>
         </div>
+      </Sheet>}
+      {/* 功能码关联套餐详情 */}
+      {detailFC && <Sheet title={`关联套餐: ${detailFC.name}`} close={()=>{setDetailFC(null);setDetailPlans([]);}} maxHeight="70vh">
+        {detailLoading ? <p style={{ fontSize:13, color:'var(--gray-400)', textAlign:'center', padding:20 }}>加载中…</p> :
+         detailPlans.length === 0 ? <p style={{ fontSize:13, color:'var(--gray-400)', textAlign:'center', padding:20 }}>暂无套餐关联此功能码</p> :
+         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+           <thead><tr style={{ borderBottom:'2px solid var(--gray-200)' }}>
+             <th style={{ textAlign:'left', padding:'8px 4px' }}>套餐名称</th>
+             <th style={{ textAlign:'right', padding:'8px 4px' }}>月赠额度</th>
+             <th style={{ textAlign:'center', padding:'8px 4px' }}>状态</th>
+           </tr></thead>
+           <tbody>{detailPlans.map(p => (
+             <tr key={p.id} style={{ borderBottom:'1px solid var(--gray-100)' }}>
+               <td style={{ padding:'8px 4px', fontWeight:500 }}>{p.name}</td>
+               <td style={{ textAlign:'right', padding:'8px 4px', color:'var(--orange)', fontWeight:600 }}>{p.monthly_grant.toLocaleString()}</td>
+               <td style={{ textAlign:'center', padding:'8px 4px', color: p.status==='active' ? '#34c759' : 'var(--gray-400)', fontWeight:500 }}>{SLS[p.status] || p.status}</td>
+             </tr>
+           ))}</tbody>
+         </table>
+        }
       </Sheet>}
     </div>
   );

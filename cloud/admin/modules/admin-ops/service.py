@@ -231,6 +231,7 @@ async def list_provider_call_logs(
     feature: Optional[str] = None,
     provider: Optional[str] = None,
     status: Optional[str] = None,
+    order: str = "desc",
 ) -> AdminProviderCallLogListData:
     """查询全部 Provider 调用日志（管理员视角，跨用户）。
 
@@ -277,7 +278,7 @@ async def list_provider_call_logs(
     query = (
         select(_ProviderCallLog)
         .where(and_(*conditions) if conditions else True)
-        .order_by(_ProviderCallLog.created_at.desc())
+        .order_by(_ProviderCallLog.created_at.desc() if order == "desc" else _ProviderCallLog.created_at.asc())
         .offset(offset)
         .limit(limit)
     )
@@ -505,6 +506,7 @@ async def list_risk_logs(
     user_id: Optional[str] = None,
     risk_type: Optional[str] = None,
     severity: Optional[str] = None,
+    order: str = "desc",
 ) -> RiskLogListData:
     """查询风控日志列表。
 
@@ -545,7 +547,7 @@ async def list_risk_logs(
     query = (
         select(RiskLog)
         .where(and_(*conditions) if conditions else True)
-        .order_by(RiskLog.created_at.desc())
+        .order_by(RiskLog.created_at.desc() if order == "desc" else RiskLog.created_at.asc())
         .offset(offset)
         .limit(limit)
     )

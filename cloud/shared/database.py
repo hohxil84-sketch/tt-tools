@@ -105,13 +105,23 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """初始化数据库：创建所有 ORM 模型对应表（仅开发环境使用）。
+    """初始化数据库：创建所有 ORM 模型对应表，执行安全迁移（仅开发环境使用）。
 
     生产环境应使用 Alembic 迁移。
     该函数在 FastAPI lifespan startup 阶段调用。
     """
     async with _get_engine().begin() as conn:
+        # 创建新表（已存在的表会跳过）
         await conn.run_sync(Base.metadata.create_all)
+
+        # 安全迁移：给已有表加列（ADD COLUMN IF NOT EXISTS，幂等操作）
+        from sqlalchemy import text as _sql_text
+        _migrations = [
+            # roles 软删除标记
+            "ALTER TABLE roles ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE",
+        ]
+        for _sql in _migrations:
+            await conn.execute(_sql_text(_sql))
 
 
 async def close_db() -> None:

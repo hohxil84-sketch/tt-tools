@@ -13,13 +13,14 @@ export default function Providers() {
   const [delTarget, setDelTarget] = useState<P | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
   const [form, setForm] = useState({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', priority: '0' });
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/providers', { params: { limit, offset: pg * limit, provider_type: providerType || undefined, status: sf || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/providers', { params: { limit, offset: pg * limit, order, provider_type: providerType || undefined, status: sf || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, providerType, sf, limit, refreshKey]);
+  }, [pg, providerType, sf, limit, order, refreshKey]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -85,7 +86,7 @@ export default function Providers() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
 
       {/* 详情 Sheet */}
       {detail && <Sheet title="Provider 详情" close={() => setDetail(null)}>

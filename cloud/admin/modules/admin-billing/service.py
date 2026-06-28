@@ -248,7 +248,7 @@ async def list_plans(db: AsyncSession) -> PlanListData:
     _load_module_models()
 
     result = await db.execute(
-        select(_Plan).order_by(_Plan.created_at)
+        select(_Plan).order_by(_Plan.created_at.desc())
     )
     plans = result.scalars().all()
 
@@ -586,6 +586,7 @@ async def list_all_orders(
     user_id: Optional[str] = None,
     order_type: Optional[str] = None,
     status: Optional[str] = None,
+    order: str = "desc",
 ) -> AdminOrderListData:
     """查询全部订单列表（管理员视角，跨用户）。
 
@@ -628,7 +629,7 @@ async def list_all_orders(
     query = (
         select(_Order)
         .where(and_(*conditions) if conditions else True)
-        .order_by(_Order.created_at.desc())
+        .order_by(_Order.created_at.desc() if order == "desc" else _Order.created_at.asc())
         .offset(offset)
         .limit(limit)
     )
@@ -722,9 +723,9 @@ async def get_admin_order_detail(db: AsyncSession, order_id: str) -> AdminOrderD
 
 
 async def delete_plan(db: AsyncSession, plan_id: str) -> dict:
-    """删除套餐（硬删除）。
+    """软删除套餐。
 
-    检查是否有关联用户正在使用该套餐，如有则拒绝删除。
+    将套餐状态设为 disabled，保留套餐记录及已有用户的关联。
 
     Args:
         db: 数据库异步会话
@@ -734,7 +735,7 @@ async def delete_plan(db: AsyncSession, plan_id: str) -> dict:
         {"deleted": True}
 
     Raises:
-        AppError: 套餐不存在(404)或有关联用户(409)
+        AppError: 套餐不存在或已禁用时抛出 404
     """
     _load_module_models()
 
@@ -748,20 +749,14 @@ async def delete_plan(db: AsyncSession, plan_id: str) -> dict:
             status_code=404,
         )
 
-    # 检查是否有关联用户
-    if _User is not None:
-        user_count_result = await db.execute(
-            select(func.count()).select_from(_User).where(_User.plan_id == plan_id)
+    if plan.status == "disabled":
+        raise AppError(
+            code="PLAN_ALREADY_DISABLED",
+            message=f"套餐 {plan.name} 已被禁用",
+            status_code=404,
         )
-        user_count = user_count_result.scalar_one()
-        if user_count > 0:
-            raise AppError(
-                code="PLAN_HAS_USERS",
-                message=f"套餐 {plan.name} 仍有 {user_count} 个用户在使用，无法删除",
-                status_code=409,
-            )
 
-    await db.delete(plan)
+    plan.status = "disabled"
     await db.flush()
 
     return {"deleted": True}
@@ -774,6 +769,7 @@ async def list_credit_accounts(
     status: Optional[str] = None,
     plan_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    order: str = "desc",
 ) -> AdminCreditAccountListData:
     """查询所有额度账户列表（管理员视角，跨用户）。
 
@@ -814,7 +810,7 @@ async def list_credit_accounts(
     query = (
         select(_CreditAccount)
         .where(and_(*conditions) if conditions else True)
-        .order_by(_CreditAccount.updated_at.desc())
+        .order_by(_CreditAccount.created_at.desc() if order == "desc" else _CreditAccount.created_at.asc())
         .offset(offset)
         .limit(limit)
     )
@@ -932,6 +928,7 @@ async def list_all_credit_ledger(
     user_id: Optional[str] = None,
     change_type: Optional[str] = None,
     source_type: Optional[str] = None,
+    order: str = "desc",
 ) -> AdminCreditLedgerListData:
     """查询全部额度流水（管理员视角，跨用户）。
 
@@ -973,7 +970,7 @@ async def list_all_credit_ledger(
     query = (
         select(_CreditLedger)
         .where(and_(*conditions) if conditions else True)
-        .order_by(_CreditLedger.created_at.desc())
+        .order_by(_CreditLedger.created_at.desc() if order == "desc" else _CreditLedger.created_at.asc())
         .offset(offset)
         .limit(limit)
     )

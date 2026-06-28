@@ -18,15 +18,16 @@ export default function AuditLogs() {
   const [search, setSearch] = useState(''); const [action, setAction] = useState(''); const [targetType, setTargetType] = useState('');
   const [pg, setPg] = useState(0); const [err, setErr] = useState(''); const [detail, setDetail] = useState<Log | null>(null);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
 
   const load = useCallback(async () => {
     setErr('');
     try {
       setD(await apiRequest<List>('/admin/audit-logs', {
-        params: { limit, offset: pg * limit, search: search || undefined, action: action || undefined, target_type: targetType || undefined },
+        params: { limit, offset: pg * limit, order, search: search || undefined, action: action || undefined, target_type: targetType || undefined },
       }));
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, search, action, targetType, limit]);
+  }, [pg, search, action, targetType, limit, order]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -79,7 +80,7 @@ export default function AuditLogs() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
       {detail && <Sheet title="审计日志详情" close={() => setDetail(null)}>
         <DetailRows rows={[
           ['ID', detail.id],

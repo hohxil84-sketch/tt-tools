@@ -30,33 +30,64 @@ def _parse_json(raw) -> dict:
 
 
 async def _get_feature_plan_counts(db: AsyncSession) -> dict[str, int]:
-    """统计每个功能码被多少个 active 套餐引用。
-
-    遍历所有 active 套餐的 enabled_features_json，统计每个 key 的出现次数。
-    """
+    """统计每个功能码被多少个 active 套餐引用（只计 truthy 值）。"""
     counts: dict[str, int] = {}
     try:
         pl = Base.metadata.tables.get("plans")
         if pl is None:
             return counts
         result = await db.execute(
-            select(pl.c.enabled_features_json).where(pl.c.status == "active")
+            select(pl.c.id, pl.c.enabled_features_json).where(pl.c.status == "active")
         )
         for row in result.all():
-            features = _parse_json(row[0])
-            for key in features:
-                counts[key] = counts.get(key, 0) + 1
+            features = _parse_json(row[1])
+            for key, val in features.items():
+                if val:  # 只计数 truthy 值（true / 含 daily_limit 的对象）
+                    counts[key] = counts.get(key, 0) + 1
     except Exception:
-        pass  # 统计失败不影响主流程
+        pass
     return counts
 
 
-async def list_feature_codes(db: AsyncSession, limit=20, offset=0, category: Optional[str]=None) -> FeatureCodeListData:
+async def get_feature_plans(db: AsyncSession, fc_id: str) -> list[dict]:
+    """查询功能码关联的套餐列表（详情用）。
+
+    遍历所有 active 套餐，检查 enabled_features_json 中是否包含该功能码（truthy 值），
+    返回套餐名称、月赠额度、是否启用。
+    """
+    fc = (await db.execute(select(FeatureCode).where(FeatureCode.id == fc_id))).scalar_one_or_none()
+    if not fc:
+        raise AppError(code="FEATURE_CODE_NOT_FOUND", message="功能码不存在", status_code=404)
+
+    plans: list[dict] = []
+    try:
+        pl = Base.metadata.tables.get("plans")
+        if pl is None:
+            return plans
+        result = await db.execute(
+            select(pl.c.id, pl.c.name, pl.c.monthly_grant, pl.c.status, pl.c.enabled_features_json)
+        )
+        for row in result.all():
+            features = _parse_json(row[4])
+            val = features.get(fc.code)
+            if val:  # truthy 才算关联
+                plans.append({
+                    "id": row[0],
+                    "name": row[1],
+                    "monthly_grant": row[2] or 0,
+                    "status": row[3],
+                })
+    except Exception:
+        pass
+    return plans
+
+
+async def list_feature_codes(db: AsyncSession, limit=20, offset=0, category: Optional[str]=None, order: str = "desc") -> FeatureCodeListData:
     limit = max(1, min(limit, MAX_LIMIT)); offset = max(0, offset)
     q = select(FeatureCode)
     if category: q = q.where(FeatureCode.category == category)
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
-    rows = (await db.execute(q.order_by(FeatureCode.code).offset(offset).limit(limit))).scalars().all()
+    rows = (await db.execute(q.order_by(FeatureCode.created_at.desc() if order == "desc" else FeatureCode.created_at.asc()).offset(offset).limit(limit))).scalars().all()
 
     # 批量统计每个功能码被多少套餐引用
     plan_counts = await _get_feature_plan_counts(db)
@@ -89,23 +120,24 @@ async def update_feature_code(db: AsyncSession, fc_id: str, **kwargs) -> Feature
     return _to_detail(fc)
 
 async def delete_feature_code(db: AsyncSession, fc_id: str) -> dict:
+    """软删除功能码。
+
+    将功能码设为停用（is_active=False），保留功能码记录及套餐关联。
+
+    Args:
+        db: 数据库异步会话
+        fc_id: 功能码 ID
+
+    Returns:
+        {"deleted": True}
+
+    Raises:
+        AppError: 功能码不存在时抛出 404
+    """
     fc = (await db.execute(select(FeatureCode).where(FeatureCode.id == fc_id))).scalar_one_or_none()
     if not fc: raise AppError(code="FEATURE_CODE_NOT_FOUND", message="功能码不存在", status_code=404)
-    # 检查是否有活跃套餐引用了此功能码
-    pl = Base.metadata.tables.get("plans")
-    if pl is not None:
-        result = await db.execute(
-            text("SELECT name FROM plans WHERE status = 'active' AND enabled_features_json::text LIKE :pattern"),
-            {"pattern": f'%"' + fc.code + '"%'},
-        )
-        ref_plans = [row[0] for row in result.all()]
-        if ref_plans:
-            raise AppError(
-                code="FEATURE_CODE_IN_USE",
-                message=f"功能码 '{fc.code}' 被以下套餐引用，无法删除：{', '.join(ref_plans)}",
-                status_code=409,
-            )
-    await db.delete(fc); await db.flush()
+    fc.is_active = False
+    await db.flush()
     return {"deleted": True}
 
 def _to_detail(fc: FeatureCode) -> FeatureCodeDetail:

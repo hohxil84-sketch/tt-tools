@@ -94,7 +94,7 @@ export function Badge({ t, c = 'var(--gray-500)' }: { t: string; c?: string }) {
   return <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 20, background: c + '18', color: c, fontSize: 11, fontWeight: 500 }}>{t}</span>;
 }
 
-export function Pager({ pg, tp, total, limit, onLimitChange, onPrev, onNext }: { pg: number; tp: number; total: number; limit: number; onLimitChange: (n: number) => void; onPrev: () => void; onNext: () => void }) {
+export function Pager({ pg, tp, total, limit, order, onOrderChange, onLimitChange, onPrev, onNext }: { pg: number; tp: number; total: number; limit: number; order?: string; onOrderChange?: (o: string) => void; onLimitChange: (n: number) => void; onPrev: () => void; onNext: () => void }) {
   return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20, fontSize: 12, color: 'var(--gray-500)' }}>
     <button disabled={pg === 0} onClick={onPrev} style={secBtn}>上一页</button>
     <span>第 {pg + 1}/{tp} 页（共 {total} 条）</span>
@@ -102,6 +102,9 @@ export function Pager({ pg, tp, total, limit, onLimitChange, onPrev, onNext }: {
     <select value={limit} onChange={e => onLimitChange(Number(e.target.value))} style={{ ...selS, minWidth: 80, fontSize: 12, marginLeft: 8 }}>
       <option value={10}>10条/页</option><option value={20}>20条/页</option><option value={50}>50条/页</option><option value={100}>100条/页</option>
     </select>
+    {onOrderChange && <select value={order || 'desc'} onChange={e => onOrderChange(e.target.value)} style={{ ...selS, minWidth: 80, fontSize: 12 }}>
+      <option value="desc">倒序</option><option value="asc">正序</option>
+    </select>}
   </div>;
 }
 

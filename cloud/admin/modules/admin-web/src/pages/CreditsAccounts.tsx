@@ -10,12 +10,13 @@ export default function CreditsAccounts() {
   const [pg, setPg] = useState(0); const [err, setErr] = useState('');
   const [detail, setDetail] = useState<Acc | null>(null);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/credits/accounts', { params: { limit, offset: pg * limit, user_id: uid || undefined, status: sf || undefined, plan_name: pc || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/credits/accounts', { params: { limit, offset: pg * limit, order, user_id: uid || undefined, status: sf || undefined, plan_name: pc || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, uid, sf, pc, limit]);
+  }, [pg, uid, sf, pc, limit, order]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -43,7 +44,7 @@ export default function CreditsAccounts() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
       {detail && <Sheet title="账户详情" close={() => setDetail(null)}>
         <DetailRows rows={[['账户 ID', detail.id], ['用户', detail.user_account], ['名称', detail.user_display_name], ['套餐', detail.plan_name || '—'], ['余额', detail.balance], ['月赠', detail.monthly_grant], ['状态', detail.status], ['周期开始', detail.period_start ? new Date(detail.period_start).toLocaleString('zh-CN') : '—'], ['周期结束', detail.period_end ? new Date(detail.period_end).toLocaleString('zh-CN') : '—'], ['创建', detail.created_at ? new Date(detail.created_at).toLocaleString('zh-CN') : '—'], ['更新', new Date(detail.updated_at).toLocaleString('zh-CN')]]} />
       </Sheet>}

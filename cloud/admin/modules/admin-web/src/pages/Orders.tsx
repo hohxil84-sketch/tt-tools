@@ -17,6 +17,7 @@ export default function Orders() {
   const [batchCancelTarget, setBatchCancelTarget] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [order, setOrder] = useState('desc');
 
   const toggleSelect = (id: string) => {
     setSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -40,9 +41,9 @@ export default function Orders() {
 
   const load = useCallback(async () => {
     setErr('');
-    try { setD(await apiRequest<List>('/admin/orders', { params: { limit, offset: pg * limit, user_id: uid || undefined, order_type: ot || undefined, status: sf || undefined, order_no: orderNo || undefined } })); }
+    try { setD(await apiRequest<List>('/admin/orders', { params: { limit, offset: pg * limit, order, user_id: uid || undefined, order_type: ot || undefined, status: sf || undefined, order_no: orderNo || undefined } })); }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, uid, ot, sf, orderNo, limit, refreshKey]);
+  }, [pg, uid, ot, sf, orderNo, limit, order, refreshKey]);
   useEffect(() => { load(); }, [load]);
   const TP = d ? Math.ceil(d.total / limit) : 0;
 
@@ -103,7 +104,7 @@ export default function Orders() {
           </tr>
         ))}
       </Tbl></Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} />
 
       {/* 详情 Sheet */}
       {detail && <Sheet title="订单详情" close={() => setDetail(null)}>

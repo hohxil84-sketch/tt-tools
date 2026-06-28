@@ -39,6 +39,7 @@ async def admin_list_audit_logs(
     action: Optional[str] = Query(default=None, description="按操作类型筛选"),
     target_type: Optional[str] = Query(default=None, description="按目标资源类型筛选"),
     target_id: Optional[str] = Query(default=None, description="按目标资源 ID 筛选"),
+    order: str = Query(default="desc", description="排序方向：desc（倒序）/ asc（正序）"),
     request_id: str = Depends(get_request_id),
     current_user: TokenData = Depends(require_permission("audit.read")),
     db: AsyncSession = Depends(get_db),
@@ -57,6 +58,7 @@ async def admin_list_audit_logs(
             action=action,
             target_type=target_type,
             target_id=target_id,
+            order=order,
         )
         return success_response(data.model_dump(mode="json"), request_id)
     except AppError as e:

@@ -335,8 +335,8 @@ async def confirm_order(
 
     elif order.order_type == "plan":
         await db.execute(
-            text("UPDATE users SET plan_code = :plan_code, updated_at = :now WHERE id = :uid"),
-            {"plan_code": order.product_code, "now": now, "uid": user_id},
+            text("UPDATE users SET plan_id = :plan_id, updated_at = :now WHERE id = :uid"),
+            {"plan_id": order.product_code, "now": now, "uid": user_id},
         )
 
     # 5. 刷新订单状态
@@ -436,9 +436,9 @@ async def refund_order(
         )
 
     elif order.order_type == "plan":
-        # 退款 plan 订单：将用户套餐降级为 free
+        # 退款 plan 订单：清除用户套餐
         await db.execute(
-            text("UPDATE users SET plan_code = 'free', updated_at = :now WHERE id = :uid"),
+            text("UPDATE users SET plan_id = NULL, updated_at = :now WHERE id = :uid"),
             {"now": now, "uid": order.user_id},
         )
 

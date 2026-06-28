@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, ActBtn, Pager, Sheet, Modal, Fld, DetailRows, priBtn, secBtn, inpS, selS, finpS, showToast } from '../components/shared';
@@ -10,6 +10,21 @@ interface CreditAccount { id: string; balance: number; plan_name?: string | null
 interface List { items: User[]; total: number; limit: number; offset: number; }
 const SL: Record<string, string> = { active: '正常', blocked: '已封禁', deleted: '已删除' };
 const SC: Record<string, string> = { active: '#34c759', blocked: '#ff9500', deleted: '#ff3b30' };
+// 紧凑操作按钮（⋮）
+const _abCompact: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  width: 32, height: 28, borderRadius: 5, border: 'none',
+  fontSize: 16, fontWeight: 700, color: '#fff', cursor: 'pointer',
+  letterSpacing: '0', transition: 'background 0.12s ease', lineHeight: 1,
+};
+// 下拉菜单项
+const _menuItem: React.CSSProperties = {
+  display: 'block', width: '100%', padding: '10px 16px', border: 'none',
+  background: 'none', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+  textAlign: 'left', whiteSpace: 'nowrap', transition: 'background 0.1s ease',
+  color: 'var(--gray-800)',
+};
+const _menuDanger: React.CSSProperties = { ..._menuItem, color: '#ff3b30' };
 
 /** 根据 roleFilter 决定页面标题 */
 function getTitle(roleFilter?: string): string {
@@ -27,10 +42,7 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
   const [cd, setCd] = useState<User | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [edit, setEdit] = useState<User | null>(null);
-  const [resetPwUser, setResetPwUser] = useState<User | null>(null);
-  const [newPw, setNewPw] = useState('');
-  const [roleUser, setRoleUser] = useState<User | null>(null);
-  const [creditUser, setCreditUser] = useState<User | null>(null);
+  const [order, setOrder] = useState('desc');  // 排序方向，默认倒序
 
   // === 批量操作 ===
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -38,6 +50,9 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
   const [batching, setBatching] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
+  // 行内操作下拉菜单
+  const [menuOpen, setMenuOpen] = useState<{ id: string; top: number; right: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const toggleSelect = (id: string) => {
     setSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -54,14 +69,12 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
     setBatching(true);
     try {
       if (batchTarget.action === 'delete') {
-        // 逐个删除
         let ok = 0, fail = 0;
         for (const uid of selected) {
           try { await apiRequest(`/admin/users/${uid}`, { method: 'DELETE' }); ok++; } catch { fail++; }
         }
         showToast(`删除成功 ${ok} 个` + (fail > 0 ? `，失败 ${fail} 个` : ''), fail > 0 ? 'error' : 'success');
       } else {
-        // 批量改状态
         await apiRequest('/admin/users/batch/status', { method: 'POST', body: { ids: [...selected], status: batchTarget.action } });
         showToast(`批量${batchTarget.label}成功`, 'success');
       }
@@ -80,13 +93,12 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
   const load = useCallback(async () => {
     setErr('');
     try {
-      const params: Record<string, string | number | undefined> = { limit, offset: pg * limit, search: q || undefined, status: sf || undefined };
-      // 根据 roleFilter 附加角色筛选参数
+      const params: Record<string, string | number | undefined> = { limit, offset: pg * limit, order, search: q || undefined, status: sf || undefined };
       if (roleFilter) params.role = roleFilter;
       setD(await apiRequest<List>('/admin/users', { params }));
     }
     catch (e: unknown) { setErr(e instanceof Error ? e.message : '加载失败'); }
-  }, [pg, q, sf, roleFilter, limit, refreshKey]);
+  }, [pg, q, sf, roleFilter, limit, order, refreshKey]);
   useEffect(() => { load(); }, [load]);
 
   const updStatus = async (id: string, ns: string) => {
@@ -104,22 +116,21 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
       setCd(null); setRefreshKey(k => k + 1); load();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '删除失败', 'error'); }
   };
-  const resetPw = async () => { if (!resetPwUser || !newPw) { showToast('请输入新密码', 'error'); return; } try { await apiRequest(`/admin/users/${resetPwUser.id}/reset-password`, { method: 'POST', body: { new_password: newPw } }); showToast('密码重置成功', 'success'); setResetPwUser(null); setNewPw(''); setRefreshKey(k => k + 1); load(); } catch (e: unknown) { showToast(e instanceof Error ? e.message : '重置失败', 'error'); } };
   const isSystem = roleFilter === 'admin';
   const isClient = roleFilter === 'user';
 
-  // 根据角色筛选条件动态构建表头
+  // 根据角色筛选条件动态构建表头（「创建时间」替代「更新时间」）
   const selectAllCheckbox = <input type="checkbox" checked={d ? selected.size === d.items.length && d.items.length > 0 : false} onChange={selectAll} style={{ width: 16, height: 16, cursor: 'pointer' }} />;
   const heads = isSystem
-    ? [selectAllCheckbox, '账号', '名称', 'RBAC 角色', '状态', '设备', '最后登录', '审计', '更新时间', '']
+    ? [selectAllCheckbox, '账号', '名称', 'RBAC 角色', '状态', '设备', '最后登录', '审计', '创建时间', '']
     : isClient
-      ? [selectAllCheckbox, '账号', '名称', '额度余额', '本月消费', '套餐', '到期时间', '状态', '设备', '最后登录', '更新时间', '']
-      : [selectAllCheckbox, '账号', '名称', '角色', '额度余额', '套餐', '状态', '设备', '最后登录', '更新时间', ''];
+      ? [selectAllCheckbox, '账号', '名称', '额度余额', '本月消费', '套餐', '到期时间', '状态', '设备', '最后登录', '创建时间', '']
+      : [selectAllCheckbox, '账号', '名称', '角色', '额度余额', '套餐', '到期时间', '状态', '设备', '最后登录', '创建时间', ''];
   const colAligns: ('l'|'r'|'c')[] = isSystem
     ? ['c','c','c','c','c','c','c','c','c','r']
     : isClient
       ? ['c','c','c','c','c','c','c','c','c','c','c','r']
-      : ['c','c','c','c','c','c','c','c','c','c','r'];
+      : ['c','c','c','c','c','c','c','c','c','c','c','r'];
   const TP = d ? Math.ceil(d.total / limit) : 0;
   const title = getTitle(roleFilter);
 
@@ -144,54 +155,54 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--blue)' }}>已选 {selected.size} 项</span>
           <ActBtn kind="block" onClick={() => setBatchTarget({ action: 'blocked', label: '封禁' })}>批量封禁</ActBtn>
           <ActBtn kind="unblock" onClick={() => setBatchTarget({ action: 'active', label: '解封' })}>批量解封</ActBtn>
+          <ActBtn kind="unblock" onClick={() => setBatchTarget({ action: 'active', label: '恢复' })}>批量恢复</ActBtn>
           <ActBtn kind="delete" onClick={() => setBatchTarget({ action: 'delete', label: '删除' })}>批量删除</ActBtn>
           <button onClick={clearSelection} style={{ ...secBtn, fontSize: 11, marginLeft: 'auto' }}>取消选择</button>
         </div>
       )}
 
       <Card>
-        <div style={{ overflowX: 'auto' }}>
         <Tbl heads={heads} colAligns={colAligns}>
           {d?.items.map(u => {
             const lastLoginStr = u.last_login_at ? new Date(u.last_login_at).toLocaleString('zh-CN') : '—';
-            const updatedStr = u.updated_at ? new Date(u.updated_at).toLocaleString('zh-CN') : '—';
+            const createdStr = new Date(u.created_at).toLocaleString('zh-CN');
             const balanceStr = u.credit_balance != null ? u.credit_balance.toLocaleString() : '—';
             const balanceColor = balanceStr === '—' ? 'var(--gray-400)' : (u.credit_balance ?? 0) > 0 ? '#34c759' : '#ff9500';
             const usageStr = (u.monthly_usage || 0).toLocaleString();
             // RBAC 角色显示：有 role_names 显示之，无则显示「超级管理员」（role=admin 向后兼容）
             const roleDisplay = u.role_names || (u.role === 'admin' ? '超级管理员' : '—');
-            // 操作按钮（缩窄间距）
+            // 操作按钮 — 紧凑下拉菜单（替代拥挤的 4-5 个按钮）
+            const openMenu = (e: React.MouseEvent) => {
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setMenuOpen({ id: u.id, top: rect.bottom + 4, right: window.innerWidth - rect.right });
+            };
             const actions = (
-              <td style={{ textAlign: 'right', whiteSpace: 'nowrap', paddingRight: 4 }}>
-                <ActBtn kind="detail" onClick={() => setDetail(u)}>详情</ActBtn>
-                <ActBtn kind="edit" onClick={() => setEdit(u)}>编辑</ActBtn>
-                {u.role === 'admin' && <ActBtn kind="role" onClick={() => setRoleUser(u)}>角色</ActBtn>}
-                {u.role === 'user' && <ActBtn kind="credit" onClick={() => setCreditUser(u)}>额度</ActBtn>}
-                <ActBtn kind="password" onClick={() => { setResetPwUser(u); setNewPw(''); }}>密码</ActBtn>
-                {u.status === 'active' && <ActBtn kind="block" onClick={() => setCa({ id: u.id, s: 'blocked' })}>封禁</ActBtn>}
-                {u.status === 'blocked' && <ActBtn kind="unblock" onClick={() => setCa({ id: u.id, s: 'active' })}>解封</ActBtn>}
-                <ActBtn kind="delete" onClick={() => setCd(u)}>删除</ActBtn>
+              <td style={{ textAlign: 'center', width: 50, paddingRight: 2 }}>
+                <button
+                  onClick={openMenu}
+                  style={{ ..._abCompact, background: menuOpen?.id === u.id ? '#636366' : '#8e8e93' }}
+                  title="操作"
+                >⋮</button>
               </td>
             );
             // 通用信息单元格
             const commonCells = (
               <>
-                <td style={{ width: 30, padding: '8px 4px', textAlign: 'center' }}><input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} /></td>
-                <td style={{ fontWeight: 500, fontSize: 13, textAlign: 'center' }}>{u.account}</td>
-                <td style={{ color: 'var(--gray-500)', fontSize: 13, textAlign: 'center' }}>{u.display_name || '—'}</td>
+                <td style={{ width: '3%', padding: '8px 4px', textAlign: 'center' }}><input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} /></td>
+                <td style={{ fontWeight: 500, fontSize: 13, textAlign: 'center', width: isSystem ? '10%' : isClient ? '9%' : '10%' }}>{u.account}</td>
+                <td style={{ color: 'var(--gray-500)', fontSize: 13, textAlign: 'center', width: isSystem ? '8%' : isClient ? '7%' : '8%' }}>{u.display_name || '—'}</td>
               </>
             );
-            // 根据视图类型渲染不同的列布局
             if (isSystem) {
               return (
                 <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                   {commonCells}
-                  <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#af52de' }}>{roleDisplay}</span></td>
-                  <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
-                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 12, textAlign: 'center' }}>{lastLoginStr}</td>
-                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.audit_count || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{u.audit_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center' }}>{updatedStr}</td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '10%' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#af52de' }}>{roleDisplay}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '6%' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '5%', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-500)', fontSize: 12, textAlign: 'center', width: '13%' }}>{lastLoginStr}</td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '5%', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.audit_count || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{u.audit_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center', width: '13%' }}>{createdStr}</td>
                   {actions}
                 </tr>
               );
@@ -202,55 +213,68 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
               return (
                 <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                   {commonCells}
-                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
-                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.monthly_usage || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{usageStr}</span></td>
-                  <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
-                  <td style={{ fontSize: 12, textAlign: 'center', fontWeight: u.period_end ? 500 : 400, color: periodEndColor }}>{periodEndStr}</td>
-                  <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
-                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 12, textAlign: 'center' }}>{lastLoginStr}</td>
-                  <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center' }}>{updatedStr}</td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '8%', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '6%', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.monthly_usage || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{usageStr}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '6%' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
+                  <td style={{ fontSize: 12, textAlign: 'center', width: '7%', fontWeight: u.period_end ? 500 : 400, color: periodEndColor }}>{periodEndStr}</td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '5%' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center', width: '5%', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-500)', fontSize: 12, textAlign: 'center', width: '12%' }}>{lastLoginStr}</td>
+                  <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center', width: '12%' }}>{createdStr}</td>
                   {actions}
                 </tr>
               );
             }
             // 全部用户视图
+            const periodEndStr2 = u.period_end ? new Date(u.period_end).toLocaleDateString('zh-CN') : '—';
+            const periodEndColor2 = u.period_end ? 'var(--gray-700)' : 'var(--gray-400)';
             return (
               <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                 {commonCells}
                 <td style={{ fontSize: 13, textAlign: 'center' }}><Badge t={u.role === 'admin' ? '管理员' : '用户'} c={u.role === 'admin' ? 'var(--blue)' : 'var(--gray-500)'} /></td>
                 <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
                 <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
+                <td style={{ fontSize: 12, textAlign: 'center', fontWeight: u.period_end ? 500 : 400, color: periodEndColor2 }}>{periodEndStr2}</td>
                 <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
                 <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
                 <td style={{ color: 'var(--gray-500)', fontSize: 12, textAlign: 'center' }}>{lastLoginStr}</td>
-                <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center' }}>{updatedStr}</td>
+                <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center' }}>{createdStr}</td>
                 {actions}
               </tr>
             );
           })}
         </Tbl>
-        </div>
       </Card>
-      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
+      <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} order={order} onOrderChange={o => { setOrder(o); setPg(0); }} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
       {detail && <Sheet title="用户详情" close={() => setDetail(null)}>
-        <DetailRows rows={[
-          ['ID', detail.id],
-          ['账号', detail.account],
-          ['名称', detail.display_name],
-          ['角色', detail.role === 'admin' ? '管理员 (admin)' : '用户 (user)'],
-          ['状态', SL[detail.status] || detail.status],
-          ['套餐', detail.plan_name || '—'],
-          ['套餐到期', detail.period_end ? new Date(detail.period_end).toLocaleDateString('zh-CN') : '—'],
-          ['额度余额', detail.credit_balance != null ? detail.credit_balance.toLocaleString() : '—'],
-          ['RBAC 角色', detail.role_names || '—'],
-          ['本月消费', (detail.monthly_usage || 0).toLocaleString()],
-          ['绑定设备', detail.device_count ?? 0],
-          ['最后登录', detail.last_login_at ? new Date(detail.last_login_at).toLocaleString('zh-CN') : '—'],
-          ['操作审计', detail.audit_count ?? 0],
-          ['注册时间', new Date(detail.created_at).toLocaleString('zh-CN')],
-          ['更新时间', detail.updated_at ? new Date(detail.updated_at).toLocaleString('zh-CN') : '—'],
-        ]} />
+        <DetailRows rows={detail.role === 'admin'
+          ? [  // 管理员详情
+              ['ID', detail.id], ['账号', detail.account], ['名称', detail.display_name],
+              ['角色', '管理员 (admin)'], ['状态', SL[detail.status] || detail.status],
+              ['RBAC 角色', detail.role_names || '—'],
+              ['套餐', detail.plan_name || '—'],
+              ['套餐到期', detail.period_end ? new Date(detail.period_end).toLocaleDateString('zh-CN') : '—'],
+              ['额度余额', detail.credit_balance != null ? detail.credit_balance.toLocaleString() : '—'],
+              ['本月消费', (detail.monthly_usage || 0).toLocaleString()],
+              ['绑定设备', detail.device_count ?? 0],
+              ['最后登录', detail.last_login_at ? new Date(detail.last_login_at).toLocaleString('zh-CN') : '—'],
+              ['操作审计', detail.audit_count ?? 0],
+              ['注册时间', new Date(detail.created_at).toLocaleString('zh-CN')],
+              ['更新时间', detail.updated_at ? new Date(detail.updated_at).toLocaleString('zh-CN') : '—'],
+            ]
+          : [  // 普通用户详情
+              ['ID', detail.id], ['账号', detail.account], ['名称', detail.display_name],
+              ['角色', '用户 (user)'], ['状态', SL[detail.status] || detail.status],
+              ['套餐', detail.plan_name || '—'],
+              ['套餐到期', detail.period_end ? new Date(detail.period_end).toLocaleDateString('zh-CN') : '—'],
+              ['额度余额', detail.credit_balance != null ? detail.credit_balance.toLocaleString() : '—'],
+              ['本月消费', (detail.monthly_usage || 0).toLocaleString()],
+              ['绑定设备', detail.device_count ?? 0],
+              ['最后登录', detail.last_login_at ? new Date(detail.last_login_at).toLocaleString('zh-CN') : '—'],
+              ['注册时间', new Date(detail.created_at).toLocaleString('zh-CN')],
+              ['更新时间', detail.updated_at ? new Date(detail.updated_at).toLocaleString('zh-CN') : '—'],
+            ]
+        } />
       </Sheet>}
       {ca && <Modal title="确认操作" close={() => setCa(null)} action={() => updStatus(ca.id, ca.s)} danger>
         <p>将用户状态改为 <b>{SL[ca.s]}</b>？</p>
@@ -260,16 +284,49 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
       </Modal>}
       {showCreate && <UserForm roleFilter={roleFilter} close={() => setShowCreate(false)} done={() => { setShowCreate(false); setRefreshKey(k => k + 1); load(); }} />}
       {edit && <UserForm roleFilter={roleFilter} user={edit} close={() => setEdit(null)} done={() => { setEdit(null); setRefreshKey(k => k + 1); load(); }} />}
-      {resetPwUser && <Modal title="重置密码" close={() => { setResetPwUser(null); setNewPw(''); }} action={resetPw}><p>为用户 <b>{resetPwUser.account}</b> 重置密码：</p><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="输入新密码" style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--gray-300)', borderRadius: 'var(--radius-sm)', fontSize: 13 }} /></Modal>}
-      {roleUser && <RoleAssignmentModal user={roleUser} close={() => setRoleUser(null)} done={() => { setRoleUser(null); setRefreshKey(k => k + 1); load(); }} />}
-      {creditUser && <CreditAdjustModal user={creditUser} close={() => setCreditUser(null)} done={() => { setCreditUser(null); setRefreshKey(k => k + 1); load(); }} />}
 
       {batchTarget && <Modal title={`批量${batchTarget.label}`} close={() => setBatchTarget(null)} action={doBatch} danger={batchTarget.action === 'delete'}>
         <p>确认批量{batchTarget.label} <b>{selected.size}</b> 个用户？{batchTarget.action === 'delete' ? '此操作不可撤销。' : ''}</p>
       </Modal>}
+
+      {/* 行内操作下拉菜单（position:fixed 避免被 Card overflow:hidden 裁剪） */}
+      {menuOpen && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setMenuOpen(null)} />
+          <div ref={menuRef} style={{
+            position: 'fixed', top: menuOpen.top, right: menuOpen.right, zIndex: 1000,
+            background: 'var(--white)', borderRadius: 10, boxShadow: '0 6px 24px rgba(0,0,0,0.14)',
+            border: '1px solid var(--gray-200)', padding: '6px 0', minWidth: 140,
+          }}>
+            {(() => {
+              const u = d?.items.find(x => x.id === menuOpen.id);
+              if (!u) return null;
+              return (
+                <>
+                  <button onClick={() => { setDetail(u); setMenuOpen(null); }} style={_menuItem}>📋 详情</button>
+                  <button onClick={() => { setEdit(u); setMenuOpen(null); }} style={_menuItem}>✏️ 编辑</button>
+                  {u.status === 'active' && (
+                    <button onClick={() => { setCa({ id: u.id, s: 'blocked' }); setMenuOpen(null); }} style={_menuItem}>🚫 封禁</button>
+                  )}
+                  {u.status === 'blocked' && (
+                    <button onClick={() => { setCa({ id: u.id, s: 'active' }); setMenuOpen(null); }} style={_menuItem}>✅ 解封</button>
+                  )}
+                  {u.status === 'deleted' && (
+                    <button onClick={() => { setCa({ id: u.id, s: 'active' }); setMenuOpen(null); }} style={_menuItem}>🔄 恢复</button>
+                  )}
+                  <div style={{ height: 1, background: 'var(--gray-100)', margin: '4px 0' }} />
+                  <button onClick={() => { setCd(u); setMenuOpen(null); }} style={_menuDanger}>🗑 删除</button>
+                </>
+              );
+            })()}
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
+/** ==================== 用户表单（编辑时含密码/角色/额度全覆盖） ==================== */
 
 function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?: string; close: () => void; done: () => void }) {
   const [acc, setAcc] = useState(user?.account || '');
@@ -293,8 +350,10 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
   const [allRoles, setAllRoles] = useState<RoleOption[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set());
   const [rolesLoading, setRolesLoading] = useState(false);
-  // 编辑用户时显示的额度余额
+  // 编辑用户时显示的额度余额和调整
   const [editCreditBalance, setEditCreditBalance] = useState<number | null>(null);
+  const [creditAmountStr, setCreditAmountStr] = useState('');  // 用字符串避免 number input 吞负号
+  const [creditDesc, setCreditDesc] = useState('');
 
   // 加载套餐选项
   useEffect(() => {
@@ -327,7 +386,7 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
     })();
   }, [isCreatingAdmin, isEditingAdmin]);
 
-  // 编辑用户时显示额度余额（从已加载的用户数据获取）
+  // 编辑用户时显示额度余额
   useEffect(() => {
     if (isEditingUser && user?.credit_balance != null) {
       setEditCreditBalance(user.credit_balance);
@@ -344,9 +403,8 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
 
   const submit = async (e: React.FormEvent) => { e.preventDefault();
 
-    // 前端校验
     if (!dn.trim()) { showToast('请填写展示名称', 'error'); return; }
-    if (isCreatingUser && !planId) { showToast('普通用户必须选择套餐', 'error'); return; }
+    if (!isEdit && !planId) { showToast('必须选择套餐', 'error'); return; }
     if (isCreatingAdmin && selectedRoleIds.size === 0) { showToast('管理员必须分配至少一个角色', 'error'); return; }
 
     setSaving(true);
@@ -362,6 +420,11 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
         if ((isCreatingAdmin || isEditingAdmin) && selectedRoleIds.size > 0) {
           await apiRequest(`/admin/users/${user!.id}/roles`, { method: 'POST', body: { role_ids: [...selectedRoleIds] } });
         }
+        // 编辑时如果填了额度调整，一起提交
+        const creditAmount = Number(creditAmountStr);
+        if (isEditingUser && creditAmountStr.trim() !== '' && !isNaN(creditAmount) && creditAmount !== 0) {
+          await apiRequest('/admin/credits/adjust', { method: 'POST', body: { user_id: user!.id, amount: creditAmount, description: creditDesc || undefined } });
+        }
       }
       else await apiRequest('/admin/users', { method: 'POST', body: { account: acc, password: pw, ...body } });
       showToast(isEdit ? '保存成功' : '创建成功', 'success');
@@ -371,7 +434,7 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
   };
 
   return (
-    <Sheet title={isEdit ? `编辑: ${user!.account}` : (roleFilter === 'admin' ? '创建管理员' : '创建用户')} close={close}>
+    <Sheet title={isEdit ? `编辑: ${user!.account}` : (roleFilter === 'admin' ? '创建管理员' : '创建用户')} close={close} maxHeight="85vh">
       <form onSubmit={submit}>
         {!isEdit && <>
           <Fld label="账号 *"><input value={acc} onChange={e => setAcc(e.target.value)} required style={finpS} /></Fld>
@@ -380,14 +443,24 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
         {isEdit && <Fld label="密码（留空则保持原密码）"><input type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="留空则保持原密码" style={finpS} /></Fld>}
         <Fld label="展示名称 *"><input value={dn} onChange={e => setDn(e.target.value)} required style={finpS} /></Fld>
 
-        {/* 编辑用户时显示额度余额 */}
+        {/* 编辑客户端用户时显示额度余额 + 额度调整 */}
         {isEditingUser && editCreditBalance != null && (
           <Fld label="当前额度">
             <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--orange)' }}>{editCreditBalance.toLocaleString()}</span>
             <span style={{ fontSize: 12, color: 'var(--gray-400)', marginLeft: 4 }}>额度</span>
           </Fld>
         )}
-        <Fld label={isCreatingUser ? '套餐 *' : '套餐'}>
+        {isEditingUser && (
+          <>
+            <Fld label="调整额度（正数赠送，负数扣除，0=不调整）">
+              <input type="text" value={creditAmountStr} onChange={e => setCreditAmountStr(e.target.value)} style={finpS} placeholder="如 1000 或 -500" />
+            </Fld>
+            <Fld label="调整原因">
+              <input value={creditDesc} onChange={e => setCreditDesc(e.target.value)} style={finpS} placeholder="选填" />
+            </Fld>
+          </>
+        )}
+        <Fld label={!isEdit ? '套餐 *' : '套餐'}>
           {planLoading ? (
             <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>加载中…</span>
           ) : planError ? (
@@ -396,10 +469,10 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
             <select
               value={planId}
               onChange={e => setPlanId(e.target.value)}
-              required={isCreatingUser}
+              required={!isEdit}
               style={finpS}
             >
-              <option value="">{isCreatingUser ? '-- 必选 --' : '-- 选择套餐 --'}</option>
+              <option value="">{!isEdit ? '-- 必选 --' : '-- 选择套餐 --'}</option>
               {planOptions.map(o => (
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
@@ -421,7 +494,7 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
           )}
         </Fld>
 
-        {/* 创建管理员时显示角色分配 */}
+        {/* 管理员编辑时显示角色分配 */}
         {(isCreatingAdmin || isEditingAdmin) && (
           <Fld label={isCreatingAdmin ? '分配角色 *' : '分配角色'}>
             {rolesLoading ? (
@@ -447,129 +520,5 @@ function UserForm({ user, roleFilter, close, done }: { user?: User; roleFilter?:
         </div>
       </form>
     </Sheet>
-  );
-}
-
-/** ==================== 角色分配弹窗（系统用户） ==================== */
-
-function RoleAssignmentModal({ user, close, done }: { user: User; close: () => void; done: () => void }) {
-  const [allRoles, setAllRoles] = useState<RoleOption[]>([]);
-  const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const [rolesRes, userRolesRes] = await Promise.all([
-          apiRequest<{ items: RoleOption[] }>('/admin/roles'),
-          apiRequest<RoleOption[]>(`/admin/users/${user.id}/roles`),
-        ]);
-        setAllRoles(rolesRes.items || []);
-        setAssignedIds(new Set((userRolesRes || []).map(r => r.id)));
-      } catch { showToast('角色数据加载失败', 'error'); }
-      finally { setLoading(false); }
-    })();
-  }, [user.id]);
-
-  const toggle = (roleId: string) => {
-    setAssignedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(roleId)) next.delete(roleId); else next.add(roleId);
-      return next;
-    });
-  };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await apiRequest(`/admin/users/${user.id}/roles`, { method: 'POST', body: { role_ids: [...assignedIds] } });
-      showToast('角色分配成功', 'success');
-      done();
-    } catch (e: unknown) { showToast(e instanceof Error ? e.message : '保存失败', 'error'); }
-    finally { setSaving(false); }
-  };
-
-  return (
-    <Modal title={`角色权限: ${user.account}`} close={close} action={save}>
-      {loading ? <p style={{ fontSize: 13, color: 'var(--gray-400)' }}>加载中…</p> : (
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-          {allRoles.map(r => (
-            <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--gray-100)', cursor: 'pointer', fontSize: 13 }}>
-              <input type="checkbox" checked={assignedIds.has(r.id)} onChange={() => toggle(r.id)} style={{ width: 16, height: 16 }} />
-              <span style={{ fontWeight: 500 }}>{r.name}</span>
-              <code style={{ fontSize: 11, color: 'var(--gray-400)' }}>{r.code}</code>
-              {r.is_system && <span style={{ fontSize: 10, color: '#ff9500', background: 'rgba(255,149,0,0.1)', padding: '1px 6px', borderRadius: 8 }}>系统内置</span>}
-            </label>
-          ))}
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-/** ==================== 额度调整弹窗（客户端用户） ==================== */
-
-function CreditAdjustModal({ user, close, done }: { user: User; close: () => void; done: () => void }) {
-  const [account, setAccount] = useState<CreditAccount | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [amount, setAmount] = useState(0);
-  const [desc, setDesc] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        // 通过 user_id 筛选查询该用户的额度账户
-        const data = await apiRequest<{ items: CreditAccount[] }>('/admin/credits/accounts', { params: { user_id: user.id, limit: 1 } });
-        if (data.items && data.items.length > 0) {
-          setAccount(data.items[0]);
-        } else {
-          setAccount(null);
-        }
-      } catch {
-        setAccount(null);
-        showToast('额度账户加载失败', 'error');
-      }
-      finally { setLoading(false); }
-    })();
-  }, [user.id]);
-
-  const adjust = async () => {
-    if (amount === 0) { showToast('请输入调整额度', 'error'); return; }
-    setSaving(true);
-    try {
-      await apiRequest('/admin/credits/adjust', { method: 'POST', body: { user_id: user.id, amount, description: desc || undefined } });
-      showToast(`额度${amount > 0 ? '赠送' : '扣除'}成功`, 'success');
-      done();
-    } catch (e: unknown) { showToast(e instanceof Error ? e.message : '调整失败', 'error'); }
-    finally { setSaving(false); }
-  };
-
-  return (
-    <Modal title={`额度管理: ${user.account}`} close={close} action={adjust}>
-      {loading ? <p style={{ fontSize: 13, color: 'var(--gray-400)' }}>加载中…</p> : (
-        <div>
-          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--gray-50)', borderRadius: 8 }}>
-            <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>当前余额：</span>
-            <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--gray-800)', marginLeft: 8 }}>
-              {account ? account.balance.toLocaleString() : '—'}
-            </span>
-            {account && <span style={{ fontSize: 12, color: 'var(--gray-400)', marginLeft: 6 }}>额度</span>}
-          </div>
-          {account && (
-            <div style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 16 }}>
-              套餐：{account.plan_name || '—'} · 状态：{account.status === 'active' ? '正常' : account.status}
-            </div>
-          )}
-          <Fld label="调整额度（正数赠送，负数扣除）">
-            <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} style={finpS} placeholder="如 1000 或 -500" />
-          </Fld>
-          <Fld label="调整原因">
-            <input value={desc} onChange={e => setDesc(e.target.value)} style={finpS} placeholder="选填" />
-          </Fld>
-        </div>
-      )}
-    </Modal>
   );
 }

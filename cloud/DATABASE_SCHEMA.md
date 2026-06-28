@@ -396,6 +396,7 @@ Provider 耗时统计表，由 provider-log 模块异步更新。滑动窗口基
 | code | varchar(100) | unique, not null | 角色编码 |
 | description | text | nullable | 描述 |
 | is_system | boolean | not null default false | 是否系统内置（不可删除） |
+| is_active | boolean | not null default true | 是否启用（软删除标记） |
 | created_at | timestamptz | not null | 创建时间 |
 
 ### permissions

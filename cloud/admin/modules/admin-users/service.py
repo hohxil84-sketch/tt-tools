@@ -212,20 +212,33 @@ async def _batch_last_logins(
 async def _batch_role_names(
     db: AsyncSession, user_ids: list[str]
 ) -> dict[str, str]:
-    """批量查询用户 RBAC 角色名称（user_roles JOIN roles，逗号拼接）。"""
+    """批量查询用户 RBAC 角色名称（user_roles JOIN roles，逗号拼接）。
+
+    使用 PostgreSQL 兼容的 string_agg 聚合函数（替代 MySQL/SQLite 的 group_concat）。
+    """
     if not user_ids:
         return {}
     try:
-        ur = Base.metadata.tables["user_roles"]
-        r = Base.metadata.tables["roles"]
+        ur = Base.metadata.tables.get("user_roles")
+        r = Base.metadata.tables.get("roles")
+        if ur is None or r is None:
+            import logging; logging.getLogger("admin-users").warning(
+                "user_roles 或 roles 表未注册，无法查询 RBAC 角色名称"
+            )
+            return {}
+        # string_agg 是 PostgreSQL 聚合函数，SQLite 3.44+ 也支持
+        # 仅统计启用中的角色，已停用角色不显示
         result = await db.execute(
-            select(ur.c.user_id, func.group_concat(r.c.name, ', ').label("role_names"))
-            .join(r, r.c.id == ur.c.role_id)
+            select(ur.c.user_id, func.string_agg(r.c.name, ', ').label("role_names"))
+            .join(r, (r.c.id == ur.c.role_id) & (r.c.is_active == True))
             .where(ur.c.user_id.in_(user_ids))
             .group_by(ur.c.user_id)
         )
         return {row[0]: row[1] for row in result.all()}
     except Exception:
+        import logging; logging.getLogger("admin-users").warning(
+            "_batch_role_names 查询失败", exc_info=True
+        )
         return {}
 
 
@@ -281,12 +294,16 @@ async def _batch_period_ends(
     if not user_ids:
         return {}
     try:
-        ca = Base.metadata.tables["credit_accounts"]
+        ca = Base.metadata.tables.get("credit_accounts")
+        if ca is None:
+            import logging; logging.getLogger("admin-users").warning("credit_accounts 表未注册，period_end 无法查询")
+            return {}
         result = await db.execute(
             select(ca.c.user_id, ca.c.period_end).where(ca.c.user_id.in_(user_ids))
         )
         return {row[0]: row[1] for row in result.all()}
     except Exception:
+        import logging; logging.getLogger("admin-users").warning("_batch_period_ends 查询失败", exc_info=True)
         return {}
 
 
@@ -432,6 +449,7 @@ async def list_users(
     status: Optional[str] = None,
     search: Optional[str] = None,
     role: Optional[str] = None,
+    order: str = "desc",
 ) -> UserListData:
     """查询用户列表，支持分页、状态筛选、角色筛选和账号/名称模糊搜索。
 
@@ -499,8 +517,10 @@ async def list_users(
     total_result = await db.execute(count_query)
     total = total_result.scalar_one()
 
-    # 查询分页数据
-    query = query.order_by(User.created_at.desc()).offset(offset).limit(limit)
+    # 查询分页数据（按创建时间排序，默认倒序）
+    query = query.order_by(
+        User.created_at.desc() if order == "desc" else User.created_at.asc()
+    ).offset(offset).limit(limit)
     result = await db.execute(query)
     rows = result.scalars().all()
 
@@ -708,7 +728,7 @@ async def create_user(
 
     创建规则：
     - display_name 必填
-    - role=user 时必须选套餐（plan_id）
+    - 套餐（plan_id）必选（管理员和普通用户都必须选择）
     - role=admin 时必须分配 RBAC 角色（role_ids）
 
     Args:
@@ -717,7 +737,7 @@ async def create_user(
         password: 明文密码（将 bcrypt 哈希存储）
         display_name: 展示名称（必填）
         role: 用户角色（默认 user）
-        plan_id: 套餐 ID（UUID），普通用户必选
+        plan_id: 套餐 ID（UUID），必选
         role_ids: RBAC 角色 ID 列表，管理员必选
 
     Returns:
@@ -734,10 +754,10 @@ async def create_user(
             status_code=422,
         )
 
-    if role == "user" and not plan_id:
+    if not plan_id:
         raise AppError(
             code=ErrorCode.VALIDATION_ERROR,
-            message="普通用户必须选择套餐",
+            message="必须选择套餐",
             status_code=422,
         )
 
@@ -862,7 +882,10 @@ async def update_user(
 
 
 async def delete_user(db: AsyncSession, user_id: str) -> dict:
-    """删除用户（硬删除，同时清理关联设备）。
+    """软删除用户。
+
+    将用户状态设为 deleted，关联设备状态设为 removed，清除登录会话。
+    保留所有关联数据（订单、额度、审计日志等），不做硬删除。
 
     Args:
         db: 数据库异步会话
@@ -872,7 +895,7 @@ async def delete_user(db: AsyncSession, user_id: str) -> dict:
         {"deleted": True}
 
     Raises:
-        AppError: 用户不存在时抛出 404
+        AppError: 用户不存在或已删除时抛出 404
     """
     # 查询用户
     result = await db.execute(select(User).where(User.id == user_id))
@@ -885,23 +908,32 @@ async def delete_user(db: AsyncSession, user_id: str) -> dict:
             status_code=404,
         )
 
-    # 按外键依赖顺序清理所有关联数据（raw SQL 避免跨模块 ORM 冲突）
-    await db.execute(text("DELETE FROM credit_ledger WHERE user_id = :uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM usage_events WHERE user_id = :uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM provider_call_log WHERE user_id = :uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM ai_tasks WHERE user_id = :uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM orders WHERE user_id = :uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM admin_audit_logs WHERE admin_user_id = :uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM user_roles WHERE user_id = :uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM auth_sessions WHERE user_id = :uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM credit_accounts WHERE user_id = :uid"), {"uid": user_id})
-    # 删除关联设备
-    await db.execute(text("DELETE FROM devices WHERE user_id = :uid"), {"uid": user_id})
+    if user.status == "deleted":
+        raise AppError(
+            code="USER_ALREADY_DELETED",
+            message=f"用户 {user_id} 已被删除",
+            status_code=404,
+        )
 
-    # 删除用户
-    await db.delete(user)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # 软删除用户
+    user.status = "deleted"
+    user.updated_at = now
+
+    # 软删除关联设备
+    await db.execute(
+        text("UPDATE devices SET status = 'removed', updated_at = :now WHERE user_id = :uid AND status != 'removed'"),
+        {"uid": user_id, "now": now},
+    )
+
+    # 清除登录会话（强制下线）
+    await db.execute(
+        text("DELETE FROM auth_sessions WHERE user_id = :uid"),
+        {"uid": user_id},
+    )
+
     await db.flush()
-
     return {"deleted": True}
 
 
@@ -1161,7 +1193,9 @@ async def update_device_status(
 
 
 async def delete_device(db: AsyncSession, device_id: str) -> dict:
-    """删除设备（硬删除）。
+    """软删除设备。
+
+    将设备状态设为 removed，保留设备记录。
 
     Args:
         db: 数据库异步会话
@@ -1171,7 +1205,7 @@ async def delete_device(db: AsyncSession, device_id: str) -> dict:
         {"deleted": True}
 
     Raises:
-        AppError: 设备不存在时抛出 404
+        AppError: 设备不存在或已移除时抛出 404
     """
     result = await db.execute(select(Device).where(Device.id == device_id))
     device = result.scalar_one_or_none()
@@ -1183,7 +1217,16 @@ async def delete_device(db: AsyncSession, device_id: str) -> dict:
             status_code=404,
         )
 
-    await db.delete(device)
+    if device.status == "removed":
+        raise AppError(
+            code="DEVICE_ALREADY_REMOVED",
+            message=f"设备 {device_id} 已被移除",
+            status_code=404,
+        )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    device.status = "removed"
+    device.updated_at = now
     await db.flush()
 
     return {"deleted": True}
