@@ -266,17 +266,18 @@ async def seed_pricing_tables(db_session: AsyncSession):
 
 @pytest_asyncio.fixture
 async def test_user(db_session: AsyncSession, seed_plans, seed_pricing_tables):
-    """创建一个测试用户（标准套餐）并返回 ORM 对象。
+    """创建一个测试用户（绑定标准套餐）并返回 ORM 对象。
 
     密码为 "test123"，已 bcrypt 哈希。
     """
+    std_plan = next((p for p in seed_plans if p.plan_tier == "standard"), None)
     user = User(
         account="test@example.com",
         password_hash=hash_password("test123"),
         display_name="测试用户",
         role="user",
         status="active",
-        plan_id=None,
+        plan_id=std_plan.id if std_plan else None,
     )
     db_session.add(user)
     await db_session.flush()
@@ -284,15 +285,16 @@ async def test_user(db_session: AsyncSession, seed_plans, seed_pricing_tables):
 
 
 @pytest_asyncio.fixture
-async def free_user(db_session: AsyncSession, seed_plans):
-    """创建一个免费套餐测试用户。"""
+async def free_user(db_session: AsyncSession, seed_plans, seed_pricing_tables):
+    """创建一个免费套餐测试用户（绑定免费套餐）。"""
+    free_plan = next((p for p in seed_plans if p.plan_tier == "free"), None)
     user = User(
         account="free@example.com",
         password_hash=hash_password("test123"),
         display_name="免费用户",
         role="user",
         status="active",
-        plan_id=None,
+        plan_id=free_plan.id if free_plan else None,
     )
     db_session.add(user)
     await db_session.flush()
@@ -300,15 +302,16 @@ async def free_user(db_session: AsyncSession, seed_plans):
 
 
 @pytest_asyncio.fixture
-async def pro_user(db_session: AsyncSession, seed_plans):
-    """创建一个专业套餐测试用户。"""
+async def pro_user(db_session: AsyncSession, seed_plans, seed_pricing_tables):
+    """创建一个专业套餐测试用户（绑定专业套餐）。"""
+    pro_plan = next((p for p in seed_plans if p.plan_tier == "pro"), None)
     user = User(
         account="pro@example.com",
         password_hash=hash_password("test123"),
         display_name="专业用户",
         role="user",
         status="active",
-        plan_id=None,
+        plan_id=pro_plan.id if pro_plan else None,
     )
     db_session.add(user)
     await db_session.flush()
@@ -340,16 +343,13 @@ async def free_credit_account(db_session: AsyncSession, free_user, seed_plans):
 
 @pytest_asyncio.fixture
 async def auth_headers(test_user, test_credit_account):
-    """生成测试用户的有效 Bearer Token 请求头。
-
-    直接使用 cloud-shared 的 JWT 签发（不经过登录流程），方便测试。
-    """
+    """生成测试用户的有效 Bearer Token 请求头。"""
     from cloud.shared import create_access_token
     token = create_access_token(
         user_id=test_user.id,
         device_id=None,
         role=test_user.role,
-        plan_id=None,
+        plan_id=test_user.plan_id,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -362,7 +362,7 @@ async def free_auth_headers(free_user):
         user_id=free_user.id,
         device_id=None,
         role=free_user.role,
-        plan_id=None,
+        plan_id=free_user.plan_id,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -375,6 +375,6 @@ async def pro_auth_headers(pro_user):
         user_id=pro_user.id,
         device_id=None,
         role=pro_user.role,
-        plan_id=None,
+        plan_id=pro_user.plan_id,
     )
     return {"Authorization": f"Bearer {token}"}
