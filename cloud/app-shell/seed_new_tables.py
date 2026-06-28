@@ -281,6 +281,106 @@ async def seed():
             ), {"uid": admin_id, "rid": role_ids["admin"]})
             print(f"[OK] user_roles: {admin_account} → super admin role")
 
+        # ============================================================
+        # 8. provider_model_pricing — 模型定价种子数据（来自 cost.py）
+        # ============================================================
+        model_pricing_data = [
+            ("deepseek", "deepseek-chat", 1.0, 2.0),
+            ("deepseek", "deepseek-v4-flash", 1.0, 2.0),
+            ("deepseek", "deepseek-v4-pro", 4.0, 16.0),
+            ("deepseek", "deepseek-reasoner", 4.0, 16.0),
+            ("openai", "gpt-4o", 18.31, 73.24),
+            ("openai", "gpt-4o-mini", 1.10, 4.39),
+            ("openai", "gpt-4-turbo", 73.24, 219.72),
+            ("anthropic", "claude-3-opus", 109.86, 549.30),
+            ("anthropic", "claude-3-sonnet", 21.97, 109.86),
+            ("anthropic", "claude-3-haiku", 1.83, 9.15),
+            ("doubao", "doubao-text-default", 1.0, 2.0),
+            ("doubao", "doubao-image-default", 0.0, 0.0),
+            ("__default__", "__default__", 1.0, 2.0),
+        ]
+        for pn, mn, ip, op in model_pricing_data:
+            await db.execute(text(
+                "INSERT INTO provider_model_pricing "
+                "(id, provider_name, model_name, input_price, output_price, currency, is_active, created_at, updated_at) "
+                "VALUES (:id, :pn, :mn, :ip, :op, 'CNY', TRUE, :ts, :ts) "
+                "ON CONFLICT (provider_name, model_name) DO UPDATE SET "
+                "input_price = EXCLUDED.input_price, output_price = EXCLUDED.output_price"
+            ), {"id": str(uuid.uuid4()), "pn": pn, "mn": mn, "ip": ip, "op": op, "ts": _now()})
+        print(f"[OK] provider_model_pricing: {len(model_pricing_data)} rows")
+
+        # ============================================================
+        # 9. feature_pricing — 功能起步扣点种子数据
+        # ============================================================
+        feature_pricing_data = [
+            ("ai_copy_cloud", 2),
+            ("ai_render_cloud", 3),
+            ("upscale_image_cloud", 3),
+            ("vectorize_image_cloud", 3),
+            ("ai_edit_image_cloud", 5),
+            ("remove_bg_cloud", 2),
+            ("ocr_cloud", 2),
+        ]
+        for fc_code, mc in feature_pricing_data:
+            await db.execute(text(
+                "INSERT INTO feature_pricing (feature_code, min_credits, default_max_tokens, updated_at) "
+                "VALUES (:fc, :mc, 2048, :ts) "
+                "ON CONFLICT (feature_code) DO UPDATE SET min_credits = EXCLUDED.min_credits"
+            ), {"fc": fc_code, "mc": mc, "ts": _now()})
+        print(f"[OK] feature_pricing: {len(feature_pricing_data)} rows")
+
+        # ============================================================
+        # 10. system_config — 系统配置种子数据
+        # ============================================================
+        await db.execute(text(
+            "INSERT INTO system_config (key, value, updated_at) "
+            "VALUES ('credits_exchange_rate', '10', :ts) "
+            "ON CONFLICT (key) DO NOTHING"
+        ), {"ts": _now()})
+        print("[OK] system_config: credits_exchange_rate = 10")
+
+        # ============================================================
+        # 11. credit_packages — 充值套餐种子数据
+        # ============================================================
+        package_data = [
+            ("credits_100", "100点额度包", 100, 1000, 1),
+            ("credits_500", "500点超值包", 500, 4000, 2),
+            ("credits_2000", "2000点特惠包", 2000, 15000, 3),
+        ]
+        for pc, nm, ca, pr, so in package_data:
+            await db.execute(text(
+                "INSERT INTO credit_packages "
+                "(id, product_code, name, credit_amount, price_cents, sort_order, is_active, created_at, updated_at) "
+                "VALUES (:id, :pc, :nm, :ca, :pr, :so, TRUE, :ts, :ts) "
+                "ON CONFLICT (product_code) DO UPDATE SET "
+                "name = EXCLUDED.name, credit_amount = EXCLUDED.credit_amount, "
+                "price_cents = EXCLUDED.price_cents"
+            ), {"id": str(uuid.uuid4()), "pc": pc, "nm": nm, "ca": ca, "pr": pr, "so": so, "ts": _now()})
+        print(f"[OK] credit_packages: {len(package_data)} rows")
+
+        # ============================================================
+        # 12. 已有 plans 数据迁移 — 设置 plan_tier 和 price_cents
+        # ============================================================
+        await db.execute(text(
+            "UPDATE plans SET plan_tier = 'free' WHERE monthly_grant <= 10 AND plan_tier = ''"
+        ))
+        await db.execute(text(
+            "UPDATE plans SET plan_tier = 'standard' WHERE monthly_grant > 10 AND monthly_grant <= 1000 AND plan_tier = ''"
+        ))
+        await db.execute(text(
+            "UPDATE plans SET plan_tier = 'pro' WHERE monthly_grant > 1000 AND plan_tier = ''"
+        ))
+        await db.execute(text(
+            "UPDATE plans SET price_cents = 0 WHERE plan_tier = 'free' AND price_cents = 0"
+        ))
+        await db.execute(text(
+            "UPDATE plans SET price_cents = 2900 WHERE plan_tier = 'standard' AND price_cents = 0"
+        ))
+        await db.execute(text(
+            "UPDATE plans SET price_cents = 9900 WHERE plan_tier = 'pro' AND price_cents = 0"
+        ))
+        print("[OK] plans migrated: plan_tier + price_cents set")
+
         await db.commit()
         print("\nAll seed data inserted!")
 

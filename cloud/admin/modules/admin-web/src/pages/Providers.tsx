@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiRequest } from '../api/client';
 import { Card, Tbl, Badge, ActBtn, Pager, Sheet, Modal, DetailRows, secBtn, inpS, selS, priBtn, showToast } from '../components/shared';
 
-interface P { id: string; name: string; provider_type: string; is_enabled: boolean; priority?: number; created_at: string; api_key_encrypted?: string | null; base_url?: string | null; models_json?: any; updated_at?: string; }
+interface P { id: string; name: string; provider_type: string; is_enabled: boolean; priority?: number; created_at: string; api_key_encrypted?: string | null; base_url?: string | null; updated_at?: string; }
 interface List { items: P[]; total: number; limit: number; offset: number; }
 export default function Providers() {
   const [d, setD] = useState<List | null>(null);
@@ -13,7 +13,7 @@ export default function Providers() {
   const [delTarget, setDelTarget] = useState<P | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [limit, setLimit] = useState(10);
-  const [form, setForm] = useState({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', models_json: '', priority: '0' });
+  const [form, setForm] = useState({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', priority: '0' });
 
   const load = useCallback(async () => {
     setErr('');
@@ -30,20 +30,16 @@ export default function Providers() {
 
   const doCreate = async () => {
     try {
-      let models: any = undefined;
-      if (form.models_json.trim()) { try { models = JSON.parse(form.models_json); } catch { setErr('models_json 格式错误'); return; } }
-      await apiRequest('/admin/providers', { method: 'POST', body: { name: form.name, provider_type: form.provider_type, api_key_encrypted: form.api_key_encrypted || undefined, base_url: form.base_url || undefined, models_json: models, priority: parseInt(form.priority) || 0 } });
+      await apiRequest('/admin/providers', { method: 'POST', body: { name: form.name, provider_type: form.provider_type, api_key_encrypted: form.api_key_encrypted || undefined, base_url: form.base_url || undefined, priority: parseInt(form.priority) || 0 } });
       showToast('创建成功', 'success');
-      setCreate(false); setForm({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', models_json: '', priority: '0' }); setRefreshKey(k => k + 1); load();
+      setCreate(false); setForm({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', priority: '0' }); setRefreshKey(k => k + 1); load();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '创建失败', 'error'); }
   };
 
   const doUpdate = async () => {
     if (!edit) return;
     try {
-      let models: any = undefined;
-      if (form.models_json.trim()) { try { models = JSON.parse(form.models_json); } catch { setErr('models_json 格式错误'); return; } }
-      await apiRequest(`/admin/providers/${edit.id}`, { method: 'PATCH', body: { name: form.name, provider_type: form.provider_type, api_key_encrypted: form.api_key_encrypted || undefined, base_url: form.base_url || undefined, models_json: models, priority: parseInt(form.priority) || 0 } });
+      await apiRequest(`/admin/providers/${edit.id}`, { method: 'PATCH', body: { name: form.name, provider_type: form.provider_type, api_key_encrypted: form.api_key_encrypted || undefined, base_url: form.base_url || undefined, priority: parseInt(form.priority) || 0 } });
       showToast('保存成功', 'success');
       setEdit(null); setRefreshKey(k => k + 1); load();
     } catch (e: unknown) { showToast(e instanceof Error ? e.message : '更新失败', 'error'); }
@@ -57,14 +53,14 @@ export default function Providers() {
 
   const openEdit = (p: P) => {
     setEdit(p);
-    setForm({ name: p.name, provider_type: p.provider_type, api_key_encrypted: '', base_url: p.base_url || '', models_json: p.models_json ? JSON.stringify(p.models_json) : '', priority: String(p.priority ?? 0) });
+    setForm({ name: p.name, provider_type: p.provider_type, api_key_encrypted: '', base_url: p.base_url || '', priority: String(p.priority ?? 0) });
   };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>Provider 管理</h2>
-        <button onClick={() => { setCreate(true); setForm({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', models_json: '', priority: '0' }); }} style={priBtn}>新增 Provider</button>
+        <button onClick={() => { setCreate(true); setForm({ name: '', provider_type: 'deepseek', api_key_encrypted: '', base_url: '', priority: '0' }); }} style={priBtn}>新增 Provider</button>
       </div>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
         <input placeholder="Provider 类型" value={providerType} onChange={e => { setProviderType(e.target.value); setPg(0); }} style={inpS} />
@@ -99,7 +95,6 @@ export default function Providers() {
           ['创建时间', new Date(detail.created_at).toLocaleString('zh-CN')],
           ['更新时间', detail.updated_at ? new Date(detail.updated_at).toLocaleString('zh-CN') : '—'],
         ]} />
-        {detail.models_json && <pre style={{ marginTop: 12, padding: 8, background: 'var(--gray-50)', borderRadius: 4, fontSize: 11 }}>{JSON.stringify(detail.models_json, null, 2)}</pre>}
       </Sheet>}
 
       {/* 创建/编辑 Sheet */}
@@ -112,7 +107,6 @@ export default function Providers() {
           <input placeholder="类型 (如 deepseek / openai / anthropic)" value={form.provider_type} onChange={e => setForm({ ...form, provider_type: e.target.value })} style={inpS} />
           <input placeholder="留空则保持原 Key" type="password" value={form.api_key_encrypted} onChange={e => setForm({ ...form, api_key_encrypted: e.target.value })} style={inpS} />
           <input placeholder="Base URL (如 https://api.deepseek.com)" value={form.base_url} onChange={e => setForm({ ...form, base_url: e.target.value })} style={inpS} />
-          <textarea placeholder='models_json (如 {"text":"deepseek-chat","image":"doubao-image"})' value={form.models_json} onChange={e => setForm({ ...form, models_json: e.target.value })} style={{ ...inpS, minHeight: 80, fontFamily: 'monospace' }} />
           <input placeholder="优先级 (数字越大越优先，默认 0)" type="number" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} style={inpS} />
           <button type="button" onClick={create ? doCreate : doUpdate} style={priBtn}>{create ? '创建' : '保存'}</button>
         </div>

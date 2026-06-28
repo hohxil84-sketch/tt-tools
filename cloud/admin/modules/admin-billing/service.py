@@ -259,6 +259,8 @@ async def list_plans(db: AsyncSession) -> PlanListData:
             monthly_grant=p.monthly_grant,
             expire_days=getattr(p, 'expire_days', 0) or 0,
             is_default=bool(getattr(p, 'is_default', False)),
+            plan_tier=getattr(p, 'plan_tier', None) or None,
+            enabled_features_json=getattr(p, 'enabled_features_json', None) or None,
             status=p.status,
             created_at=p.created_at,
         )
@@ -298,6 +300,7 @@ async def get_plan_detail(db: AsyncSession, plan_id: str) -> PlanDetail:
         name=plan.name,
         monthly_grant=plan.monthly_grant,
         expire_days=getattr(plan, 'expire_days', 0) or 0,
+        plan_tier=getattr(plan, 'plan_tier', None) or None,
         enabled_features_json=plan.enabled_features_json or {},
         status=plan.status,
         created_at=plan.created_at,
@@ -347,6 +350,7 @@ async def create_plan(
     monthly_grant: int = 0,
     expire_days: int = 0,
     is_default: bool = False,
+    plan_tier: str = "standard",
     enabled_features_json: Optional[dict] = None,
 ) -> PlanDetail:
     """创建新套餐。
@@ -397,6 +401,7 @@ async def create_plan(
         monthly_grant=monthly_grant,
         expire_days=expire_days,
         is_default=is_default,
+        plan_tier=plan_tier,
         enabled_features_json=enabled_features_json or {},
         status="active",
         created_at=now,
@@ -410,6 +415,7 @@ async def create_plan(
         name=plan.name,
         monthly_grant=plan.monthly_grant,
         expire_days=getattr(plan, 'expire_days', 0) or 0,
+        plan_tier=getattr(plan, 'plan_tier', None) or None,
         enabled_features_json=plan.enabled_features_json or {},
         status=plan.status,
         created_at=plan.created_at,
@@ -424,6 +430,7 @@ async def update_plan(
     monthly_grant: Optional[int] = None,
     expire_days: Optional[int] = None,
     is_default: Optional[bool] = None,
+    plan_tier: Optional[str] = None,
     enabled_features_json: Optional[dict] = None,
 ) -> PlanDetail:
     """更新套餐配置。
@@ -466,6 +473,8 @@ async def update_plan(
         if is_default:
             await db.execute(text("UPDATE plans SET is_default = false WHERE is_default = true"))
         plan.is_default = is_default
+    if plan_tier is not None:
+        plan.plan_tier = plan_tier
     if enabled_features_json is not None:
         await _validate_features(db, enabled_features_json)
         plan.enabled_features_json = enabled_features_json
@@ -478,6 +487,7 @@ async def update_plan(
         name=plan.name,
         monthly_grant=plan.monthly_grant,
         expire_days=getattr(plan, 'expire_days', 0) or 0,
+        plan_tier=getattr(plan, 'plan_tier', None) or None,
         enabled_features_json=plan.enabled_features_json or {},
         status=plan.status,
         created_at=plan.created_at,
@@ -529,6 +539,7 @@ async def update_plan_status(
         name=plan.name,
         monthly_grant=plan.monthly_grant,
         expire_days=getattr(plan, 'expire_days', 0) or 0,
+        plan_tier=getattr(plan, 'plan_tier', None) or None,
         enabled_features_json=plan.enabled_features_json or {},
         status=plan.status,
         created_at=plan.created_at,
@@ -1179,3 +1190,272 @@ async def _get_order_function(func_name: str):
         _spec.loader.exec_module(_mod)
         return getattr(_mod, func_name)
     raise RuntimeError(f"Cannot load {func_name} from orders_recharge")
+
+
+# ============================================================
+# 模型定价管理（provider_model_pricing 表 CRUD）
+# ============================================================
+
+
+async def list_model_pricing(
+    db: AsyncSession,
+    provider_id: Optional[str] = None,
+    is_active: Optional[bool] = None,
+) -> list[dict]:
+    """列出所有 Provider 模型定价（JOIN providers 获取名称）。"""
+    from sqlalchemy import text as _t
+    conditions = ["1=1"]
+    params: dict = {}
+    if provider_id:
+        conditions.append("pmp.provider_id = :pid")
+        params["pid"] = provider_id
+    if is_active is not None:
+        conditions.append("pmp.is_active = :ia")
+        params["ia"] = is_active
+
+    result = await db.execute(
+        _t(
+            f"SELECT pmp.id, p.name, pmp.model_name, pmp.input_price, pmp.output_price, "
+            f"pmp.currency, pmp.is_active, pmp.created_at, pmp.updated_at, pmp.provider_id "
+            f"FROM provider_model_pricing pmp "
+            f"JOIN providers p ON pmp.provider_id = p.id "
+            f"WHERE {' AND '.join(conditions)} "
+            f"ORDER BY p.name, pmp.model_name"
+        ),
+        params,
+    )
+    rows = result.all()
+    return [
+        {
+            "id": r[0], "provider_name": r[1], "model_name": r[2],
+            "provider_id": r[9],
+            "input_price": float(r[3]), "output_price": float(r[4]),
+            "currency": r[5], "is_active": r[6],
+            "created_at": r[7].isoformat() if r[7] else None,
+            "updated_at": r[8].isoformat() if r[8] else None,
+        }
+        for r in rows
+    ]
+
+
+async def create_model_pricing(
+    db: AsyncSession,
+    provider_id: str,
+    model_name: str,
+    input_price: float,
+    output_price: float,
+    currency: str = "CNY",
+    capability: str = "text",
+) -> dict:
+    """新增模型定价（关联 Provider UUID + capability）。"""
+    import uuid as _uuid
+    from sqlalchemy import text as _t
+    now = datetime.now(timezone.utc)
+    id_ = str(_uuid.uuid4())
+
+    await db.execute(
+        _t(
+            "INSERT INTO provider_model_pricing "
+            "(id, provider_id, model_name, capability, input_price, output_price, currency, created_at, updated_at) "
+            "VALUES (:id, :pid, :mn, :cap, :ip, :op, :cur, :now, :now)"
+        ),
+        {"id": id_, "pid": provider_id, "mn": model_name, "cap": capability,
+         "ip": input_price, "op": output_price, "cur": currency, "now": now},
+    )
+    await db.flush()
+    # 查 provider name 返回
+    result = await db.execute(_t("SELECT name FROM providers WHERE id = :pid"), {"pid": provider_id})
+    row = result.fetchone()
+    pname = row[0] if row else ""
+    return {"id": id_, "provider_name": pname, "model_name": model_name}
+
+
+async def update_model_pricing(
+    db: AsyncSession, pricing_id: str, **kwargs,
+) -> None:
+    """更新模型定价（部分字段）。"""
+    from sqlalchemy import text as _t
+    updates = []
+    params = {"id": pricing_id, "now": datetime.now(timezone.utc)}
+    for field in ("input_price", "output_price", "currency", "is_active",
+                  "provider_name", "model_name"):
+        if field in kwargs:
+            updates.append(f"{field} = :{field}")
+            params[field] = kwargs[field]
+    if not updates:
+        return
+    updates.append("updated_at = :now")
+    await db.execute(
+        _t(f"UPDATE provider_model_pricing SET {', '.join(updates)} WHERE id = :id"),
+        params,
+    )
+    await db.flush()
+
+
+# ============================================================
+# 功能定价管理（feature_pricing 表 CRUD）
+# ============================================================
+
+
+async def list_feature_pricing(db: AsyncSession) -> list[dict]:
+    """列出所有功能起步扣点。"""
+    from sqlalchemy import text as _t
+    result = await db.execute(
+        _t(
+            "SELECT fp.feature_code, fc.name, fp.min_credits, fp.default_max_tokens, fp.updated_at "
+            "FROM feature_pricing fp LEFT JOIN feature_codes fc ON fp.feature_code = fc.code "
+            "ORDER BY fp.feature_code"
+        ),
+    )
+    rows = result.all()
+    return [
+        {
+            "feature_code": r[0], "feature_name": r[1] or r[0],
+            "min_credits": r[2], "default_max_tokens": r[3],
+            "updated_at": r[4].isoformat() if r[4] else None,
+        }
+        for r in rows
+    ]
+
+
+async def update_feature_pricing(
+    db: AsyncSession, feature_code: str, min_credits: int,
+    default_max_tokens: Optional[int] = None,
+) -> None:
+    """更新功能起步扣点。"""
+    from sqlalchemy import text as _t
+    now = datetime.now(timezone.utc)
+    # UPSERT
+    result = await db.execute(
+        _t(
+            "UPDATE feature_pricing SET min_credits = :mc, updated_at = :now "
+            "WHERE feature_code = :fc"
+        ),
+        {"mc": min_credits, "now": now, "fc": feature_code},
+    )
+    if result.rowcount == 0:
+        await db.execute(
+            _t(
+                "INSERT INTO feature_pricing (feature_code, min_credits, default_max_tokens, updated_at) "
+                "VALUES (:fc, :mc, :dmt, :now)"
+            ),
+            {"fc": feature_code, "mc": min_credits,
+             "dmt": default_max_tokens or 2048, "now": now},
+        )
+    elif default_max_tokens is not None:
+        await db.execute(
+            _t(
+                "UPDATE feature_pricing SET default_max_tokens = :dmt "
+                "WHERE feature_code = :fc"
+            ),
+            {"dmt": default_max_tokens, "fc": feature_code},
+        )
+    await db.flush()
+
+
+# ============================================================
+# 系统配置管理（system_config 表 CRUD）
+# ============================================================
+
+
+async def get_system_config(db: AsyncSession) -> dict:
+    """获取所有系统配置。"""
+    from sqlalchemy import text as _t
+    result = await db.execute(
+        _t("SELECT key, value, updated_at FROM system_config ORDER BY key"),
+    )
+    rows = result.all()
+    return {
+        r[0]: {"value": r[1], "updated_at": r[2].isoformat() if r[2] else None}
+        for r in rows
+    }
+
+
+async def update_system_config(db: AsyncSession, key: str, value: str) -> None:
+    """更新系统配置（UPSERT）。"""
+    from sqlalchemy import text as _t
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        _t("UPDATE system_config SET value = :val, updated_at = :now WHERE key = :key"),
+        {"val": value, "now": now, "key": key},
+    )
+    if result.rowcount == 0:
+        await db.execute(
+            _t("INSERT INTO system_config (key, value, updated_at) VALUES (:key, :val, :now)"),
+            {"key": key, "val": value, "now": now},
+        )
+    await db.flush()
+
+
+# ============================================================
+# 充值套餐管理（credit_packages 表 CRUD）
+# ============================================================
+
+
+async def list_credit_packages_admin(db: AsyncSession) -> list[dict]:
+    """列出所有充值套餐（含停用）。"""
+    from sqlalchemy import text as _t
+    result = await db.execute(
+        _t(
+            "SELECT id, product_code, name, credit_amount, price_cents, "
+            "is_active, sort_order, created_at, updated_at "
+            "FROM credit_packages ORDER BY sort_order"
+        ),
+    )
+    rows = result.all()
+    return [
+        {
+            "id": r[0], "product_code": r[1], "name": r[2],
+            "credit_amount": r[3], "price_cents": r[4],
+            "is_active": r[5], "sort_order": r[6],
+            "created_at": r[7].isoformat() if r[7] else None,
+            "updated_at": r[8].isoformat() if r[8] else None,
+        }
+        for r in rows
+    ]
+
+
+async def create_credit_package(
+    db: AsyncSession,
+    product_code: str, name: str,
+    credit_amount: int, price_cents: int,
+    sort_order: int = 0,
+) -> dict:
+    """新增充值套餐。"""
+    import uuid as _uuid
+    from sqlalchemy import text as _t
+    now = datetime.now(timezone.utc)
+    id_ = str(_uuid.uuid4())
+    await db.execute(
+        _t(
+            "INSERT INTO credit_packages "
+            "(id, product_code, name, credit_amount, price_cents, sort_order, created_at, updated_at) "
+            "VALUES (:id, :pc, :nm, :ca, :pr, :so, :now, :now)"
+        ),
+        {"id": id_, "pc": product_code, "nm": name,
+         "ca": credit_amount, "pr": price_cents, "so": sort_order, "now": now},
+    )
+    await db.flush()
+    return {"id": id_, "product_code": product_code, "name": name}
+
+
+async def update_credit_package(
+    db: AsyncSession, package_id: str, **kwargs,
+) -> None:
+    """更新充值套餐。"""
+    from sqlalchemy import text as _t
+    updates = []
+    params = {"id": package_id, "now": datetime.now(timezone.utc)}
+    for field in ("product_code", "name", "credit_amount", "price_cents",
+                  "is_active", "sort_order"):
+        if field in kwargs:
+            updates.append(f"{field} = :{field}")
+            params[field] = kwargs[field]
+    if not updates:
+        return
+    updates.append("updated_at = :now")
+    await db.execute(
+        _t(f"UPDATE credit_packages SET {', '.join(updates)} WHERE id = :id"),
+        params,
+    )
+    await db.flush()

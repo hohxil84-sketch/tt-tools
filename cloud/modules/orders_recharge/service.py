@@ -98,21 +98,63 @@ def _get_grant_credits():
 
 
 # ============================================================
-# 定价配置（服务端常量，单位：分）
+# 定价配置（从 DB 查询，替代硬编码）
 # ============================================================
 
-# 套餐价格（单位：分）
-PLAN_PRICES: dict[str, int] = {
-    "standard": 2900,  # ¥29/月
-    "pro": 9900,       # ¥99/月
-}
 
-# 额度包价格（单位：分）
-CREDIT_PACKAGES: dict[str, dict[str, int]] = {
-    "credits_100":  {"amount": 100,  "price_cents": 1000},   # ¥10
-    "credits_500":  {"amount": 500,  "price_cents": 4000},   # ¥40
-    "credits_2000": {"amount": 2000, "price_cents": 15000},  # ¥150
-}
+async def _get_product_pricing(
+    db: AsyncSession, order_type: str, product_code: str
+) -> tuple[int, Optional[int]]:
+    """从 DB 查询产品定价（替代 PLAN_PRICES 和 CREDIT_PACKAGES 硬编码）。
+
+    Args:
+        db: 数据库异步会话
+        order_type: plan / credits
+        product_code: 产品编码
+
+    Returns:
+        (price_cents, credit_amount or None)
+
+    Raises:
+        AppError: 无效的产品编码
+    """
+    if order_type == "plan":
+        result = await db.execute(
+            text("SELECT price_cents FROM plans WHERE id = :pid AND status = 'active'"),
+            {"pid": product_code},
+        )
+        row = result.fetchone()
+        if row is None:
+            raise AppError(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=f"无效的套餐编码：{product_code}",
+                status_code=400,
+            )
+        return row[0], None
+
+    elif order_type == "credits":
+        result = await db.execute(
+            text(
+                "SELECT credit_amount, price_cents FROM credit_packages "
+                "WHERE product_code = :pc AND is_active = TRUE"
+            ),
+            {"pc": product_code},
+        )
+        row = result.fetchone()
+        if row is None:
+            raise AppError(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=f"无效的额度包编码：{product_code}，可选的产品请通过 GET /products 查询",
+                status_code=400,
+            )
+        return row[1], row[0]
+
+    else:
+        raise AppError(
+            code=ErrorCode.VALIDATION_ERROR,
+            message=f"无效的订单类型：{order_type}，可选：plan / credits",
+            status_code=400,
+        )
 
 
 # ============================================================
@@ -132,40 +174,15 @@ def _generate_order_no() -> str:
 # ============================================================
 
 
-def _get_price_and_credit_amount(
-    order_type: str, product_code: str
+async def _get_price_and_credit_amount(
+    db: AsyncSession, order_type: str, product_code: str
 ) -> tuple[int, Optional[int]]:
-    """根据订单类型和产品编码查询价格和额度数量。
+    """从 DB 查询定价（替代硬编码 PLAN_PRICES 和 CREDIT_PACKAGES）。
 
     Raises:
         AppError: 无效的 order_type 或 product_code
     """
-    if order_type == "plan":
-        price = PLAN_PRICES.get(product_code)
-        if price is None:
-            raise AppError(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=f"无效的套餐编码：{product_code}，可选：standard / pro",
-                status_code=400,
-            )
-        return price, None
-
-    elif order_type == "credits":
-        package = CREDIT_PACKAGES.get(product_code)
-        if package is None:
-            raise AppError(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=f"无效的额度包编码：{product_code}，可选：credits_100 / credits_500 / credits_2000",
-                status_code=400,
-            )
-        return package["price_cents"], package["amount"]
-
-    else:
-        raise AppError(
-            code=ErrorCode.VALIDATION_ERROR,
-            message=f"无效的订单类型：{order_type}，可选：plan / credits",
-            status_code=400,
-        )
+    return await _get_product_pricing(db, order_type, product_code)
 
 
 # ============================================================
@@ -181,7 +198,7 @@ async def create_order(
     client_request_id: str,
 ) -> OrderData:
     """创建订单。服务端根据 order_type 和 product_code 查询定价表计算金额。"""
-    amount_cents, credit_amount = _get_price_and_credit_amount(order_type, product_code)
+    amount_cents, credit_amount = await _get_price_and_credit_amount(db, order_type, product_code)
     order_no = _generate_order_no()
 
     now = datetime.now(timezone.utc)

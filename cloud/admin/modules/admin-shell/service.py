@@ -188,6 +188,13 @@ def get_menu(user_permissions: set | None = None) -> MenuData:
                     path="/admin/credits/ledger",
                     required_permission="credits.read",
                 ),
+                MenuItem(
+                    id="model-pricing",
+                    title="模型定价",
+                    icon="dollar",
+                    path="/admin/billing/model-pricing",
+                    required_permission="plans.read",
+                ),
             ],
         ),
         MenuItem(
@@ -216,13 +223,6 @@ def get_menu(user_permissions: set | None = None) -> MenuData:
                     icon="risk",
                     path="/admin/risk-logs",
                     required_permission="ops.read",
-                ),
-                MenuItem(
-                    id="feature-flags",
-                    title="功能开关",
-                    icon="feature",
-                    path="/admin/feature-flags",
-                    required_permission="ops.manage",
                 ),
             ],
         ),

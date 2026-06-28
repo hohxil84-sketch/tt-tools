@@ -246,3 +246,62 @@ public class ProviderCallLogItemDto
     [JsonPropertyName("created_at")]
     public string CreatedAt { get; set; } = string.Empty;
 }
+
+// ============ Estimate DTOs（预估接口）============
+
+/// <summary>AI 文案预估请求</summary>
+public class AiCopyEstimateRequest
+{
+    [JsonPropertyName("scene")]
+    public string Scene { get; set; } = string.Empty;
+    [JsonPropertyName("product_name")]
+    public string ProductName { get; set; } = string.Empty;
+    [JsonPropertyName("selling_points")]
+    public List<string> SellingPoints { get; set; } = new();
+    [JsonPropertyName("target_audience")]
+    public string? TargetAudience { get; set; }
+    [JsonPropertyName("tone")]
+    public string Tone { get; set; } = "direct";
+    [JsonPropertyName("platform")]
+    public string? Platform { get; set; }
+    [JsonPropertyName("extra_requirements")]
+    public string? ExtraRequirements { get; set; }
+    [JsonPropertyName("max_tokens")]
+    public int MaxTokens { get; set; } = 2048;
+    [JsonPropertyName("client_request_id")]
+    public string ClientRequestId { get; set; } = string.Empty;
+}
+
+/// <summary>预估延迟信息</summary>
+public class EstimateLatencyData
+{
+    [JsonPropertyName("p50_ms")]
+    public int P50Ms { get; set; }
+    [JsonPropertyName("p95_ms")]
+    public int P95Ms { get; set; }
+    [JsonPropertyName("display")]
+    public string? Display { get; set; }
+    [JsonPropertyName("sample_count")]
+    public int SampleCount { get; set; }
+}
+
+/// <summary>AI 文案预估响应</summary>
+public class AiCopyEstimateResponse
+{
+    [JsonPropertyName("feature")]
+    public string Feature { get; set; } = string.Empty;
+    [JsonPropertyName("min_credits")]
+    public int MinCredits { get; set; }
+    [JsonPropertyName("estimated_max_credits")]
+    public int EstimatedMaxCredits { get; set; }
+    [JsonPropertyName("balance")]
+    public int Balance { get; set; }
+    [JsonPropertyName("enough")]
+    public bool Enough { get; set; }
+    [JsonPropertyName("estimated_latency")]
+    public EstimateLatencyData? EstimatedLatency { get; set; }
+    [JsonPropertyName("provider")]
+    public string Provider { get; set; } = string.Empty;
+    [JsonPropertyName("model")]
+    public string Model { get; set; } = string.Empty;
+}

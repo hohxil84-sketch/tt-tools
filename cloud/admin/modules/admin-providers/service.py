@@ -86,7 +86,7 @@ def _to_detail(p: Provider) -> ProviderDetail:
     return ProviderDetail(
         id=p.id, name=p.name, provider_type=p.provider_type,
         api_key_encrypted=p.api_key_encrypted, base_url=p.base_url,
-        models_json=p.models_json, is_enabled=p.is_enabled,
+        is_enabled=p.is_enabled,
         priority=p.priority,
         created_at=_fmt_ts(p.created_at),
         updated_at=_fmt_ts(p.updated_at),

@@ -35,8 +35,8 @@ _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 if _MODULE_DIR not in sys.path:
     sys.path.insert(0, _MODULE_DIR)
 
-from schemas import AiCopyGenerateRequest, GenerateContext
-from service import generate_ai_copy
+from schemas import AiCopyGenerateRequest, GenerateContext, EstimateRequest
+from service import generate_ai_copy, _estimate_threshold, _get_min_credits, _get_latency_estimate, _get_exchange_rate
 
 # 创建路由，prefix 在 app-shell 装配时指定
 router = APIRouter(tags=["AI Copy"])
@@ -85,6 +85,81 @@ async def ai_copy_generate(
         # 执行标准云端 AI 调用链
         data = await generate_ai_copy(db, req, ctx)
         return success_response(data.model_dump(), request_id)
+    except AppError as e:
+        return error_response(
+            code=e.code,
+            message=e.message,
+            request_id=request_id,
+            status_code=e.status_code,
+            details=e.details,
+        )
+
+
+@router.post("/ai/copy/estimate")
+async def ai_copy_estimate(
+    req: EstimateRequest,
+    request_id: str = Depends(get_request_id),
+    current_user: TokenData = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """预估 AI 文案生成的扣点和耗时（不实际调用 AI）。
+
+    返回预估的最小/最大扣点数、用户当前余额是否足够、以及预估 Provider 耗时。
+    不扣除任何额度。
+
+    需要有效的 Bearer Token。
+    """
+    try:
+        feature = "ai_copy_cloud"
+
+        # 构建 prompt 用于准确估算输入 token
+        parts = [f"【场景】{req.scene}", f"【产品/服务】{req.product_name}"]
+        if req.selling_points:
+            parts.append(f"【核心卖点】{'、'.join(req.selling_points)}")
+        if req.target_audience:
+            parts.append(f"【目标受众】{req.target_audience}")
+        if req.extra_requirements:
+            parts.append(f"【额外要求】{req.extra_requirements}")
+        prompt_text = "\n".join(parts)
+
+        max_tokens = req.max_tokens
+
+        # 查起步扣点 + 预估最大扣点
+        min_credits = await _get_min_credits(db, feature)
+        threshold = await _estimate_threshold(db, feature, "text", max_tokens, prompt_text)
+
+        # 查余额
+        balance_result = await db.execute(
+            __import__("sqlalchemy").text(
+                "SELECT balance FROM credit_accounts WHERE user_id = :uid AND status = 'active'"
+            ),
+            {"uid": current_user.user_id},
+        )
+        row = balance_result.fetchone()
+        balance = row[0] if row else 0
+
+        # 查耗时（取第一条活跃记录作为参考）
+        lat_result = await db.execute(
+            __import__("sqlalchemy").text(
+                "SELECT provider_name, model_name FROM provider_model_pricing "
+                "WHERE is_active = TRUE LIMIT 1"
+            ),
+        )
+        lat_row = lat_result.fetchone()
+        latency = {"p50_ms": 0, "p95_ms": 0, "display": "暂无耗时数据", "sample_count": 0}
+        if lat_row is not None:
+            latency = await _get_latency_estimate(db, lat_row[0], lat_row[1], "text")
+
+        return success_response({
+            "feature": feature,
+            "min_credits": min_credits,
+            "estimated_max_credits": threshold,
+            "balance": balance,
+            "enough": balance >= threshold,
+            "estimated_latency": latency,
+            "provider": lat_row[0] if lat_row else "",
+            "model": lat_row[1] if lat_row else "",
+        }, request_id)
     except AppError as e:
         return error_response(
             code=e.code,

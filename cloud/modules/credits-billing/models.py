@@ -16,6 +16,7 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     ForeignKey,
+    Numeric,
     UniqueConstraint,
     Index,
     JSON,  # 使用通用 JSON 类型，兼容 PostgreSQL (JSONB) 和 SQLite (TEXT)
@@ -57,6 +58,10 @@ class Plan(Base):
     expire_days = Column(Integer, nullable=False, default=0)
     # 是否默认套餐（新用户自动获得），全局唯一
     is_default = Column(Boolean, nullable=False, default=False)
+    # 套餐等级：free / standard / pro（替代 monthly_grant <= 10 免费判定）
+    plan_tier = Column(String(20), nullable=False, default="")
+    # 套餐月费（分），如 2900 = ¥29
+    price_cents = Column(Integer, nullable=False, default=0)
     # 套餐状态：active / disabled
     status = Column(String(50), nullable=False, default="active")
     # 时间戳
@@ -183,7 +188,8 @@ class UsageEvent(Base):
     feature = Column(String(100), nullable=True)
     # 功能码外键 ID（→ feature_codes.id）
     feature_code_id = Column(
-        String(36), ForeignKey("feature_codes.id"), nullable=True, index=True
+        String(36), nullable=True, index=True
+        # FK → feature_codes.id 移除，避免 ORM 跨模块表依赖导致 create_all 失败
     )
     # 事件类型
     event_type = Column(String(100), nullable=False)
@@ -203,3 +209,131 @@ class UsageEvent(Base):
 
     def __repr__(self) -> str:
         return f"<UsageEvent(id={self.id}, feature={self.feature}, event_type={self.event_type})>"
+
+
+# ============================================================
+# 定价相关模型（DB 驱动，替代代码硬编码）
+# ============================================================
+
+
+class ProviderModelPricing(Base):
+    """Provider 模型定价表，替代 cost.py 硬编码 _MODEL_PRICING。
+
+    运营可在后台编辑，即时生效，不需要改代码发版。
+    """
+
+    __tablename__ = "provider_model_pricing"
+
+    id = Column(String(36), primary_key=True, default=_new_uuid)
+    provider_id = Column(String(36), nullable=False)  # FK→providers.id 通过raw SQL确保
+    provider_name = Column(String(50), default="")  # 过渡期保留，后续版本删除
+    model_name = Column(String(100), nullable=False)
+    capability = Column(String(50), nullable=False, default="text")  # text/image_generation/image_edit
+    input_price = Column(Numeric(18, 6), nullable=False, default=0)  # 元/百万token
+    output_price = Column(Numeric(18, 6), nullable=False, default=0)  # 元/百万token
+    currency = Column(String(10), nullable=False, default="CNY")
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    __table_args__ = (
+        Index("idx_pmp_provider_model", "provider_id", "model_name", unique=True),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ProviderModelPricing(provider={self.provider_id}/{self.model_name})>"
+
+
+class FeaturePricing(Base):
+    """功能起步扣点表，替代各模块硬编码 _DEFAULT_CREDITS_PER_CALL 等常量。
+
+    每个 AI 功能对应一条记录，定义最少扣点数和默认 max_tokens。
+    """
+
+    __tablename__ = "feature_pricing"
+
+    feature_code = Column(
+        String(100), primary_key=True
+        # FK → feature_codes.code 通过 raw SQL 保证，避免 ORM 跨模块表依赖导致 test conftest 失败
+    )
+    min_credits = Column(Integer, nullable=False, default=1)
+    default_max_tokens = Column(Integer, nullable=False, default=2048)
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"<FeaturePricing({self.feature_code}, min={self.min_credits})>"
+
+
+class SystemConfig(Base):
+    """全局系统配置表，简单 KV 结构。如汇率等全局参数。"""
+
+    __tablename__ = "system_config"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(String(500), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"<SystemConfig({self.key}={self.value})>"
+
+
+class ProviderLatencyStats(Base):
+    """Provider 耗时统计表，由 provider-log 异步更新。
+
+    滑动窗口基于最近 1000 条成功调用，计算 p50/p95 耗时。
+    用于 /estimate 接口返回预估耗时。
+    """
+
+    __tablename__ = "provider_latency_stats"
+
+    id = Column(String(36), primary_key=True, default=_new_uuid)
+    provider_name = Column(String(50), nullable=False)
+    model_name = Column(String(100), nullable=False)
+    capability = Column(String(50), nullable=False)
+    p50_latency_ms = Column(Integer, nullable=False, default=0)
+    p95_latency_ms = Column(Integer, nullable=False, default=0)
+    sample_count = Column(Integer, nullable=False, default=0)
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_pls_provider_model_cap",
+            "provider_name", "model_name", "capability",
+            unique=True,
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ProviderLatencyStats({self.provider_name}/{self.model_name}/{self.capability})>"
+
+
+class CreditPackage(Base):
+    """充值套餐表，替代 orders_recharge/service.py 硬编码 CREDIT_PACKAGES。
+
+    运营可在后台增删改，即时生效。
+    """
+
+    __tablename__ = "credit_packages"
+
+    id = Column(String(36), primary_key=True, default=_new_uuid)
+    product_code = Column(String(50), unique=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    credit_amount = Column(Integer, nullable=False)
+    price_cents = Column(Integer, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"<CreditPackage({self.product_code}, {self.credit_amount}credits, {self.price_cents}cents)>"

@@ -36,8 +36,8 @@ from models import (
 # -- 基础接口 --
 from base import BaseProvider
 
-# -- Mock Provider --
-from mock import MockProvider
+# -- OpenAI 兼容 Provider（通用，DB 驱动）--
+from openai_compatible import OpenAICompatibleProvider
 
 # -- 路由 --
 from router import ProviderRouter, get_provider_for_model, call_provider
@@ -60,8 +60,8 @@ __all__ = [
     "ChatMessage",
     # 基础接口
     "BaseProvider",
-    # Mock Provider
-    "MockProvider",
+    # OpenAI 兼容 Provider（通用）
+    "OpenAICompatibleProvider",
     # 路由
     "ProviderRouter",
     "get_provider_for_model",

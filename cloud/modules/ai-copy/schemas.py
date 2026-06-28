@@ -88,3 +88,37 @@ class GenerateContext(BaseModel):
     role: str = Field(default="user", description="用户角色")
     plan_id: Optional[str] = Field(default=None, description="当前套餐 ID（UUID）")
     request_id: str = Field(..., description="云端请求追踪 ID")
+
+
+# ============================================================
+# 预估接口 DTO
+# ============================================================
+
+
+class EstimateRequest(BaseModel):
+    """预估扣费 + 耗时请求（/estimate 端点）。"""
+
+    scene: str = Field(default="poster", description="场景代码")
+    product_name: str = Field(..., description="产品名称")
+    selling_points: List[str] = Field(default_factory=list, description="卖点列表")
+    target_audience: Optional[str] = Field(default=None, description="目标受众")
+    tone: str = Field(default="direct", description="语气风格")
+    platform: Optional[str] = Field(default=None, description="投放平台")
+    extra_requirements: Optional[str] = Field(default=None, description="额外要求")
+    max_tokens: int = Field(default=2048, description="最大生成 token 数")
+    client_request_id: str = Field(..., description="客户端请求追踪 ID")
+
+
+class EstimateResponse(BaseModel):
+    """预估结果。"""
+
+    feature: str = Field(default="ai_copy_cloud", description="功能码")
+    min_credits: int = Field(..., description="起步扣点")
+    estimated_max_credits: int = Field(..., description="预估最大扣点")
+    balance: int = Field(default=0, description="当前余额")
+    enough: bool = Field(default=False, description="余额是否足够")
+    estimated_latency: dict = Field(
+        default_factory=dict, description="预估耗时 {p50_ms, p95_ms, display, sample_count}"
+    )
+    provider: str = Field(default="", description="路由到的 Provider 名称")
+    model: str = Field(default="", description="路由到的模型名称")

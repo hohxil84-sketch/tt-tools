@@ -62,6 +62,7 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from fastapi import FastAPI
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from cloud.shared.database import Base
@@ -79,6 +80,54 @@ async def test_engine():
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # 手动创建跨模块的表（这些表的 ORM 不在本模块中，但 raw SQL 查询会用到）
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS feature_codes ("
+            " id VARCHAR(36) PRIMARY KEY, code VARCHAR(100) UNIQUE NOT NULL,"
+            " name VARCHAR(100) NOT NULL, category VARCHAR(50) NOT NULL,"
+            " description TEXT, is_active BOOLEAN NOT NULL DEFAULT TRUE,"
+            " created_at TIMESTAMP)"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS providers ("
+            " id VARCHAR(36) PRIMARY KEY, name VARCHAR(100) UNIQUE NOT NULL,"
+            " provider_type VARCHAR(50) NOT NULL DEFAULT '',"
+            " is_enabled BOOLEAN DEFAULT TRUE, priority INTEGER DEFAULT 0,"
+            " created_at TIMESTAMP, updated_at TIMESTAMP)"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS provider_model_pricing ("
+            " id VARCHAR(36) PRIMARY KEY, provider_id VARCHAR(36) NOT NULL,"
+            " model_name VARCHAR(100) NOT NULL, provider_name VARCHAR(50) DEFAULT '',"
+            " input_price DECIMAL(18,6) NOT NULL DEFAULT 0,"
+            " output_price DECIMAL(18,6) NOT NULL DEFAULT 0, currency VARCHAR(10) DEFAULT 'CNY',"
+            " is_active BOOLEAN DEFAULT TRUE, created_at TIMESTAMP, updated_at TIMESTAMP,"
+            " UNIQUE(provider_id, model_name))"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS feature_pricing ("
+            " feature_code VARCHAR(100) PRIMARY KEY, min_credits INT NOT NULL DEFAULT 1,"
+            " default_max_tokens INT NOT NULL DEFAULT 2048, updated_at TIMESTAMP)"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS system_config ("
+            " key VARCHAR(100) PRIMARY KEY, value VARCHAR(500) NOT NULL, updated_at TIMESTAMP)"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS provider_latency_stats ("
+            " id VARCHAR(36) PRIMARY KEY, provider_name VARCHAR(50) NOT NULL,"
+            " model_name VARCHAR(100) NOT NULL, capability VARCHAR(50) NOT NULL,"
+            " p50_latency_ms INT NOT NULL DEFAULT 0, p95_latency_ms INT NOT NULL DEFAULT 0,"
+            " sample_count INT NOT NULL DEFAULT 0, updated_at TIMESTAMP,"
+            " UNIQUE(provider_name, model_name, capability))"
+        ))
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS credit_packages ("
+            " id VARCHAR(36) PRIMARY KEY, product_code VARCHAR(50) UNIQUE NOT NULL,"
+            " name VARCHAR(100) NOT NULL, credit_amount INT NOT NULL,"
+            " price_cents INT NOT NULL, is_active BOOLEAN DEFAULT TRUE,"
+            " sort_order INT DEFAULT 0, created_at TIMESTAMP, updated_at TIMESTAMP)"
+        ))
 
     yield engine
     await engine.dispose()
@@ -161,18 +210,93 @@ async def seed_plans(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def test_user(db_session: AsyncSession, seed_plans):
-    """创建一个测试用户（标准套餐）并返回 ORM 对象。
+async def seed_pricing_tables(db_session: AsyncSession):
+    """初始化定价相关表的种子数据。"""
+    import uuid as _uuid
+    from datetime import datetime, timezone as _tz
+
+    now = datetime.now(_tz.utc)
+
+    # 功能码
+    features = [
+        ("ai_copy_cloud", "AI 文案生成", "cloud_ai", True),
+        ("ai_render_cloud", "AI 效果图生成", "cloud_ai", True),
+        ("upscale_image_cloud", "AI 高清修复", "cloud_ai", True),
+        ("vectorize_image_cloud", "AI 转矢量", "cloud_ai", True),
+        ("ai_edit_image_cloud", "AI 智能改图", "cloud_ai", True),
+        ("remove_bg_cloud", "云端高级抠图", "cloud_ai", True),
+        ("ocr_cloud", "云端高级 OCR", "cloud_ai", True),
+        ("resize_image_local_paid", "图片改尺寸", "local_paid", True),
+        ("pdf_image_convert_local_paid", "PDF/图片互转", "local_paid", True),
+        ("ocr_local", "本地 OCR", "local_free", True),
+    ]
+    for code, name, cat, active in features:
+        await db_session.execute(
+            text("INSERT OR IGNORE INTO feature_codes (id, code, name, category, is_active, created_at) "
+                 "VALUES (:id, :code, :name, :cat, :active, :now)"),
+            {"id": str(_uuid.uuid4()), "code": code, "name": name, "cat": cat, "active": active, "now": now},
+        )
+
+    # Providers（测试用）
+    prov_ids = {}
+    for pname, ptype in [("deepseek", "deepseek"), ("__default__", "__default__")]:
+        pid = str(_uuid.uuid4())
+        prov_ids[pname] = pid
+        await db_session.execute(
+            text("INSERT OR IGNORE INTO providers (id, name, provider_type, is_enabled, created_at, updated_at) "
+                 "VALUES (:id, :nm, :pt, TRUE, :now, :now)"),
+            {"id": pid, "nm": pname, "pt": ptype, "now": now},
+        )
+
+    # 模型定价（使用 provider_id）
+    pricing = [
+        (prov_ids["deepseek"], "deepseek-chat", 1.0, 2.0),
+        (prov_ids["__default__"], "__default__", 1.0, 2.0),
+    ]
+    for pid, mn, ip, op in pricing:
+        await db_session.execute(
+            text("INSERT OR IGNORE INTO provider_model_pricing "
+                 "(id, provider_id, provider_name, model_name, input_price, output_price, is_active, created_at, updated_at) "
+                 "VALUES (:id, :pid, :pn, :mn, :ip, :op, TRUE, :now, :now)"),
+            {"id": str(_uuid.uuid4()), "pid": pid, "pn": "", "mn": mn, "ip": ip, "op": op, "now": now},
+        )
+
+    # 功能定价
+    fp_data = [
+        ("ai_copy_cloud", 2), ("ai_render_cloud", 3),
+        ("upscale_image_cloud", 3), ("vectorize_image_cloud", 3),
+        ("ai_edit_image_cloud", 5), ("remove_bg_cloud", 2), ("ocr_cloud", 2),
+    ]
+    for fc_code, mc in fp_data:
+        await db_session.execute(
+            text("INSERT OR IGNORE INTO feature_pricing (feature_code, min_credits, default_max_tokens, updated_at) "
+                 "VALUES (:fc, :mc, 2048, :now)"),
+            {"fc": fc_code, "mc": mc, "now": now},
+        )
+
+    # 汇率
+    await db_session.execute(
+        text("INSERT OR IGNORE INTO system_config (key, value, updated_at) VALUES ('credits_exchange_rate', '10', :now)"),
+        {"now": now},
+    )
+
+    await db_session.flush()
+
+
+@pytest_asyncio.fixture
+async def test_user(db_session: AsyncSession, seed_plans, seed_pricing_tables):
+    """创建一个测试用户（绑定标准套餐）并返回 ORM 对象。
 
     密码为 "test123"，已 bcrypt 哈希。
     """
+    std_plan = next((p for p in seed_plans if p.plan_tier == "standard"), None)
     user = User(
         account="test@example.com",
         password_hash=hash_password("test123"),
         display_name="测试用户",
         role="user",
         status="active",
-        plan_id=None,
+        plan_id=std_plan.id if std_plan else None,
     )
     db_session.add(user)
     await db_session.flush()
@@ -180,15 +304,16 @@ async def test_user(db_session: AsyncSession, seed_plans):
 
 
 @pytest_asyncio.fixture
-async def free_user(db_session: AsyncSession, seed_plans):
-    """创建一个免费套餐测试用户。"""
+async def free_user(db_session: AsyncSession, seed_plans, seed_pricing_tables):
+    """创建一个免费套餐测试用户（绑定免费套餐）。"""
+    free_plan = next((p for p in seed_plans if p.plan_tier == "free"), None)
     user = User(
         account="free@example.com",
         password_hash=hash_password("test123"),
         display_name="免费用户",
         role="user",
         status="active",
-        plan_id=None,
+        plan_id=free_plan.id if free_plan else None,
     )
     db_session.add(user)
     await db_session.flush()
@@ -196,15 +321,16 @@ async def free_user(db_session: AsyncSession, seed_plans):
 
 
 @pytest_asyncio.fixture
-async def pro_user(db_session: AsyncSession, seed_plans):
-    """创建一个专业套餐测试用户。"""
+async def pro_user(db_session: AsyncSession, seed_plans, seed_pricing_tables):
+    """创建一个专业套餐测试用户（绑定专业套餐）。"""
+    pro_plan = next((p for p in seed_plans if p.plan_tier == "pro"), None)
     user = User(
         account="pro@example.com",
         password_hash=hash_password("test123"),
         display_name="专业用户",
         role="user",
         status="active",
-        plan_id=None,
+        plan_id=pro_plan.id if pro_plan else None,
     )
     db_session.add(user)
     await db_session.flush()
@@ -213,34 +339,36 @@ async def pro_user(db_session: AsyncSession, seed_plans):
 
 @pytest_asyncio.fixture
 async def test_credit_account(db_session: AsyncSession, test_user, seed_plans):
-    """为测试用户创建额度账户。"""
+    """为测试用户创建额度账户（使用标准套餐 UUID）。"""
     from service import get_or_create_credit_account  # noqa: E402
-    account = await get_or_create_credit_account(db_session, test_user.id, "standard")
+    # 从已 seed 的 plans 中找到标准套餐的 UUID
+    std_plan = next((p for p in seed_plans if p.plan_tier == "standard"), None)
+    plan_id = std_plan.id if std_plan else ""
+    account = await get_or_create_credit_account(db_session, test_user.id, plan_id)
     await db_session.flush()
     return account
 
 
 @pytest_asyncio.fixture
 async def free_credit_account(db_session: AsyncSession, free_user, seed_plans):
-    """为免费用户创建额度账户。"""
+    """为免费用户创建额度账户（使用免费套餐 UUID）。"""
     from service import get_or_create_credit_account  # noqa: E402
-    account = await get_or_create_credit_account(db_session, free_user.id, "free")
+    free_plan = next((p for p in seed_plans if p.plan_tier == "free"), None)
+    plan_id = free_plan.id if free_plan else ""
+    account = await get_or_create_credit_account(db_session, free_user.id, plan_id)
     await db_session.flush()
     return account
 
 
 @pytest_asyncio.fixture
 async def auth_headers(test_user, test_credit_account):
-    """生成测试用户的有效 Bearer Token 请求头。
-
-    直接使用 cloud-shared 的 JWT 签发（不经过登录流程），方便测试。
-    """
+    """生成测试用户的有效 Bearer Token 请求头。"""
     from cloud.shared import create_access_token
     token = create_access_token(
         user_id=test_user.id,
         device_id=None,
         role=test_user.role,
-        plan_id=None,
+        plan_id=test_user.plan_id,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -253,7 +381,7 @@ async def free_auth_headers(free_user):
         user_id=free_user.id,
         device_id=None,
         role=free_user.role,
-        plan_id=None,
+        plan_id=free_user.plan_id,
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -266,6 +394,6 @@ async def pro_auth_headers(pro_user):
         user_id=pro_user.id,
         device_id=None,
         role=pro_user.role,
-        plan_id=None,
+        plan_id=pro_user.plan_id,
     )
     return {"Authorization": f"Bearer {token}"}

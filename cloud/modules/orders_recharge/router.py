@@ -149,3 +149,42 @@ async def confirm_order_endpoint(
             status_code=e.status_code,
             details=e.details,
         )
+
+
+# ============================================================
+# 产品列表端点（供客户端展示可用充值/套餐选项）
+# ============================================================
+
+
+@router.get("/products")
+async def list_products_endpoint(
+    request_id: str = Depends(get_request_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取可用产品列表（套餐 + 充值包）。不鉴权——任何人都可以浏览。"""
+    try:
+        from sqlalchemy import text as _text
+        # 直接用 raw SQL 查 credit_packages，避免 importlib 跨模块冲突
+        cp_result = await db.execute(
+            _text("SELECT product_code, name, credit_amount, price_cents, sort_order "
+                  "FROM credit_packages WHERE is_active = TRUE ORDER BY sort_order"),
+        )
+        credits_items = [
+            {"product_code": r[0], "name": r[1], "credit_amount": r[2],
+             "price_cents": r[3], "sort_order": r[4]}
+            for r in cp_result.all()
+        ]
+        plans_result = await db.execute(
+            _text("SELECT id, name, plan_tier, monthly_grant, price_cents FROM plans WHERE status = 'active' ORDER BY price_cents"),
+        )
+        plan_items = [
+            {"plan_id": r[0], "name": r[1], "plan_tier": r[2],
+             "monthly_grant": r[3], "price_cents": r[4]}
+            for r in plans_result.all()
+        ]
+        return success_response({"plans": plan_items, "credit_packages": credits_items}, request_id)
+    except AppError as e:
+        return error_response(
+            code=e.code, message=e.message,
+            request_id=request_id, status_code=e.status_code, details=e.details,
+        )
