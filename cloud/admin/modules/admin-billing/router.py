@@ -186,6 +186,7 @@ async def admin_create_plan(
             monthly_grant=body.monthly_grant,
             expire_days=body.expire_days,
             is_default=body.is_default,
+            plan_tier=body.plan_tier,
             enabled_features_json=body.enabled_features_json,
         )
         return success_response(data.model_dump(mode="json"), request_id)
@@ -587,7 +588,7 @@ async def admin_list_model_pricing(
 async def admin_create_model_pricing(
     body: dict,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_permission("plans.write")),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """新增模型定价。"""
@@ -613,7 +614,7 @@ async def admin_update_model_pricing(
     pricing_id: str,
     body: dict,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_permission("plans.write")),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """更新模型定价。"""
@@ -654,7 +655,7 @@ async def admin_update_feature_pricing(
     feature_code: str,
     body: dict,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_permission("plans.write")),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """更新功能起步扣点。"""
@@ -699,7 +700,7 @@ async def admin_update_system_config(
     key: str,
     body: dict,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_permission("plans.write")),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """更新系统配置。"""
@@ -739,7 +740,7 @@ async def admin_list_credit_packages(
 async def admin_create_credit_package(
     body: dict,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_permission("plans.write")),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """新增充值套餐。"""
@@ -765,7 +766,7 @@ async def admin_update_credit_package(
     package_id: str,
     body: dict,
     request_id: str = Depends(get_request_id),
-    current_user: TokenData = Depends(require_permission("plans.write")),
+    current_user: TokenData = Depends(require_permission("plans.manage")),
     db: AsyncSession = Depends(get_db),
 ):
     """更新充值套餐。"""

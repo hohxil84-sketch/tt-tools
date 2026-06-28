@@ -27,11 +27,11 @@ import CreditsLedger from './pages/CreditsLedger';
 import ProviderCallLogs from './pages/ProviderCallLogs';
 import CostStats from './pages/CostStats';
 import RiskLogs from './pages/RiskLogs';
-import FeatureFlags from './pages/FeatureFlags';
+
 import AuditLogs from './pages/AuditLogs';
 import Roles from './pages/Roles';
 import ProviderModelPricing from './pages/ProviderModelPricing';
-import FeaturePricingPage from './pages/FeaturePricing';
+
 import Providers from './pages/Providers';
 import FeatureCodes from './pages/FeatureCodes';
 
@@ -82,13 +82,12 @@ export default function App() {
             <Route path="provider-call-logs" element={<ProviderCallLogs />} />
             <Route path="cost-stats" element={<CostStats />} />
             <Route path="risk-logs" element={<RiskLogs />} />
-            <Route path="feature-flags" element={<FeatureFlags />} />
+
             <Route path="audit-logs" element={<AuditLogs />} />
             <Route path="roles" element={<Roles />} />
             <Route path="providers" element={<Providers />} />
             <Route path="feature-codes" element={<FeatureCodes />} />
             <Route path="billing/model-pricing" element={<ProviderModelPricing />} />
-            <Route path="billing/feature-pricing" element={<FeaturePricingPage />} />
           </Route>
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Routes>

@@ -15,6 +15,7 @@ import logging
 
 from deepseek import DeepSeekProvider
 from doubao import DoubaoProvider
+from openai_compatible import OpenAICompatibleProvider
 from errors import ProviderError, ProviderErrorCode
 
 _logger = logging.getLogger(__name__)
@@ -46,9 +47,12 @@ class RouteTarget:
 # Provider 实例工厂
 # ============================================================
 
+# 已知 Provider 类型 → 类映射。
+# 未列出的类型自动回退到 OpenAICompatibleProvider（完全由 DB 驱动）。
 _PROVIDER_CLASSES: dict[str, type] = {
-    "deepseek": DeepSeekProvider,
-    "doubao": DoubaoProvider,
+    "deepseek": DeepSeekProvider,          # 向后兼容（有默认 base_url）
+    "doubao": DoubaoProvider,              # 特殊：支持图片生成/编辑
+    "openai_compatible": OpenAICompatibleProvider,  # 通用（纯 DB 驱动，无默认值）
 }
 
 
@@ -64,34 +68,30 @@ def _decrypt_api_key(encrypted: str | None) -> str:
 
 
 def _create_provider_instance(row: dict) -> Optional[object]:
-    """根据 provider_type 创建 Provider 实例。
+    """根据 provider_type 创建 Provider 实例（DB 驱动，无硬编码默认值）。
+
+    - doubao：特殊处理（支持图片生成/编辑）
+    - deepseek：向后兼容（无 base_url 时回退到 api.deepseek.com）
+    - 其他所有类型：OpenAICompatibleProvider，参数全部从 DB 读取
 
     Args:
         row: 数据库行字典，含 name, provider_type, api_key_encrypted, base_url, models_json
 
     Returns:
-        Provider 实例，未知类型返回 None
+        Provider 实例，无法创建时返回 None
     """
     ptype = (row.get("provider_type") or "").lower()
     cls = _PROVIDER_CLASSES.get(ptype)
-    if cls is None:
-        _logger.warning("未知的 Provider 类型: %s，跳过", ptype)
-        return None
 
     api_key = _decrypt_api_key(row.get("api_key_encrypted"))
     base_url = row.get("base_url") or ""
-    models = row.get("models_json") or {}
+    models = row.get("models_json") or {}  # 来自 provider_model_pricing 聚合
     name = row.get("name") or ""
 
-    if ptype == "deepseek":
-        return cls(
-            api_key=api_key,
-            base_url=base_url or "https://api.deepseek.com",
-            default_model=models.get("text", "deepseek-chat"),
-            timeout_seconds=60,
-        )
-
+    # -- Doubao：特殊处理（图片生成/编辑接口不走 chat/completions） --
     if ptype == "doubao":
+        if cls is None:
+            cls = DoubaoProvider
         return cls(
             api_key=api_key,
             base_url=base_url,
@@ -100,7 +100,28 @@ def _create_provider_instance(row: dict) -> Optional[object]:
             timeout_seconds=60,
         )
 
-    return None
+    # -- 其他所有类型 → OpenAI 兼容类 --
+    if cls is None:
+        # 未注册的类型（如 openai、gemini、groq 等）
+        # 自动使用 OpenAICompatibleProvider，完全由 DB 驱动
+        cls = OpenAICompatibleProvider
+
+    # DeepSeek 向后兼容：数据库没配 base_url 时用默认值
+    if ptype == "deepseek" and not base_url:
+        base_url = "https://api.deepseek.com"
+
+    # 没有 base_url 的 OpenAI 兼容 Provider 无法工作
+    if not base_url:
+        _logger.warning("Provider %s 未配置 base_url，跳过", name)
+        return None
+
+    return cls(
+        api_key=api_key,
+        base_url=base_url,
+        default_model=models.get("text", ""),
+        timeout_seconds=60,
+        provider_name=name,
+    )
 
 
 # ============================================================

@@ -150,6 +150,7 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
       )}
 
       <Card>
+        <div style={{ overflowX: 'auto' }}>
         <Tbl heads={heads} colAligns={colAligns}>
           {d?.items.map(u => {
             const lastLoginStr = u.last_login_at ? new Date(u.last_login_at).toLocaleString('zh-CN') : '—';
@@ -157,9 +158,11 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
             const balanceStr = u.credit_balance != null ? u.credit_balance.toLocaleString() : '—';
             const balanceColor = balanceStr === '—' ? 'var(--gray-400)' : (u.credit_balance ?? 0) > 0 ? '#34c759' : '#ff9500';
             const usageStr = (u.monthly_usage || 0).toLocaleString();
-            // 操作按钮（三个视图共用）
+            // RBAC 角色显示：有 role_names 显示之，无则显示「超级管理员」（role=admin 向后兼容）
+            const roleDisplay = u.role_names || (u.role === 'admin' ? '超级管理员' : '—');
+            // 操作按钮（缩窄间距）
             const actions = (
-              <td style={{ textAlign: 'right', width: '22%', whiteSpace: 'nowrap' }}>
+              <td style={{ textAlign: 'right', whiteSpace: 'nowrap', paddingRight: 4 }}>
                 <ActBtn kind="detail" onClick={() => setDetail(u)}>详情</ActBtn>
                 <ActBtn kind="edit" onClick={() => setEdit(u)}>编辑</ActBtn>
                 {u.role === 'admin' && <ActBtn kind="role" onClick={() => setRoleUser(u)}>角色</ActBtn>}
@@ -174,8 +177,8 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
             const commonCells = (
               <>
                 <td style={{ width: 30, padding: '8px 4px', textAlign: 'center' }}><input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSelect(u.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} /></td>
-                <td style={{ fontWeight: 500, fontSize: 13, width: '11%', textAlign: 'center' }}>{u.account}</td>
-                <td style={{ color: 'var(--gray-500)', fontSize: 13, width: '8%', textAlign: 'center' }}>{u.display_name || '—'}</td>
+                <td style={{ fontWeight: 500, fontSize: 13, textAlign: 'center' }}>{u.account}</td>
+                <td style={{ color: 'var(--gray-500)', fontSize: 13, textAlign: 'center' }}>{u.display_name || '—'}</td>
               </>
             );
             // 根据视图类型渲染不同的列布局
@@ -183,29 +186,30 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
               return (
                 <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                   {commonCells}
-                  <td style={{ fontSize: 13, width: '10%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#af52de' }}>{u.role_names || '—'}</span></td>
-                  <td style={{ fontSize: 13, width: '7%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
-                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 12, width: '14%', textAlign: 'center' }}>{lastLoginStr}</td>
-                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.audit_count || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{u.audit_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-400)', fontSize: 12, width: '13%', textAlign: 'center' }}>{updatedStr}</td>
+                  <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: '#af52de' }}>{roleDisplay}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-500)', fontSize: 12, textAlign: 'center' }}>{lastLoginStr}</td>
+                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.audit_count || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{u.audit_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center' }}>{updatedStr}</td>
                   {actions}
                 </tr>
               );
             }
             if (isClient) {
               const periodEndStr = u.period_end ? new Date(u.period_end).toLocaleDateString('zh-CN') : '—';
+              const periodEndColor = u.period_end ? 'var(--gray-700)' : 'var(--gray-400)';
               return (
                 <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                   {commonCells}
-                  <td style={{ fontSize: 13, width: '7%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
-                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.monthly_usage || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{usageStr}</span></td>
-                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 12, width: '7%', textAlign: 'center' }}>{periodEndStr}</td>
-                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
-                  <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 12, width: '11%', textAlign: 'center' }}>{lastLoginStr}</td>
-                  <td style={{ color: 'var(--gray-400)', fontSize: 12, width: '11%', textAlign: 'center' }}>{updatedStr}</td>
+                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.monthly_usage || 0) > 0 ? 'var(--gray-700)' : 'var(--gray-400)' }}>{usageStr}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
+                  <td style={{ fontSize: 12, textAlign: 'center', fontWeight: u.period_end ? 500 : 400, color: periodEndColor }}>{periodEndStr}</td>
+                  <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
+                  <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
+                  <td style={{ color: 'var(--gray-500)', fontSize: 12, textAlign: 'center' }}>{lastLoginStr}</td>
+                  <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center' }}>{updatedStr}</td>
                   {actions}
                 </tr>
               );
@@ -214,18 +218,19 @@ export default function Users({ roleFilter }: { roleFilter?: string }) {
             return (
               <tr key={u.id} style={{ background: selected.has(u.id) ? 'var(--blue-50)' : undefined }}>
                 {commonCells}
-                <td style={{ fontSize: 13, width: '6%', textAlign: 'center' }}><Badge t={u.role === 'admin' ? '管理员' : '用户'} c={u.role === 'admin' ? 'var(--blue)' : 'var(--gray-500)'} /></td>
-                <td style={{ fontSize: 13, width: '7%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
-                <td style={{ fontSize: 13, width: '5%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
-                <td style={{ fontSize: 13, width: '5%', textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
-                <td style={{ fontSize: 13, width: '5%', textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
-                <td style={{ color: 'var(--gray-500)', fontSize: 12, width: '12%', textAlign: 'center' }}>{lastLoginStr}</td>
-                <td style={{ color: 'var(--gray-400)', fontSize: 12, width: '12%', textAlign: 'center' }}>{updatedStr}</td>
+                <td style={{ fontSize: 13, textAlign: 'center' }}><Badge t={u.role === 'admin' ? '管理员' : '用户'} c={u.role === 'admin' ? 'var(--blue)' : 'var(--gray-500)'} /></td>
+                <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 13, fontWeight: 600, color: balanceColor }}>{balanceStr}</span></td>
+                <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500 }}>{u.plan_name || '—'}</span></td>
+                <td style={{ fontSize: 13, textAlign: 'center' }}><span style={{ fontSize: 12, fontWeight: 500, color: SC[u.status] }}>{SL[u.status]}</span></td>
+                <td style={{ fontSize: 13, textAlign: 'center', paddingRight: 24 }}><span style={{ fontSize: 12, fontWeight: 500, color: (u.device_count || 0) > 1 ? '#ff9500' : 'var(--gray-500)' }}>{u.device_count ?? 0}</span></td>
+                <td style={{ color: 'var(--gray-500)', fontSize: 12, textAlign: 'center' }}>{lastLoginStr}</td>
+                <td style={{ color: 'var(--gray-400)', fontSize: 12, textAlign: 'center' }}>{updatedStr}</td>
                 {actions}
               </tr>
             );
           })}
         </Tbl>
+        </div>
       </Card>
       <Pager pg={pg} tp={TP} total={d?.total || 0} limit={limit} onLimitChange={(n) => { setLimit(n); setPg(0); }} onPrev={() => setPg(pg - 1)} onNext={() => setPg(pg + 1)} />
       {detail && <Sheet title="用户详情" close={() => setDetail(null)}>

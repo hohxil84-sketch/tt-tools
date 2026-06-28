@@ -270,14 +270,34 @@
 |---|---|---|---|
 | id | uuid | pk | Provider ID |
 | name | varchar(100) | unique, not null | Provider 名称 |
-| provider_type | varchar(50) | not null | deepseek / doubao / openai 等 |
+| provider_type | varchar(50) | not null | 见下方 Provider 类型说明 |
 | api_key_encrypted | varchar(500) | nullable | 加密存储的 API Key |
-| base_url | varchar(500) | nullable | API 基础 URL |
+| base_url | varchar(500) | **必填**（deepseek 除外） | API 基础 URL（如 https://api.openai.com/v1） |
 | models_json | jsonb | nullable | 模型配置 JSON |
 | is_enabled | boolean | not null default true | 是否启用 |
 | priority | integer | not null default 0 | 优先级，数字越大越优先调用 |
 | created_at | timestamptz | not null | 创建时间 |
 | updated_at | timestamptz | not null | 更新时间 |
+
+### Provider 类型说明
+
+provider_type 决定使用哪个 Provider 类。未列出的类型自动回退到 `OpenAICompatibleProvider`（纯 DB 驱动）。
+
+| provider_type | 类 | base_url 必填 | 说明 |
+|---|---|---|---|
+| `deepseek` | DeepSeekProvider | 否（默认 api.deepseek.com） | 向后兼容，OpenAI 兼容接口 |
+| `doubao` | DoubaoProvider | 是 | 特殊：支持图片生成/编辑 |
+| `openai_compatible` | OpenAICompatibleProvider | 是 | 通用 OpenAI 兼容类 |
+| **其他任意值** | OpenAICompatibleProvider | 是 | `openai`、`gemini`、`groq` 等均可，自动回退 |
+
+**新增 Provider 示例**（只需在后台填表，零代码改动）：
+
+| name | provider_type | base_url |
+|---|---|---|
+| deepseek | deepseek | （可为空，自动用 api.deepseek.com） |
+| openai | openai | https://api.openai.com/v1 |
+| gemini | gemini | https://generativelanguage.googleapis.com/v1beta/openai |
+| groq | groq | https://api.groq.com/openai/v1 |
 
 ## feature_codes
 

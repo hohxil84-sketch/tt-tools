@@ -83,8 +83,10 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   const [name, setName] = useState(plan?.name || '');
   const [mg, setMg] = useState(plan?.monthly_grant || 0);
   const [expDays, setExpDays] = useState(plan?.expire_days || 0);
-  const [planTier, setPlanTier] = useState((plan as any)?.plan_tier || 'standard');
+  const [planTier, setPlanTier] = useState(plan?.plan_tier || 'standard');
   const [isDefault, setIsDefault] = useState(plan?.is_default || false);
+  // 记录原始 is_default 值，编辑时仅当用户改了才发送
+  const [origIsDefault] = useState(plan?.is_default || false);
 
   // 全部可用功能码列表（从后端拉取）
   const [allFeatures, setAllFeatures] = useState<FeatureCode[]>([]);
@@ -171,8 +173,11 @@ function PlanForm({ plan, close, done }: { plan?: Plan | null; close: () => void
   const submit = async (e: React.FormEvent) => { e.preventDefault(); setSaving(true);
     const featuresJson = buildFeaturesJson();
     try {
+      // 构建请求体：编辑时 is_default 只在用户改动时才发送，避免误清默认标记
+      const body: Record<string, unknown> = { name, monthly_grant: mg, expire_days: expDays, plan_tier: planTier, enabled_features_json: featuresJson };
+      if (!isEdit || isDefault !== origIsDefault) body.is_default = isDefault;
       if (isEdit) {
-        await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body: { name, monthly_grant: mg, expire_days: expDays, is_default: isDefault, plan_tier: planTier, enabled_features_json: featuresJson } });
+        await apiRequest(`/admin/plans/${plan!.id}`, { method: 'PATCH', body });
       } else {
         await apiRequest('/admin/plans', { method: 'POST', body: { name, monthly_grant: mg, expire_days: expDays, is_default: isDefault, plan_tier: planTier, enabled_features_json: featuresJson } });
       }
