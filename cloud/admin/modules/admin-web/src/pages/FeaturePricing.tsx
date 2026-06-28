@@ -50,7 +50,7 @@ export default function FeaturePricingPage() {
       {err && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{err}</div>}
 
       {/* 汇率配置 */}
-      <Card style={{ marginBottom: 24, padding: '16px 20px' }}>
+      <div style={{ background: 'var(--white)', borderRadius: 'var(--radius-lg)', padding: '16px 20px', border: '1px solid var(--gray-200)', boxShadow: 'var(--shadow-sm)', marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 14, fontWeight: 600 }}>汇率：1 CNY =</span>
           <input type="number" step="0.1" value={rateVal} onChange={e => setRateVal(e.target.value)} style={{ width: 80, padding: '5px 8px', fontSize: 13, textAlign: 'center' }} />
@@ -62,7 +62,7 @@ export default function FeaturePricingPage() {
             </span>
           )}
         </div>
-      </Card>
+      </div>
 
       {/* 功能起步扣点 */}
       <Card><Tbl heads={['功能码', '功能名称', '起步扣点', '默认max_tokens', '更新时间', '']} colAligns={['l', 'l', 'r', 'r', 'l', 'r']}>
