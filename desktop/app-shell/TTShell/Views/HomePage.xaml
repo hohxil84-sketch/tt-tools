@@ -1,70 +1,218 @@
 <UserControl x:Class="TTShell.Views.HomePage"
-      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Background="{DynamicResource BackgroundBrush}">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource BackgroundBrush}">
 
-        <!-- 欢迎信息 -->
-        <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,0,0,40">
-            <!-- 应用图标 -->
-            <TextBlock Text="🛠️"
-                       FontSize="64"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,16" />
+    <!-- ========== Dashboard 布局：欢迎区 + 快捷入口 + 最近任务 + 算力 + 引擎状态 ========== -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="0,0,0,24">
 
-            <!-- 欢迎标题 -->
-            <TextBlock Text="欢迎使用 Alphoria"
-                       Style="{DynamicResource TitleTextStyle}"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,8" />
+            <!-- ==================== 欢迎区 ==================== -->
+            <StackPanel Margin="0,0,0,24">
+                <TextBlock Text="欢迎回来 👋"
+                           FontSize="24" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="今天准备处理什么工作？"
+                           Style="{StaticResource SubtitleTextStyle}"
+                           Margin="0,4,0,0" />
+            </StackPanel>
 
-            <!-- 版本信息 -->
-            <TextBlock Text="版本 0.1.0 - 开发中"
-                       FontSize="14"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,24" />
+            <!-- ==================== 快捷入口 ==================== -->
+            <TextBlock Text="快捷入口" Style="{StaticResource SectionHeaderStyle}" />
+            <UniformGrid Columns="4" Margin="0,0,0,24">
+                <!-- OCR 文字识别 -->
+                <Button Style="{StaticResource QuickActionCardStyle}"
+                        Margin="0,0,12,0" Click="OnQuickActionOcr">
+                    <StackPanel>
+                        <TextBlock Text="📝" FontSize="24" Margin="0,0,0,10" />
+                        <TextBlock Text="OCR 文字识别"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,4" />
+                        <TextBlock Text="图片转文字，支持多语言"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Button>
+                <!-- 图片改尺寸 -->
+                <Button Style="{StaticResource QuickActionCardStyle}"
+                        Margin="0,0,12,0" Click="OnQuickActionResize">
+                    <StackPanel>
+                        <TextBlock Text="📐" FontSize="24" Margin="0,0,0,10" />
+                        <TextBlock Text="图片改尺寸"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,4" />
+                        <TextBlock Text="批量调整图片大小"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Button>
+                <!-- 证件照换底色 -->
+                <Button Style="{StaticResource QuickActionCardStyle}"
+                        Margin="0,0,12,0" Click="OnQuickActionIdPhoto">
+                    <StackPanel>
+                        <TextBlock Text="📸" FontSize="24" Margin="0,0,0,10" />
+                        <TextBlock Text="证件照"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,4" />
+                        <TextBlock Text="换底色，一键生成"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Button>
+                <!-- 智能抠图 -->
+                <Button Style="{StaticResource QuickActionCardStyle}"
+                        Click="OnQuickActionRemoveBg">
+                    <StackPanel>
+                        <TextBlock Text="✂️" FontSize="24" Margin="0,0,0,10" />
+                        <TextBlock Text="智能抠图"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,4" />
+                        <TextBlock Text="AI 自动去除背景"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Button>
+            </UniformGrid>
 
-            <!-- 模块状态概览 -->
-            <Border Background="{DynamicResource CardBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="24,16"
-                    Margin="0,0,0,16"
-                    MaxWidth="400">
-                <StackPanel>
-                    <TextBlock Text="模块开发状态"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextPrimaryBrush}"
-                               Margin="0,0,0,12" />
-                    <TextBlock Text="✅ 应用外壳 (app-shell)"
-                               FontSize="13"
-                               Foreground="{DynamicResource SuccessBrush}"
-                               Margin="0,0,0,4" />
-                    <TextBlock Text="⏳ 文件工作台 · 即将开发"
-                               FontSize="13"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               Margin="0,0,0,4" />
-                    <TextBlock Text="⏳ AI 工具 · 即将开发"
-                               FontSize="13"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               Margin="0,0,0,4" />
-                    <TextBlock Text="⏳ 导出 · 即将开发"
-                               FontSize="13"
-                               Foreground="{DynamicResource TextSecondaryBrush}"
-                               Margin="0,0,0,4" />
-                    <TextBlock Text="⏳ 设置 · 即将开发"
-                               FontSize="13"
-                               Foreground="{DynamicResource TextSecondaryBrush}" />
+            <!-- ==================== 最近任务 ==================== -->
+            <TextBlock Text="最近任务" Style="{StaticResource SectionHeaderStyle}" />
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                <!-- 空状态（暂无任务数据） -->
+                <StackPanel HorizontalAlignment="Center">
+                    <TextBlock Text="📋"
+                               Style="{StaticResource EmptyStateIconStyle}" />
+                    <TextBlock Text="暂无最近任务"
+                               Style="{StaticResource EmptyStateTitleStyle}" />
+                    <TextBlock Text="使用工具处理文件后，最近任务将显示在这里"
+                               Style="{StaticResource EmptyStateDescStyle}" />
                 </StackPanel>
             </Border>
+
+            <!-- ==================== 算力概览 + 本地引擎状态 ==================== -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 算力概览 -->
+                <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="算力概览"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,16" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <!-- 剩余算力 -->
+                            <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                <TextBlock Text="剩余算力"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,0,0,4" />
+                                <TextBlock Text="—"
+                                           FontSize="22" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                            <!-- 今日使用 -->
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                                <TextBlock Text="今日使用"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,0,0,4" />
+                                <TextBlock Text="—"
+                                           FontSize="22" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                            <!-- 本月使用 -->
+                            <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                <TextBlock Text="本月使用"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryBrush}"
+                                           Margin="0,0,0,4" />
+                                <TextBlock Text="—"
+                                           FontSize="22" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- 本地引擎状态 -->
+                <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="本地引擎"
+                                   FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryBrush}"
+                                   Margin="0,0,0,16" />
+                        <!-- OCR 引擎 -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Ellipse Grid.Column="0"
+                                     Width="8" Height="8"
+                                     Fill="{DynamicResource SuccessBrush}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="1" Text="OCR 引擎"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                        <!-- 抠图引擎 -->
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Ellipse Grid.Column="0"
+                                     Width="8" Height="8"
+                                     Fill="{DynamicResource SuccessBrush}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="1" Text="抠图引擎"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                        <!-- 图片处理引擎 -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Ellipse Grid.Column="0"
+                                     Width="8" Height="8"
+                                     Fill="{DynamicResource SuccessBrush}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="1" Text="图片处理引擎"
+                                       FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
         </StackPanel>
-    </Grid>
+    </ScrollViewer>
 </UserControl>

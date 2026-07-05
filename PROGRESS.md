@@ -8,7 +8,7 @@
 | cloud-shared | cloud/shared | feature/cloud-shared | DEVELOPMENT_COMPLETE | 47/47 通过 | 2026-06-20 已合并 |
 | cloud-auth-device | cloud/modules/auth-device | fix/auth-device-login-no-response | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并, 2026-06-26 修复合并 |
 | desktop-ai-copy-client | desktop/modules/ai-copy-client | fix/ai-copy-client-ui-and-provider-import | DEVELOPMENT_COMPLETE | 28/28 通过 | 2026-06-24 已合并, 2026-06-26 修复合并 |
-| desktop-app-shell | desktop/app-shell | fix/desktop-app-shell-titlebar | DEVELOPMENT_COMPLETE | 编译 0 错误 | 2026-06-26 已合并 |
+| desktop-app-shell | desktop/app-shell | fix/wpf-rendering-sharpness | DEVELOPMENT_COMPLETE | 编译 0 错误 | 2026-06-26 已合并, 2026-06-29 渲染修复合并 |
 | desktop-auth-device | desktop/modules/auth-device | feature/desktop-auth-device | DEVELOPMENT_COMPLETE | 20/20 通过 | 2026-06-20 已合并 |
 | desktop-file-workbench | desktop/modules/file-workbench | fix/file-workbench-导入文件按钮无响应 | DEVELOPMENT_COMPLETE | 36/36 通过 | 2026-06-26 已合并 |
 | desktop-ocr | desktop/modules/ocr | feature/ocr-low-confidence-placeholder | DEVELOPMENT_COMPLETE | 45/45 C# + 37/37 Python | 2026-06-25 已合并 |
