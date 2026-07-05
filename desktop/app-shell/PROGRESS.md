@@ -99,6 +99,26 @@
   5. `ToolbarButtonStyle`
   6. `IconButtonStyle`
 
+### 阶段 3：首页 Dashboard + 设备绑定页重构
+
+- **分支**：`feat/desktop-ui-v2-stage3`
+- **范围**：HomePage.xaml/.cs + DeviceStatusView.xaml/.cs + CommonStyles.xaml + LastCharsConverter.cs，不改业务逻辑
+- **删除**：大扳手图标、"欢迎使用 Alphoria"、"版本 0.1.0 - 开发中"、"模块开发状态"、"即将开发"列表
+- **HomePage Dashboard 改造**：
+  1. 欢迎区："欢迎回来 👋" + "今天准备处理什么工作？"
+  2. 快捷入口（UniformGrid 4 列）：OCR 文字识别 / 图片改尺寸 / 证件照 / 智能抠图，卡片可点击跳转
+  3. 最近任务 Card + EmptyState（图标 + 标题 + 说明）
+  4. 算力概览 Card：剩余算力 / 今日使用 / 本月使用（占位 "—"）
+  5. 本地引擎状态 Card：OCR / 抠图 / 图片处理（绿色圆点 + 名称）
+- **DeviceStatusView 重构**：
+  1. 设备 ID 仅显示后 8 位（LastCharsConverter），悬停 ToolTip 显示完整 ID
+  2. 新增"复制"按钮，点击复制完整设备 ID 到剪贴板，1.5s 反馈"已复制 ✓"
+  3. 状态指示器颜色改用 DynamicResource（SuccessBrush / ErrorBrush / TextSecondaryBrush）
+  4. 设备详情放入 SurfaceBrush 底色子卡片
+  5. 所有按钮添加 FocusVisualStyle="{x:Null}"
+- **CommonStyles 新增**：CardStyle / QuickActionCardStyle / SectionHeaderStyle / SubtitleTextStyle / EmptyState 系列（Border + Icon + Title + Desc）
+- **新增文件**：`LastCharsConverter.cs`（字符串截尾 N 位转换器）
+
 ## Bug 记录
 
 ### WindowChrome 导致系统按钮不可见 + 自定义按钮无响应
