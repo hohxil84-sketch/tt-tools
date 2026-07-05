@@ -6,7 +6,18 @@
 
 ## 分支
 
-`feature/desktop-app-shell`
+`feat/desktop-ui-v2-stage3`
+
+## Bug 修复记录
+
+日期：2026-06-29
+分支：feat/desktop-ui-v2-stage3
+提交：c47aebd
+测试结果：DesktopAuthDevice.Tests 20/20 通过
+说明：
+- CommonStyles.xaml: 新增全局 WPF 渲染优化样式
+- HomePage.xaml/cs: 按钮样式适配新图标
+- 合并到 dev/full-product：3e80607..c47aebd
 
 ## 已完成
 

@@ -6,7 +6,18 @@
 
 ## 分支
 
-`feature/desktop-auth-device`
+`feat/desktop-ui-v2-stage3`
+
+## Bug 修复记录
+
+日期：2026-06-29
+分支：feat/desktop-ui-v2-stage3
+提交：c47aebd
+测试结果：20/20 通过
+说明：
+- DeviceStatusView.xaml/cs: 设备状态页 UI 更新
+- Converters/LastCharsConverter.cs: 新增字符串截取转换器
+- 合并到 dev/full-product：3e80607..c47aebd
 
 ## 已完成
 
